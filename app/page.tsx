@@ -1,65 +1,208 @@
-import Image from "next/image";
+"use client";
+
+import HeroSlider from '@/components/HeroSlider';
+import ScratchCardGame from '@/components/ScratchCardGame';
+import WheelGame from '@/components/WheelGame';
+import HomeCategories from '@/components/HomeCategories';
+import FeaturedProductsSlider from '@/components/FeaturedProductsSlider';
+import LiveStreamsSlider from '@/components/LiveStreamsSlider';
+import CustomerReviewsSlider from '@/components/CustomerReviewsSlider';
+import { useState, useEffect } from 'react';
+import { useAuth } from '@/context/AuthContext';
+import { supabase } from '@/lib/supabase-client';
+
+interface ScratchGameSettings {
+  is_enabled: boolean;
+  popup_delay_seconds: number;
+  win_probability: number;
+  max_plays_per_user: number;
+  max_plays_per_day: number;
+}
+
+interface WheelGameSettings {
+  is_enabled: boolean;
+  popup_delay_seconds: number;
+  max_plays_per_day: number;
+  max_plays_per_user: number;
+  require_authentication: boolean;
+}
+
+type ActiveGame = 'scratch' | 'wheel' | null;
 
 export default function Home() {
+  const { user } = useAuth();
+  const [showScratchGame, setShowScratchGame] = useState(false);
+  const [showWheelGame, setShowWheelGame] = useState(false);
+  const [scratchSettings, setScratchSettings] = useState<ScratchGameSettings | null>(null);
+  const [wheelSettings, setWheelSettings] = useState<WheelGameSettings | null>(null);
+  const [activeGame, setActiveGame] = useState<ActiveGame>(null);
+  const [canPlay, setCanPlay] = useState(false);
+  const [sessionId] = useState(() => `session_${Date.now()}_${Math.random()}`);
+
+  useEffect(() => {
+    const fetchGameSettings = async () => {
+      const [scratchRes, wheelRes] = await Promise.all([
+        supabase.from('scratch_game_settings').select('*').limit(1).maybeSingle(),
+        supabase.from('wheel_game_settings').select('*').limit(1).maybeSingle()
+      ]);
+
+      if (scratchRes.data?.is_enabled) {
+        setScratchSettings(scratchRes.data);
+        setActiveGame('scratch');
+      } else if (wheelRes.data?.is_enabled) {
+        setWheelSettings(wheelRes.data);
+        setActiveGame('wheel');
+      }
+    };
+
+    fetchGameSettings();
+  }, []);
+
+  useEffect(() => {
+    if (activeGame === 'scratch' && scratchSettings) {
+      let timer: NodeJS.Timeout | null = null;
+
+      const checkCanPlayAndShowGame = async () => {
+        if (!user) {
+          setCanPlay(true);
+          timer = setTimeout(() => {
+            setShowScratchGame(true);
+          }, scratchSettings.popup_delay_seconds * 1000);
+          return;
+        }
+
+        let canPlayNow = true;
+
+        if (scratchSettings.max_plays_per_day > 0) {
+          const { data: playsToday } = await supabase
+            .rpc('get_user_plays_today', { user_uuid: user.id });
+
+          const todayCount = playsToday || 0;
+          if (todayCount >= scratchSettings.max_plays_per_day) {
+            canPlayNow = false;
+          }
+        }
+
+        if (canPlayNow && scratchSettings.max_plays_per_user > 0) {
+          const { data: plays } = await supabase
+            .from('scratch_game_plays')
+            .select('id')
+            .eq('user_id', user.id);
+
+          const playCount = plays?.length || 0;
+          if (playCount >= scratchSettings.max_plays_per_user) {
+            canPlayNow = false;
+          }
+        }
+
+        setCanPlay(canPlayNow);
+
+        if (canPlayNow) {
+          timer = setTimeout(() => {
+            setShowScratchGame(true);
+          }, scratchSettings.popup_delay_seconds * 1000);
+        }
+      };
+
+      checkCanPlayAndShowGame();
+
+      return () => {
+        if (timer) {
+          clearTimeout(timer);
+        }
+      };
+    }
+  }, [user, scratchSettings, activeGame]);
+
+  useEffect(() => {
+    if (activeGame === 'wheel' && wheelSettings) {
+      let timer: NodeJS.Timeout | null = null;
+
+      const checkCanPlayAndShowGame = async () => {
+        if (!user && wheelSettings.require_authentication) {
+          return;
+        }
+
+        let canPlayNow = true;
+
+        if (user) {
+          if (wheelSettings.max_plays_per_user > 0) {
+            const { count: totalPlays } = await supabase
+              .from('wheel_game_plays')
+              .select('*', { count: 'exact' })
+              .eq('user_id', user.id);
+
+            if (totalPlays && totalPlays >= wheelSettings.max_plays_per_user) {
+              canPlayNow = false;
+            }
+          }
+
+          if (canPlayNow && wheelSettings.max_plays_per_day > 0) {
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+
+            const { count } = await supabase
+              .from('wheel_game_plays')
+              .select('*', { count: 'exact' })
+              .eq('user_id', user.id)
+              .gte('created_at', today.toISOString());
+
+            if (count && count >= wheelSettings.max_plays_per_day) {
+              canPlayNow = false;
+            }
+          }
+        } else {
+          if (wheelSettings.max_plays_per_day > 0) {
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+
+            const { count } = await supabase
+              .from('wheel_game_plays')
+              .select('*', { count: 'exact' })
+              .eq('session_id', sessionId)
+              .gte('created_at', today.toISOString());
+
+            if (count && count >= wheelSettings.max_plays_per_day) {
+              canPlayNow = false;
+            }
+          }
+        }
+
+        setCanPlay(canPlayNow);
+
+        if (canPlayNow) {
+          timer = setTimeout(() => {
+            setShowWheelGame(true);
+          }, wheelSettings.popup_delay_seconds * 1000);
+        }
+      };
+
+      checkCanPlayAndShowGame();
+
+      return () => {
+        if (timer) {
+          clearTimeout(timer);
+        }
+      };
+    }
+  }, [user, wheelSettings, activeGame, sessionId]);
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
+    <>
+      {showScratchGame && scratchSettings && activeGame === 'scratch' && (
+        <ScratchCardGame
+          onClose={() => setShowScratchGame(false)}
+          winProbability={scratchSettings.win_probability}
         />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-      <h1 className="text-4xl font-bold">
-        Coucou Next.js 🚀
-      </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
-    </div>
+      )}
+      {showWheelGame && activeGame === 'wheel' && (
+        <WheelGame onClose={() => setShowWheelGame(false)} />
+      )}
+      <HeroSlider />
+      <HomeCategories />
+      <FeaturedProductsSlider />
+      <LiveStreamsSlider />
+      <CustomerReviewsSlider />
+    </>
   );
 }

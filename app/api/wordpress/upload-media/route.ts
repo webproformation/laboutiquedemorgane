@@ -1,0 +1,62 @@
+import { NextRequest, NextResponse } from 'next/server';
+
+const WORDPRESS_URL = process.env.WORDPRESS_URL;
+const WORDPRESS_USERNAME = process.env.WORDPRESS_USERNAME;
+const WORDPRESS_APP_PASSWORD = process.env.WORDPRESS_APP_PASSWORD;
+
+const getAuthHeader = () => {
+  const credentials = Buffer.from(`${WORDPRESS_USERNAME}:${WORDPRESS_APP_PASSWORD}`).toString('base64');
+  return `Basic ${credentials}`;
+};
+
+export async function POST(request: NextRequest) {
+  try {
+    if (!WORDPRESS_URL || !WORDPRESS_USERNAME || !WORDPRESS_APP_PASSWORD) {
+      return NextResponse.json(
+        { error: 'Configuration WordPress manquante' },
+        { status: 500 }
+      );
+    }
+
+    const formData = await request.formData();
+    const file = formData.get('file') as File;
+
+    if (!file) {
+      return NextResponse.json(
+        { error: 'Aucun fichier fourni' },
+        { status: 400 }
+      );
+    }
+
+    const uploadFormData = new FormData();
+    uploadFormData.append('file', file);
+
+    const response = await fetch(
+      `${WORDPRESS_URL}/wp-json/wp/v2/media`,
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': getAuthHeader(),
+        },
+        body: uploadFormData,
+      }
+    );
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      return NextResponse.json(
+        { error: errorData.message || 'Erreur lors de l\'upload' },
+        { status: response.status }
+      );
+    }
+
+    const uploadedMedia = await response.json();
+
+    return NextResponse.json(uploadedMedia);
+  } catch (error: any) {
+    return NextResponse.json(
+      { error: error.message },
+      { status: 500 }
+    );
+  }
+}
