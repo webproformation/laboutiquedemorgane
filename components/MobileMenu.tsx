@@ -33,6 +33,12 @@ export default function MobileMenu({ onLinkClick }: MobileMenuProps) {
   const maisonCategory = getCategoryByName('Maison');
   const beauteCategory = getCategoryByName('Beauté et Senteurs');
 
+  const morganeCategories = [
+    getCategoryByName("L'ambiance de la semaine"),
+    getCategoryByName('Les coups de coeur de Morgane'),
+    getCategoryByName('Le look de la semaine by Morgane')
+  ].filter(Boolean);
+
   if (loading) {
     return (
       <div className="py-4">
@@ -88,16 +94,35 @@ export default function MobileMenu({ onLinkClick }: MobileMenuProps) {
           </AccordionItem>
         )}
 
-        <div className="border-b">
-          <Link
-            href="/category/les-looks-de-morgane"
-            onClick={onLinkClick}
-            className="flex items-center justify-between py-4 text-base font-medium text-white hover:text-[#D4AF37] transition-colors"
-          >
-            <span className="uppercase">Les looks de Morgane</span>
-            <ChevronRight className="h-5 w-5" />
-          </Link>
-        </div>
+        <AccordionItem value="morgane">
+          <AccordionTrigger className="text-base font-medium text-white hover:text-[#D4AF37] uppercase">
+            Les looks de Morgane
+          </AccordionTrigger>
+          <AccordionContent>
+            <div className="space-y-2 pl-4 pb-2">
+              <Link
+                href="/les-looks-de-morgane"
+                onClick={onLinkClick}
+                className="block py-2 text-sm font-medium text-[#D4AF37] hover:text-[#b8933d] transition-colors"
+              >
+                Voir tous les looks
+              </Link>
+              {morganeCategories.map((category) => {
+                if (!category) return null;
+                return (
+                  <Link
+                    key={category.id}
+                    href={`/category/${category.slug}`}
+                    onClick={onLinkClick}
+                    className="block py-2 text-sm text-gray-300 hover:text-[#D4AF37] transition-colors"
+                  >
+                    {category.name}
+                  </Link>
+                );
+              })}
+            </div>
+          </AccordionContent>
+        </AccordionItem>
 
         {maisonCategory && (
           <AccordionItem value="maison">

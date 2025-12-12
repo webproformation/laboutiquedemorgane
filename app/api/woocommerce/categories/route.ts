@@ -5,6 +5,11 @@ interface Category {
   name: string;
   slug: string;
   parent: number;
+  image?: {
+    src: string;
+    name?: string;
+    alt?: string;
+  } | null;
   [key: string]: any;
 }
 
@@ -66,12 +71,145 @@ export async function GET() {
       throw new Error(`WooCommerce API error: ${response.status}`);
     }
 
-    const categories: Category[] = await response.json();
+    const rawCategories = await response.json();
+
+    const categories: Category[] = rawCategories.map((cat: any) => ({
+      id: cat.id,
+      name: cat.name,
+      slug: cat.slug,
+      parent: cat.parent,
+      image: cat.image,
+      count: cat.count || 0,
+    }));
+
     const hierarchicalCategories = buildCategoryTree(categories);
 
     return NextResponse.json(hierarchicalCategories);
   } catch (error) {
     console.error('Error fetching categories:', error);
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : 'Unknown error' },
+      { status: 500 }
+    );
+  }
+}
+
+export async function POST(request: Request) {
+  try {
+    const body = await request.json();
+    const { action } = body;
+
+    const wordpressUrl = process.env.WORDPRESS_URL;
+    const consumerKey = process.env.WC_CONSUMER_KEY;
+    const consumerSecret = process.env.WC_CONSUMER_SECRET;
+
+    if (!wordpressUrl || !consumerKey || !consumerSecret) {
+      return NextResponse.json(
+        { error: 'Missing WooCommerce configuration' },
+        { status: 500 }
+      );
+    }
+
+    const auth = Buffer.from(`${consumerKey}:${consumerSecret}`).toString('base64');
+
+    if (action === 'setup-morgane-categories') {
+      const existingResponse = await fetch(
+        `${wordpressUrl}/wp-json/wc/v3/products/categories?per_page=100`,
+        {
+          headers: {
+            Authorization: `Basic ${auth}`,
+          },
+        }
+      );
+
+      if (!existingResponse.ok) {
+        throw new Error(`WooCommerce API error: ${existingResponse.status}`);
+      }
+
+      const existingCategories = await existingResponse.json();
+
+      let parentCategory = existingCategories.find(
+        (cat: any) => cat.slug === 'les-looks-de-morgane'
+      );
+
+      if (!parentCategory) {
+        const createParentResponse = await fetch(
+          `${wordpressUrl}/wp-json/wc/v3/products/categories`,
+          {
+            method: 'POST',
+            headers: {
+              Authorization: `Basic ${auth}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              name: 'Les looks de Morgane',
+              slug: 'les-looks-de-morgane',
+            }),
+          }
+        );
+
+        if (!createParentResponse.ok) {
+          const errorData = await createParentResponse.json();
+          throw new Error(`Failed to create parent category: ${JSON.stringify(errorData)}`);
+        }
+
+        parentCategory = await createParentResponse.json();
+      }
+
+      const subCategories = [
+        { name: "L'ambiance de la semaine", slug: 'lambiance-de-la-semaine' },
+        { name: 'Les coups de coeur de Morgane', slug: 'les-coups-de-coeur-de-morgane' },
+        { name: 'Le look de la semaine by Morgane', slug: 'le-look-de-la-semaine-by-morgane' },
+      ];
+
+      const createdCategories = [parentCategory];
+
+      for (const subCat of subCategories) {
+        const existingSubCat = existingCategories.find(
+          (cat: any) => cat.slug === subCat.slug
+        );
+
+        if (!existingSubCat) {
+          const createSubCatResponse = await fetch(
+            `${wordpressUrl}/wp-json/wc/v3/products/categories`,
+            {
+              method: 'POST',
+              headers: {
+                Authorization: `Basic ${auth}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                name: subCat.name,
+                slug: subCat.slug,
+                parent: parentCategory.id,
+              }),
+            }
+          );
+
+          if (!createSubCatResponse.ok) {
+            const errorData = await createSubCatResponse.json();
+            console.error(`Failed to create ${subCat.name}:`, errorData);
+          } else {
+            const createdSubCat = await createSubCatResponse.json();
+            createdCategories.push(createdSubCat);
+          }
+        } else {
+          createdCategories.push(existingSubCat);
+        }
+      }
+
+      return NextResponse.json({
+        success: true,
+        categories: createdCategories,
+      });
+    }
+
+    return NextResponse.json(
+      { error: 'Invalid action' },
+      { status: 400 }
+    );
+  } catch (error) {
+    console.error('Error in POST /api/woocommerce/categories:', error);
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }

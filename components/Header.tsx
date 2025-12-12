@@ -51,7 +51,7 @@ export default function Header() {
   const navigation = [
     { name: 'Nouveautés', href: '/category/nouveautes', hasMegaMenu: false },
     { name: 'Mode', href: '/category/mode', hasMegaMenu: true },
-    { name: 'Les looks de Morgane', href: '/category/les-looks-de-morgane', hasMegaMenu: false },
+    { name: 'Les looks de Morgane', href: '/les-looks-de-morgane', hasMegaMenu: true },
     { name: 'Maison', href: '/category/maison', hasMegaMenu: true },
     { name: 'Beauté et Senteurs', href: '/category/beaute-senteurs', hasMegaMenu: true },
     { name: 'Bonnes affaires', href: '/category/bonnes-affaires', hasMegaMenu: false },

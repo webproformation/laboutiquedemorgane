@@ -45,15 +45,18 @@ export default function MegaMenu({ activeMenuItem }: MegaMenuProps) {
       parentCategory = getCategoryByName('Beauté & Senteurs');
       categorySlug = 'beaute-senteurs';
       break;
+    case 'Les looks de Morgane':
+      parentCategory = categories.find(cat =>
+        cat.slug === 'les-looks-de-morgane' ||
+        cat.name.toLowerCase().includes('looks') && cat.name.toLowerCase().includes('morgane')
+      );
+      categorySlug = 'les-looks-de-morgane';
+      break;
     default:
       return null;
   }
 
-  if (!parentCategory) return null;
-
-  const level1Categories = getSubCategories(parentCategory.id);
-
-  if (loading) {
+  if (loading || !parentCategory) {
     return (
       <div className="absolute left-0 right-0 top-full mt-0 bg-[#F2F2E8] border-t border-gray-200 shadow-xl z-50">
         <div className="container mx-auto px-4 py-12">
@@ -70,6 +73,29 @@ export default function MegaMenu({ activeMenuItem }: MegaMenuProps) {
                 </div>
               ))}
             </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const level1Categories = getSubCategories(parentCategory.id);
+
+  if (level1Categories.length === 0) {
+    return (
+      <div className="absolute left-0 right-0 top-full mt-0 bg-[#F2F2E8] border-t border-gray-200 shadow-xl z-50">
+        <div className="container mx-auto px-4 py-8">
+          <div className="mb-6 text-center">
+            <p className="text-lg font-bold text-[#b8933d]">{activeMenuItem}</p>
+          </div>
+          <div className="text-center py-6">
+            <Link
+              href={`/category/${categorySlug}`}
+              className="inline-flex items-center text-sm font-medium text-[#D4AF37] hover:text-[#b8933d] transition-colors"
+            >
+              Voir tout {activeMenuItem}
+              <ChevronRight className="h-4 w-4 ml-1" />
+            </Link>
           </div>
         </div>
       </div>

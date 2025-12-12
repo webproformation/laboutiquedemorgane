@@ -19,6 +19,15 @@ export default function HomeCategories() {
   const [categories, setCategories] = useState<HomeCategory[]>([]);
   const [loading, setLoading] = useState(true);
 
+  const decodeHtmlEntities = (text: string): string => {
+    if (typeof window !== 'undefined') {
+      const textarea = document.createElement('textarea');
+      textarea.innerHTML = text;
+      return textarea.value;
+    }
+    return text;
+  };
+
   useEffect(() => {
     loadCategories();
   }, []);
@@ -107,7 +116,7 @@ export default function HomeCategories() {
                 <div className="absolute inset-0 bg-black bg-opacity-40 group-hover:bg-opacity-30 transition-all flex items-center justify-center">
                   <div className="text-center px-4">
                     <h3 className="text-white text-2xl font-bold mb-2">
-                      {category.category_name}
+                      {decodeHtmlEntities(category.category_name)}
                     </h3>
                     {category.product_count !== undefined && (
                       <p className="text-white/90 text-base">

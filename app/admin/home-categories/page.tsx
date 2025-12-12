@@ -37,6 +37,12 @@ export default function HomeCategoriesPage() {
   const [saving, setSaving] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState('');
 
+  const decodeHtmlEntities = (text: string): string => {
+    const textarea = document.createElement('textarea');
+    textarea.innerHTML = text;
+    return textarea.value;
+  };
+
   useEffect(() => {
     if (!adminLoading && !isAdmin) {
       router.push('/');
@@ -93,7 +99,7 @@ export default function HomeCategoriesPage() {
         .from('home_categories')
         .insert({
           category_slug: wooCategory.slug,
-          category_name: wooCategory.name,
+          category_name: decodeHtmlEntities(wooCategory.name),
           display_order: maxOrder + 1,
           is_active: true,
           image_url: wooCategory.image?.src || null,
@@ -231,7 +237,7 @@ export default function HomeCategoriesPage() {
                 <option value="">Sélectionner une catégorie...</option>
                 {availableCategories.map((cat) => (
                   <option key={cat.id} value={cat.slug}>
-                    {cat.name}
+                    {decodeHtmlEntities(cat.name)}
                   </option>
                 ))}
               </select>
