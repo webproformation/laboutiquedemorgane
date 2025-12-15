@@ -52,9 +52,15 @@ export default function LiveStreamsSlider() {
     return (
       <section className="py-16 bg-gradient-to-b from-white to-gray-50">
         <div className="container mx-auto px-4">
+          <div className="text-center mb-12">
+            <h2 className="text-4xl font-bold mb-4" style={{ color: '#C6A15B' }}>
+              Plonge dans l'univers de Morgane
+            </h2>
+            <p className="text-gray-600 text-lg">
+              Inspiration, conseils et coulisses en vidéo
+            </p>
+          </div>
           <div className="animate-pulse">
-            <div className="h-10 bg-gray-200 rounded w-64 mx-auto mb-4"></div>
-            <div className="h-6 bg-gray-200 rounded w-96 mx-auto mb-12"></div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               {[1, 2, 3].map((i) => (
                 <div key={i} className="h-64 bg-gray-200 rounded-lg"></div>
@@ -76,7 +82,7 @@ export default function LiveStreamsSlider() {
             Plonge dans l'univers de Morgane
           </h2>
           <p className="text-gray-600 text-lg">
-            Inspiration, conseils et coulisses en vidéo.
+            Inspiration, conseils et coulisses en vidéo
           </p>
         </div>
 

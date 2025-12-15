@@ -40,26 +40,54 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     (async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      setUser(user);
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession();
 
-      if (user) {
-        await loadProfile(user.id);
-      }
-
-      setLoading(false);
-    })();
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      (async () => {
-        setUser(session?.user ?? null);
+        if (error) {
+          console.error('Session error:', error);
+          await supabase.auth.signOut();
+          setUser(null);
+          setProfile(null);
+          setLoading(false);
+          return;
+        }
 
         if (session?.user) {
+          setUser(session.user);
           await loadProfile(session.user.id);
         } else {
+          setUser(null);
           setProfile(null);
         }
-      })();
+      } catch (error) {
+        console.error('Error getting session:', error);
+        setUser(null);
+        setProfile(null);
+      } finally {
+        setLoading(false);
+      }
+    })();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === 'TOKEN_REFRESHED') {
+        console.log('Token refreshed successfully');
+      } else if (event === 'SIGNED_OUT') {
+        setUser(null);
+        setProfile(null);
+      } else if (event === 'USER_UPDATED') {
+        if (session?.user) {
+          setUser(session.user);
+          await loadProfile(session.user.id);
+        }
+      }
+
+      if (session?.user) {
+        setUser(session.user);
+        await loadProfile(session.user.id);
+      } else {
+        setUser(null);
+        setProfile(null);
+      }
     });
 
     return () => subscription.unsubscribe();
@@ -126,6 +154,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
+      options: {
+        data: {
+          first_name: firstName,
+          last_name: lastName,
+          birth_date: birthDate || null,
+        },
+      },
     });
 
     if (!error && data.user) {
@@ -156,14 +191,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         console.error('Error creating WordPress user:', wpError);
       }
 
-      await supabase.from('profiles').insert({
-        id: data.user.id,
-        email: data.user.email!,
-        first_name: firstName,
-        last_name: lastName,
+      await supabase.from('profiles').update({
         birth_date: birthDate || null,
         wordpress_user_id: wordpressUserId,
-      });
+      }).eq('id', data.user.id);
 
       await claimPendingPrize(data.user.id);
 

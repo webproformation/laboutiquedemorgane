@@ -29,7 +29,9 @@ export default function MentionsLegalesPage() {
             <p className="text-gray-700"><strong>Raison sociale :</strong> MORGANE DEWANIN</p>
             <p className="text-gray-700"><strong>Forme juridique :</strong> Société par actions simplifiée</p>
             <p className="text-gray-700"><strong>Adresse :</strong> 1062 rue d&apos;Armentières, 59850 Nieppe</p>
-            <p className="text-gray-700"><strong>Téléphone :</strong> +33 6 41 45 66 71</p>
+            <p className="text-gray-700"><strong>Téléphone :</strong></p>
+            <p className="text-gray-700 ml-4"><strong>Morgane</strong> : +33 6 41 45 66 71</p>
+            <p className="text-gray-700 ml-4"><strong>André</strong> : +33 6 03 48 96</p>
             <p className="text-gray-700"><strong>Email :</strong> contact@laboutiquedemorgane.fr</p>
             <p className="text-gray-700"><strong>SIREN :</strong> 907 889 802</p>
             <p className="text-gray-700"><strong>SIRET :</strong> 907 889 802 00027</p>

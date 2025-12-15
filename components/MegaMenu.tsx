@@ -81,6 +81,52 @@ export default function MegaMenu({ activeMenuItem }: MegaMenuProps) {
 
   const level1Categories = getSubCategories(parentCategory.id);
 
+  if (activeMenuItem === 'Les looks de Morgane') {
+    const morganeCategories = [
+      { name: "Les coups de cœur de Morgane", slug: "les-coups-de-coeur-de-morgane" },
+      { name: "L'ambiance de la semaine", slug: "l-ambiance-de-la-semaine" },
+      { name: "Le look de la semaine by Morgane", slug: "le-look-de-la-semaine-by-morgane" }
+    ];
+
+    return (
+      <div className="absolute left-0 right-0 top-full mt-0 bg-[#F2F2E8] border-t border-gray-200 shadow-xl z-50">
+        <div className="container mx-auto px-4 py-8">
+          <div className="mb-6 text-center">
+            <p className="text-lg font-bold text-[#b8933d]">{activeMenuItem}</p>
+          </div>
+
+          <div className="grid gap-0" style={{ gridTemplateColumns: `repeat(${morganeCategories.length}, 1fr)` }}>
+            {morganeCategories.map((cat, index) => (
+              <div
+                key={cat.slug}
+                className={`px-6 ${index !== morganeCategories.length - 1 ? 'border-r border-gray-200' : ''}`}
+              >
+                <Link
+                  href={`/category/${cat.slug}`}
+                  className="block group mb-3"
+                >
+                  <h4 className="text-sm font-bold text-gray-900 group-hover:text-[#D4AF37] transition-colors uppercase">
+                    {cat.name}
+                  </h4>
+                </Link>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-6 text-center">
+            <Link
+              href={`/category/${categorySlug}`}
+              className="inline-flex items-center text-sm font-medium text-[#D4AF37] hover:text-[#b8933d] transition-colors"
+            >
+              Voir tout {activeMenuItem}
+              <ChevronRight className="h-4 w-4 ml-1" />
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (level1Categories.length === 0) {
     return (
       <div className="absolute left-0 right-0 top-full mt-0 bg-[#F2F2E8] border-t border-gray-200 shadow-xl z-50">

@@ -165,11 +165,16 @@ export default function Footer() {
                   <p>59850 Nieppe</p>
                 </div>
               </div>
-              <div className="flex items-center gap-2 justify-center md:justify-start">
-                <Phone className="h-5 w-5 flex-shrink-0" />
-                <a href="tel:+33641456671" className="hover:text-white transition-colors">
-                  +33 6 41 45 66 71
-                </a>
+              <div className="flex items-start gap-2 justify-center md:justify-start">
+                <Phone className="h-5 w-5 flex-shrink-0 mt-0.5" />
+                <div className="space-y-1">
+                  <a href="tel:+33641456671" className="hover:text-white transition-colors block">
+                    <strong>Morgane</strong> : +33 6 41 45 66 71
+                  </a>
+                  <a href="tel:+33603489600" className="hover:text-white transition-colors block">
+                    <strong>André</strong> : +33 6 03 48 96
+                  </a>
+                </div>
               </div>
               <div className="flex items-center gap-2 justify-center md:justify-start">
                 <Mail className="h-5 w-5 flex-shrink-0" />
@@ -219,6 +224,11 @@ export default function Footer() {
           <div className="text-center md:text-left">
             <h3 className="text-white font-bold text-xl md:text-lg mb-4">Liens rapides</h3>
             <ul className="space-y-2 text-base md:text-sm">
+              <li>
+                <Link href="/qui-sommes-nous" className="hover:text-white transition-colors">
+                  Qui sommes-nous ?
+                </Link>
+              </li>
               <li>
                 <Link href="/contact" className="hover:text-white transition-colors">
                   Contactez-nous

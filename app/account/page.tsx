@@ -2,21 +2,35 @@
 
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
+import { supabase } from '@/lib/supabase-client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
-import { User, Mail, Phone, Loader2, Calendar } from 'lucide-react';
+import { User, Mail, Phone, Loader2, Calendar, PiggyBank, TrendingDown, Package } from 'lucide-react';
+import ProfilePictureUpload from '@/components/ProfilePictureUpload';
+
+interface SavingsData {
+  totalSavings: number;
+  monthlySavings: number;
+  openBatches: number;
+}
 
 export default function AccountPage() {
-  const { profile, updateProfile } = useAuth();
+  const { profile, updateProfile, user } = useAuth();
   const [loading, setLoading] = useState(false);
+  const [savingsData, setSavingsData] = useState<SavingsData>({
+    totalSavings: 0,
+    monthlySavings: 0,
+    openBatches: 0,
+  });
   const [formData, setFormData] = useState({
     first_name: '',
     last_name: '',
     phone: '',
     birth_date: '',
+    avatar_url: '',
   });
 
   useEffect(() => {
@@ -26,9 +40,55 @@ export default function AccountPage() {
         last_name: profile.last_name || '',
         phone: profile.phone || '',
         birth_date: profile.birth_date || '',
+        avatar_url: profile.avatar_url || '',
       });
     }
-  }, [profile]);
+    if (user) {
+      fetchSavingsData();
+    }
+  }, [profile, user]);
+
+  const fetchSavingsData = async () => {
+    try {
+      const firstDayOfMonth = new Date();
+      firstDayOfMonth.setDate(1);
+      firstDayOfMonth.setHours(0, 0, 0, 0);
+
+      const { data: batches, error } = await supabase
+        .from('delivery_batches')
+        .select('id, status, created_at, shipping_cost')
+        .eq('user_id', user?.id)
+        .eq('status', 'pending');
+
+      if (error) throw error;
+
+      const estimatedShippingCostPerBatch = 4.90;
+      const openBatches = batches?.length || 0;
+      const totalSavings = openBatches > 1 ? (openBatches - 1) * estimatedShippingCostPerBatch : 0;
+
+      const batchesThisMonth = batches?.filter(batch =>
+        new Date(batch.created_at) >= firstDayOfMonth
+      ) || [];
+      const monthlySavings = batchesThisMonth.length > 1 ? (batchesThisMonth.length - 1) * estimatedShippingCostPerBatch : 0;
+
+      setSavingsData({
+        totalSavings: Math.round(totalSavings * 100) / 100,
+        monthlySavings: Math.round(monthlySavings * 100) / 100,
+        openBatches,
+      });
+    } catch (error) {
+      console.error('Erreur lors du chargement des économies:', error);
+    }
+  };
+
+  const handleAvatarUpdate = async (newAvatarUrl: string) => {
+    const { error } = await updateProfile({ avatar_url: newAvatarUrl });
+    if (error) {
+      toast.error('Erreur lors de la mise à jour de la photo');
+    } else {
+      setFormData({ ...formData, avatar_url: newAvatarUrl });
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -47,6 +107,72 @@ export default function AccountPage() {
 
   return (
     <div className="space-y-6">
+      {savingsData.openBatches > 0 && (
+        <Card className="bg-gradient-to-r from-green-50 to-emerald-50 border-green-200">
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <div className="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center">
+                  <PiggyBank className="h-8 w-8 text-green-600" />
+                </div>
+                <div>
+                  <h3 className="text-2xl font-bold text-green-900">
+                    {savingsData.totalSavings.toFixed(2)}€ économisés
+                  </h3>
+                  <p className="text-sm text-green-700 mt-1">
+                    En cumulant votre panier ({savingsData.openBatches} commande{savingsData.openBatches > 1 ? 's' : ''} ouverte{savingsData.openBatches > 1 ? 's' : ''})
+                  </p>
+                </div>
+              </div>
+              <div className="hidden md:flex items-center gap-6">
+                <div className="text-center">
+                  <div className="flex items-center gap-2 justify-center">
+                    <TrendingDown className="h-5 w-5 text-green-600" />
+                    <p className="text-3xl font-bold text-green-900">
+                      {savingsData.monthlySavings.toFixed(2)}€
+                    </p>
+                  </div>
+                  <p className="text-xs text-green-700 mt-1">Ce mois-ci</p>
+                </div>
+                <div className="text-center">
+                  <div className="flex items-center gap-2 justify-center">
+                    <Package className="h-5 w-5 text-green-600" />
+                    <p className="text-3xl font-bold text-green-900">
+                      {savingsData.openBatches}
+                    </p>
+                  </div>
+                  <p className="text-xs text-green-700 mt-1">Colis ouverts</p>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      <Card>
+        <CardHeader>
+          <div className="flex items-center gap-3">
+            <div className="p-3 bg-[#b8933d] rounded-full">
+              <User className="h-6 w-6 text-white" />
+            </div>
+            <div>
+              <CardTitle>Photo de profil</CardTitle>
+              <CardDescription>
+                Ta photo sera visible lors des lives pour une expérience plus conviviale
+              </CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="flex justify-center py-6">
+          <ProfilePictureUpload
+            currentAvatarUrl={formData.avatar_url}
+            firstName={formData.first_name}
+            lastName={formData.last_name}
+            onAvatarUpdate={handleAvatarUpdate}
+          />
+        </CardContent>
+      </Card>
+
       <Card>
         <CardHeader>
           <div className="flex items-center gap-3">

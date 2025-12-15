@@ -18,7 +18,14 @@ function getSupabaseClient() {
   }
 
   console.log('Supabase client initialized with URL:', supabaseUrl);
-  supabaseInstance = createSupabaseClient(supabaseUrl, supabaseAnonKey);
+  supabaseInstance = createSupabaseClient(supabaseUrl, supabaseAnonKey, {
+    auth: {
+      autoRefreshToken: true,
+      persistSession: true,
+      detectSessionInUrl: true,
+      storageKey: 'supabase.auth.token',
+    },
+  });
   return supabaseInstance;
 }
 

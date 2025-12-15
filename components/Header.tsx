@@ -127,13 +127,13 @@ export default function Header() {
 
             <Link href="/" className="flex-shrink-0">
               <img
-                src="https://laboutiquedemorgane.webprocreation.fr/wp-content/uploads/2025/12/logo.png"
+                src="/logolbdm.jpg"
                 alt="La Boutique De Morgane"
-                className="h-24 w-24 md:h-32 md:w-32 object-contain"
+                className="h-16 w-auto md:h-20 object-contain"
               />
             </Link>
 
-            <nav className="hidden md:flex items-center justify-center gap-6 lg:gap-8 flex-1">
+            <nav className="hidden md:flex items-center justify-center gap-3 lg:gap-4 flex-1">
               {navigation.map((item) => (
                 <div
                   key={item.name}
@@ -151,7 +151,7 @@ export default function Header() {
                 >
                   <Link
                     href={item.href}
-                    className={`text-sm lg:text-base font-medium transition-colors ${
+                    className={`text-xs lg:text-sm font-medium transition-colors whitespace-nowrap ${
                       isActive(item.href)
                         ? 'text-[#D4AF37]'
                         : 'text-white hover:text-[#D4AF37]'

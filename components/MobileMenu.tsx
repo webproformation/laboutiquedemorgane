@@ -29,6 +29,45 @@ export default function MobileMenu({ onLinkClick }: MobileMenuProps) {
     return categories.filter(cat => cat.parentId === parentId);
   };
 
+  const renderSubCategoriesWithChildren = (parentCategory: any, level = 0) => {
+    const subCategories = getSubCategories(parentCategory.id);
+
+    return subCategories.map((subCategory) => {
+      const subSubCategories = getSubCategories(subCategory.id);
+      const hasChildren = subSubCategories.length > 0;
+
+      return (
+        <div key={subCategory.id}>
+          <Link
+            href={`/category/${subCategory.slug}`}
+            onClick={onLinkClick}
+            className={`block py-2 text-sm ${
+              level === 0
+                ? 'text-gray-300 hover:text-[#D4AF37] font-medium'
+                : 'text-gray-400 hover:text-[#D4AF37] pl-4'
+            } transition-colors`}
+          >
+            {subCategory.name}
+          </Link>
+          {hasChildren && (
+            <div className="pl-4">
+              {subSubCategories.map((subSubCategory) => (
+                <Link
+                  key={subSubCategory.id}
+                  href={`/category/${subSubCategory.slug}`}
+                  onClick={onLinkClick}
+                  className="block py-2 text-xs text-gray-400 hover:text-[#D4AF37] transition-colors"
+                >
+                  • {subSubCategory.name}
+                </Link>
+              ))}
+            </div>
+          )}
+        </div>
+      );
+    });
+  };
+
   const modeCategory = getCategoryByName('Mode');
   const maisonCategory = getCategoryByName('Maison');
   const beauteCategory = getCategoryByName('Beauté et Senteurs');
@@ -71,7 +110,7 @@ export default function MobileMenu({ onLinkClick }: MobileMenuProps) {
               Mode
             </AccordionTrigger>
             <AccordionContent>
-              <div className="space-y-2 pl-4 pb-2">
+              <div className="space-y-1 pl-4 pb-2">
                 <Link
                   href="/category/mode"
                   onClick={onLinkClick}
@@ -79,16 +118,7 @@ export default function MobileMenu({ onLinkClick }: MobileMenuProps) {
                 >
                   Voir tout Mode
                 </Link>
-                {getSubCategories(modeCategory.id).map((subCategory) => (
-                  <Link
-                    key={subCategory.id}
-                    href={`/category/${subCategory.slug}`}
-                    onClick={onLinkClick}
-                    className="block py-2 text-sm text-gray-300 hover:text-[#D4AF37] transition-colors"
-                  >
-                    {subCategory.name}
-                  </Link>
-                ))}
+                {renderSubCategoriesWithChildren(modeCategory)}
               </div>
             </AccordionContent>
           </AccordionItem>
@@ -130,7 +160,7 @@ export default function MobileMenu({ onLinkClick }: MobileMenuProps) {
               Maison
             </AccordionTrigger>
             <AccordionContent>
-              <div className="space-y-2 pl-4 pb-2">
+              <div className="space-y-1 pl-4 pb-2">
                 <Link
                   href="/category/maison"
                   onClick={onLinkClick}
@@ -138,16 +168,7 @@ export default function MobileMenu({ onLinkClick }: MobileMenuProps) {
                 >
                   Voir tout Maison
                 </Link>
-                {getSubCategories(maisonCategory.id).map((subCategory) => (
-                  <Link
-                    key={subCategory.id}
-                    href={`/category/${subCategory.slug}`}
-                    onClick={onLinkClick}
-                    className="block py-2 text-sm text-gray-300 hover:text-[#D4AF37] transition-colors"
-                  >
-                    {subCategory.name}
-                  </Link>
-                ))}
+                {renderSubCategoriesWithChildren(maisonCategory)}
               </div>
             </AccordionContent>
           </AccordionItem>
@@ -159,7 +180,7 @@ export default function MobileMenu({ onLinkClick }: MobileMenuProps) {
               Beauté et Senteurs
             </AccordionTrigger>
             <AccordionContent>
-              <div className="space-y-2 pl-4 pb-2">
+              <div className="space-y-1 pl-4 pb-2">
                 <Link
                   href="/category/beaute-et-senteurs"
                   onClick={onLinkClick}
@@ -167,16 +188,7 @@ export default function MobileMenu({ onLinkClick }: MobileMenuProps) {
                 >
                   Voir tout Beauté et Senteurs
                 </Link>
-                {getSubCategories(beauteCategory.id).map((subCategory) => (
-                  <Link
-                    key={subCategory.id}
-                    href={`/category/${subCategory.slug}`}
-                    onClick={onLinkClick}
-                    className="block py-2 text-sm text-gray-300 hover:text-[#D4AF37] transition-colors"
-                  >
-                    {subCategory.name}
-                  </Link>
-                ))}
+                {renderSubCategoriesWithChildren(beauteCategory)}
               </div>
             </AccordionContent>
           </AccordionItem>

@@ -51,7 +51,7 @@ export async function POST(request: NextRequest) {
 
     const { data: profile } = await supabase
       .from('profiles')
-      .select('first_name, last_name')
+      .select('first_name, last_name, avatar_url')
       .eq('id', user.id)
       .maybeSingle();
 
@@ -65,6 +65,7 @@ export async function POST(request: NextRequest) {
         live_stream_id: body.live_stream_id,
         user_id: user.id,
         username,
+        avatar_url: profile?.avatar_url || '',
         message: body.message,
       })
       .select()

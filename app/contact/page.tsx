@@ -226,12 +226,20 @@ export default function ContactPage() {
                   <Phone className="h-5 w-5 text-[#C6A15B] flex-shrink-0 mt-0.5" />
                   <div>
                     <p className="font-semibold text-gray-900">Téléphone</p>
-                    <a
-                      href="tel:+33641456671"
-                      className="text-gray-600 text-sm hover:text-[#C6A15B] transition-colors"
-                    >
-                      +33 6 41 45 66 71
-                    </a>
+                    <div className="space-y-1">
+                      <a
+                        href="tel:+33641456671"
+                        className="text-gray-600 text-sm hover:text-[#C6A15B] transition-colors block"
+                      >
+                        <strong>Morgane</strong> : +33 6 41 45 66 71
+                      </a>
+                      <a
+                        href="tel:+33603489600"
+                        className="text-gray-600 text-sm hover:text-[#C6A15B] transition-colors block"
+                      >
+                        <strong>André</strong> : +33 6 03 48 96
+                      </a>
+                    </div>
                   </div>
                 </div>
 

@@ -15,7 +15,9 @@ import {
   ShoppingCart,
   Send,
   Users,
+  User as UserIcon,
 } from 'lucide-react';
+import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
 import Image from 'next/image';
 import { toast } from 'sonner';
 import { useCart } from '@/context/CartContext';
@@ -51,6 +53,7 @@ interface LiveProduct {
 interface ChatMessage {
   id: string;
   username: string;
+  avatar_url?: string;
   message: string;
   created_at: string;
   is_pinned: boolean;
@@ -429,16 +432,26 @@ export default function LivePlayer({
                     {messages.map((msg) => (
                       <div
                         key={msg.id}
-                        className={`p-2 rounded ${
-                          msg.is_pinned ? 'bg-yellow-100' : ''
+                        className={`p-3 rounded-lg ${
+                          msg.is_pinned ? 'bg-yellow-50 border border-yellow-200' : 'bg-gray-50'
                         }`}
                       >
-                        <div className="font-semibold text-sm text-blue-600">
-                          {msg.username}
-                        </div>
-                        <div className="text-sm">{msg.message}</div>
-                        <div className="text-xs text-gray-400 mt-1">
-                          {new Date(msg.created_at).toLocaleTimeString('fr-FR')}
+                        <div className="flex gap-2">
+                          <Avatar className="h-8 w-8 flex-shrink-0">
+                            <AvatarImage src={msg.avatar_url || ''} alt={msg.username} />
+                            <AvatarFallback className="bg-[#b8933d] text-white text-xs">
+                              {msg.username.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) || <UserIcon className="h-4 w-4" />}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div className="flex-1 min-w-0">
+                            <div className="font-semibold text-sm text-blue-600">
+                              {msg.username}
+                            </div>
+                            <div className="text-sm break-words">{msg.message}</div>
+                            <div className="text-xs text-gray-400 mt-1">
+                              {new Date(msg.created_at).toLocaleTimeString('fr-FR')}
+                            </div>
+                          </div>
                         </div>
                       </div>
                     ))}

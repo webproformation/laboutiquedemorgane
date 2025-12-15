@@ -4,11 +4,18 @@ import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import AccountNav from '@/components/AccountNav';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Sparkles } from 'lucide-react';
 
 export default function AccountLayout({ children }: { children: React.ReactNode }) {
-  const { user, loading } = useAuth();
+  const { user, profile, loading } = useAuth();
   const router = useRouter();
+
+  const getGreeting = () => {
+    const hour = new Date().getHours();
+    if (hour < 12) return 'Bonjour';
+    if (hour < 18) return 'Bon après-midi';
+    return 'Bonsoir';
+  };
 
   useEffect(() => {
     if (!loading && !user) {
@@ -31,9 +38,16 @@ export default function AccountLayout({ children }: { children: React.ReactNode 
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="container mx-auto px-4 py-8">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Mon compte</h1>
-          <p className="text-gray-600">Gérez vos informations et vos commandes</p>
+        <div className="mb-8 bg-gradient-to-r from-[#b8933d] to-[#d4a962] rounded-lg p-6 text-white shadow-lg">
+          <div className="flex items-center gap-3 mb-2">
+            <Sparkles className="h-6 w-6" />
+            <h1 className="text-3xl font-bold">
+              {getGreeting()} {profile?.first_name || 'chère cliente'}
+            </h1>
+          </div>
+          <p className="text-lg text-white/90">
+            Ravie de te revoir ! Gérer ton compte et découvre nos nouveautés.
+          </p>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">

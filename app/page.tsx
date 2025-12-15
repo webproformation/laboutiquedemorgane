@@ -5,6 +5,7 @@ import ScratchCardGame from '@/components/ScratchCardGame';
 import WheelGame from '@/components/WheelGame';
 import HomeCategories from '@/components/HomeCategories';
 import FeaturedProductsSlider from '@/components/FeaturedProductsSlider';
+import VideoShowcase from '@/components/VideoShowcase';
 import LiveStreamsSlider from '@/components/LiveStreamsSlider';
 import CustomerReviewsSlider from '@/components/CustomerReviewsSlider';
 import { useState, useEffect } from 'react';
@@ -201,6 +202,7 @@ export default function Home() {
       <HeroSlider />
       <HomeCategories />
       <FeaturedProductsSlider />
+      <VideoShowcase />
       <LiveStreamsSlider />
       <CustomerReviewsSlider />
     </>
