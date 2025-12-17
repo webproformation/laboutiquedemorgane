@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label';
 import { ProductVariation } from '@/types';
 import ColorSwatch from '@/components/ColorSwatch';
 import { isColorAttribute } from '@/lib/colors';
+import { isStockAvailable } from '@/lib/utils';
 
 interface Attribute {
   name: string;
@@ -120,7 +121,12 @@ export default function ProductVariationSelector({
       .filter(([name]) => normalizeAttributeName(name) !== normalizeAttributeName(attributeName));
 
     if (otherSelectedAttributes.length === 0) {
-      return true;
+      return variations.some(variation => {
+        const matchesCurrent = variation.attributes.some(varAttr =>
+          attributeMatches(varAttr.name, attributeName, varAttr.option, value)
+        );
+        return matchesCurrent && isStockAvailable(variation.stockStatus, variation.stockQuantity);
+      });
     }
 
     return variations.some(variation => {
@@ -134,7 +140,7 @@ export default function ProductVariationSelector({
         attributeMatches(varAttr.name, attributeName, varAttr.option, value)
       );
 
-      return matchesOthers && matchesCurrent;
+      return matchesOthers && matchesCurrent && isStockAvailable(variation.stockStatus, variation.stockQuantity);
     });
   };
 
@@ -169,7 +175,8 @@ export default function ProductVariationSelector({
                 return (
                   <div
                     key={option}
-                    className={`${!isAvailable ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    className={`relative ${!isAvailable ? 'opacity-40 cursor-not-allowed' : ''}`}
+                    title={!isAvailable ? 'Rupture de stock' : ''}
                   >
                     <ColorSwatch
                       color={option}
@@ -177,6 +184,11 @@ export default function ProductVariationSelector({
                       onClick={() => isAvailable && handleAttributeSelect(attribute.name, option)}
                       size="md"
                     />
+                    {!isAvailable && (
+                      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                        <div className="w-full h-[2px] bg-red-500 rotate-45 transform scale-110" />
+                      </div>
+                    )}
                   </div>
                 );
               }
@@ -191,10 +203,11 @@ export default function ProductVariationSelector({
                       ? 'bg-[#b8933d] hover:bg-[#a07c2f] text-white border-[#b8933d]'
                       : 'border-gray-300 hover:border-[#b8933d]'
                     }
-                    ${!isAvailable ? 'opacity-50 cursor-not-allowed' : ''}
+                    ${!isAvailable ? 'opacity-40 cursor-not-allowed line-through decoration-2 decoration-red-500' : ''}
                   `}
                   onClick={() => handleAttributeSelect(attribute.name, option)}
                   disabled={!isAvailable}
+                  title={!isAvailable ? 'Rupture de stock' : ''}
                 >
                   {option}
                 </Button>
@@ -210,14 +223,14 @@ export default function ProductVariationSelector({
           <div className="flex items-center gap-2 mb-2">
             <div
               className={`h-3 w-3 rounded-full ${
-                selectedVariation.stock_status === 'instock' ? 'bg-[#B6914A]' : 'bg-[#DF30CF]'
+                isStockAvailable(selectedVariation.stockStatus, selectedVariation.stockQuantity) ? 'bg-[#B6914A]' : 'bg-[#DF30CF]'
               }`}
             />
             <p className="text-sm font-medium">
-              {selectedVariation.stock_status === 'instock' ? (
+              {isStockAvailable(selectedVariation.stockStatus, selectedVariation.stockQuantity) ? (
                 <span className="text-[#B6914A]">
                   Disponible
-                  {selectedVariation.stock_quantity !== null && selectedVariation.stock_quantity !== undefined && ` (${selectedVariation.stock_quantity} en stock)`}
+                  {selectedVariation.stockQuantity !== null && selectedVariation.stockQuantity !== undefined && ` (${selectedVariation.stockQuantity} en stock)`}
                 </span>
               ) : (
                 <span className="text-[#DF30CF]">Rupture de stock</span>

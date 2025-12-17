@@ -31,7 +31,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { formatPrice, formatAttributeName } from '@/lib/utils';
+import { formatPrice, formatAttributeName, isStockAvailable } from '@/lib/utils';
 import { supabase } from '@/lib/supabase-client';
 import ProductVariationSelector from '@/components/ProductVariationSelector';
 import ColorSwatch from '@/components/ColorSwatch';
@@ -226,6 +226,10 @@ export default function ProductPage({ params }: { params: Promise<{ slug: string
   if (rawProduct.variations?.nodes && rawProduct.variations.nodes.length > 0) {
     console.log('🔄 Raw variation sample:', rawProduct.variations.nodes[0]);
     console.log('🔄 Mapped variation sample:', product.variations?.nodes[0]);
+    console.log('📦 Stock Status (raw):', rawProduct.variations.nodes[0].stockStatus);
+    console.log('📦 Stock Quantity (raw):', rawProduct.variations.nodes[0].stockQuantity);
+    console.log('📦 Stock Status (mapped):', product.variations?.nodes[0].stockStatus);
+    console.log('📦 Stock Quantity (mapped):', product.variations?.nodes[0].stockQuantity);
   }
 
   const sizeOrder = ['xs', 's', 'm', 'l', 'xl', 'xxl', 'xxxl'];
@@ -331,16 +335,17 @@ export default function ProductPage({ params }: { params: Promise<{ slug: string
 
   const allImages = currentImages.length > 0 ? currentImages : defaultImages;
   const displayPrice = selectedVariation ? selectedVariation.price : product.price;
-  const displayRegularPrice = selectedVariation ? selectedVariation.regular_price : product.regularPrice;
+  const displayRegularPrice = selectedVariation ? selectedVariation.regularPrice : product.regularPrice;
   const isOnSale = selectedVariation
-    ? selectedVariation.sale_price && parseFloat(selectedVariation.sale_price) > 0
+    ? selectedVariation.salePrice && parseFloat(selectedVariation.salePrice) > 0
     : product.onSale;
   const displayStockQuantity = selectedVariation
-    ? selectedVariation.stock_quantity
+    ? selectedVariation.stockQuantity
     : product.stockQuantity;
   const displayStockStatus = selectedVariation
-    ? selectedVariation.stock_status
-    : ((product.stockQuantity ?? 0) > 0 ? 'instock' : 'outofstock');
+    ? selectedVariation.stockStatus
+    : product.stockStatus;
+  const isProductInStock = isStockAvailable(displayStockStatus, displayStockQuantity);
 
   console.log('🏷️ Product:', product.name);
   console.log('📦 Is Variable:', isVariable);
@@ -512,7 +517,7 @@ export default function ProductPage({ params }: { params: Promise<{ slug: string
                   >
                     Veuillez sélectionner une option
                   </Button>
-                ) : displayStockStatus === 'outofstock' || displayStockQuantity === 0 ? (
+                ) : !isProductInStock ? (
                   <Button
                     onClick={handleNotifyAvailability}
                     className="w-full bg-[#B6914A] hover:bg-[#a07c2f] text-white h-12 text-lg font-semibold"
@@ -555,6 +560,9 @@ export default function ProductPage({ params }: { params: Promise<{ slug: string
               {(product.attributes?.nodes && product.attributes.nodes.length > 0) && (
                 <div className="border-t pt-6">
                   <h3 className="text-lg font-semibold text-gray-900 mb-4">Caractéristiques</h3>
+                  <p className="text-sm text-gray-500 mb-3">
+                    {isVariable ? 'Ces caractéristiques sont disponibles dans les variations ci-dessus.' : 'Caractéristiques du produit :'}
+                  </p>
                   <div className="grid grid-cols-1 gap-3">
                     {product.attributes.nodes.filter((attr: any) => !attr.variation).map((attr: any, index: number) => {
                       const isSizeAttribute = attr.name.toLowerCase().includes('taille');
@@ -569,32 +577,26 @@ export default function ProductPage({ params }: { params: Promise<{ slug: string
                           <div className="flex-1">
                             <div className="flex flex-wrap gap-2 items-center">
                               {sortedOptions.map((option: string, optIndex: number) => {
-                                const isSelected = selectedCharacteristics[attr.name] === option;
-
                                 if (isColorAttr) {
                                   return (
-                                    <ColorSwatch
-                                      key={optIndex}
-                                      color={option}
-                                      isSelected={isSelected}
-                                      onClick={() => wrappedHandleAttributeSelect(attr.name, option)}
-                                      size="md"
-                                    />
+                                    <div key={optIndex} className="relative">
+                                      <ColorSwatch
+                                        color={option}
+                                        isSelected={false}
+                                        onClick={() => {}}
+                                        size="sm"
+                                      />
+                                    </div>
                                   );
                                 }
 
                                 return (
-                                  <button
+                                  <span
                                     key={optIndex}
-                                    onClick={() => wrappedHandleAttributeSelect(attr.name, option)}
-                                    className={`inline-flex items-center px-3 py-1 border rounded-full text-sm transition-colors cursor-pointer ${
-                                      isSelected
-                                        ? 'bg-[#b8933d] border-[#b8933d] text-white'
-                                        : 'bg-white border-gray-200 text-gray-700 hover:border-[#b8933d] hover:bg-[#b8933d]/5'
-                                    }`}
+                                    className="inline-flex items-center px-3 py-1 border border-gray-200 bg-white rounded-full text-sm text-gray-700"
                                   >
                                     {option}
-                                  </button>
+                                  </span>
                                 );
                               })}
                             </div>

@@ -74,3 +74,11 @@ export function parsePrice(priceString: string | undefined | null): number {
 
   return parseFloat(cleanPrice) || 0;
 }
+
+export function isStockAvailable(stockStatus: string | undefined | null, stockQuantity: number | null | undefined): boolean {
+  if (!stockStatus) return false;
+  const normalizedStatus = stockStatus.toUpperCase();
+  const isInStock = normalizedStatus === 'IN_STOCK' || normalizedStatus === 'INSTOCK';
+  const hasQuantity = stockQuantity === null || stockQuantity === undefined || stockQuantity > 0;
+  return isInStock && hasQuantity;
+}

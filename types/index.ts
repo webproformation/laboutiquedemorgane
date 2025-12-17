@@ -7,17 +7,21 @@ export interface ProductAttribute {
 
 export interface ProductVariation {
   id: number;
+  databaseId?: number;
+  name?: string;
   attributes: Array<{
     name: string;
     option: string;
+    value?: string;
   }>;
   price: string;
-  regular_price: string;
-  sale_price: string;
-  stock_status: string;
-  stock_quantity: number | null;
+  regularPrice?: string;
+  salePrice?: string;
+  onSale?: boolean;
+  stockStatus: string;
+  stockQuantity: number | null;
   image?: {
-    src: string;
+    src?: string;
     sourceUrl?: string;
     alt?: string;
   };
