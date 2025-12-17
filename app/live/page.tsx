@@ -149,6 +149,7 @@ export default function LivePage() {
                         src={stream.thumbnail_url}
                         alt={stream.title}
                         fill
+                        sizes="(max-width: 768px) 100vw, (max-width: 1024px) 50vw, 33vw"
                         className="object-cover"
                       />
                     ) : (
@@ -198,6 +199,7 @@ export default function LivePage() {
                         src={stream.thumbnail_url}
                         alt={stream.title}
                         fill
+                        sizes="(max-width: 768px) 100vw, (max-width: 1024px) 50vw, 33vw"
                         className="object-cover"
                       />
                     ) : (

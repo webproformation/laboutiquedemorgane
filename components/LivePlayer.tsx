@@ -386,6 +386,7 @@ export default function LivePlayer({
                         src={currentProduct.product_image}
                         alt={currentProduct.product_name}
                         fill
+                        sizes="96px"
                         className="object-cover rounded"
                       />
                     </div>
@@ -498,6 +499,7 @@ export default function LivePlayer({
                         src={product.product_image}
                         alt={product.product_name}
                         fill
+                        sizes="200px"
                         className="object-cover rounded"
                       />
                       {product.is_current && (

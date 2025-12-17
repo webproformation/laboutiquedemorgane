@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Loader2, Upload, X, Search, Trash2 } from 'lucide-react';
+import { Loader2, Upload, X, Search, Trash2, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   AlertDialog,
@@ -44,20 +44,15 @@ export default function WordPressMediaSelector({ onSelect, selectedImage }: Word
   const loadMedia = async (pageNum: number, searchTerm: string = '') => {
     setLoading(true);
     try {
-      const graphqlUrl = process.env.NEXT_PUBLIC_WORDPRESS_API_URL || '';
-      const wpUrl = graphqlUrl.replace('/graphql', '');
-
-      if (!wpUrl) {
-        throw new Error('URL WordPress non configurée');
-      }
-
-      let url = `${wpUrl}/wp-json/wp/v2/media?per_page=20&page=${pageNum}`;
+      let url = `/api/wordpress/media?per_page=20&page=${pageNum}`;
 
       if (searchTerm) {
         url += `&search=${encodeURIComponent(searchTerm)}`;
       }
 
-      const response = await fetch(url);
+      const response = await fetch(url, {
+        cache: 'no-store'
+      });
 
       if (!response.ok) throw new Error('Erreur de chargement');
 
@@ -80,9 +75,16 @@ export default function WordPressMediaSelector({ onSelect, selectedImage }: Word
 
   useEffect(() => {
     if (open) {
+      setPage(1);
       loadMedia(1, search);
     }
   }, [open, search]);
+
+  const handleRefresh = () => {
+    setPage(1);
+    loadMedia(1, search);
+    toast.success('Médiathèque actualisée');
+  };
 
   const handleSelect = (item: MediaItem) => {
     onSelect(item.source_url, item.id);
@@ -121,9 +123,10 @@ export default function WordPressMediaSelector({ onSelect, selectedImage }: Word
 
       const uploadedMedia = await response.json();
 
-      setMedia(prev => [uploadedMedia, ...prev]);
+      setPage(1);
+      await loadMedia(1, search);
 
-      toast.success('Image uploadée avec succès');
+      toast.success('Image uploadée avec succès et médiathèque rafraîchie');
 
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
@@ -223,7 +226,16 @@ export default function WordPressMediaSelector({ onSelect, selectedImage }: Word
                 className="pl-10"
               />
             </div>
-            <div>
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                onClick={handleRefresh}
+                disabled={loading}
+                variant="outline"
+                title="Actualiser la médiathèque"
+              >
+                <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+              </Button>
               <input
                 ref={fileInputRef}
                 type="file"

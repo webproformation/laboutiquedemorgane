@@ -12,7 +12,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { AlertCircle, ShoppingCart, Home, Heart, Bell } from 'lucide-react';
 import Link from 'next/link';
 import { toast } from 'sonner';
-import { useState, use } from 'react';
+import { useState, use, useCallback } from 'react';
 import ProductGallery from '@/components/ProductGallery';
 import ShareButtons from '@/components/ShareButtons';
 import {
@@ -33,6 +33,9 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { formatPrice, formatAttributeName } from '@/lib/utils';
 import { supabase } from '@/lib/supabase-client';
+import ProductVariationSelector from '@/components/ProductVariationSelector';
+import ColorSwatch from '@/components/ColorSwatch';
+import { isColorAttribute } from '@/lib/colors';
 
 export default function ProductPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug: rawSlug } = use(params);
@@ -47,6 +50,114 @@ export default function ProductPage({ params }: { params: Promise<{ slug: string
   const [showNotifyDialog, setShowNotifyDialog] = useState(false);
   const [notifyEmail, setNotifyEmail] = useState('');
   const [isSubmittingNotification, setIsSubmittingNotification] = useState(false);
+  const [selectedVariation, setSelectedVariation] = useState<any>(null);
+  const [currentImages, setCurrentImages] = useState<any[]>([]);
+  const [selectedCharacteristics, setSelectedCharacteristics] = useState<Record<string, string>>({});
+
+  const handleVariationChange = useCallback((variation: any, defaultImages: any[]) => {
+    setSelectedVariation(variation);
+    if (variation && variation.image) {
+      setCurrentImages([variation.image, ...defaultImages]);
+    } else {
+      setCurrentImages(defaultImages);
+    }
+  }, []);
+
+  const handleAttributeSelect = useCallback((attributeName: string, value: string, currentCharacteristics: Record<string, string>, variations: any[], variationAttributes: any[], defaultImages: any[]) => {
+    console.log('🎨 Attribute selected:', attributeName, '=', value);
+
+    const newSelectedCharacteristics = {
+      ...currentCharacteristics,
+      [attributeName]: value
+    };
+    setSelectedCharacteristics(newSelectedCharacteristics);
+
+    console.log('📊 All selected characteristics:', newSelectedCharacteristics);
+    console.log('🔍 Available variations:', variations.length);
+
+    const normalizeAttributeName = (name: string) => {
+      return name.toLowerCase()
+        .replace(/^pa_/, '')
+        .replace(/-/g, ' ')
+        .replace(/_/g, ' ')
+        .trim();
+    };
+
+    const attributeMatches = (varAttrName: string, selectedAttrName: string, varAttrValue: string, selectedValue: string) => {
+      const normalizedVarAttr = normalizeAttributeName(varAttrName);
+      const normalizedSelectedAttr = normalizeAttributeName(selectedAttrName);
+
+      return (normalizedVarAttr === normalizedSelectedAttr || varAttrName.toLowerCase() === selectedAttrName.toLowerCase()) &&
+             varAttrValue.toLowerCase() === selectedValue.toLowerCase();
+    };
+
+    const selectedEntries = Object.entries(newSelectedCharacteristics);
+
+    const exactMatch = variations.find(variation => {
+      const matches = variation.attributes.every((varAttr: any) => {
+        const found = selectedEntries.some(([selName, selValue]) => {
+          const match = attributeMatches(varAttr.name, selName, varAttr.option, selValue);
+          return match;
+        });
+        return found;
+      }) && variation.attributes.length === selectedEntries.length;
+
+      return matches;
+    });
+
+    console.log('✅ Exact match found:', exactMatch ? 'YES' : 'NO', exactMatch?.id);
+
+    if (exactMatch) {
+      console.log('💰 Setting price to:', exactMatch.price);
+      console.log('🖼️ Setting image to:', exactMatch.image?.sourceUrl || 'default');
+      setSelectedVariation(exactMatch);
+      if (exactMatch.image) {
+        setCurrentImages([exactMatch.image, ...defaultImages]);
+      } else {
+        setCurrentImages(defaultImages);
+      }
+      return;
+    }
+
+    const partialMatches = variations.filter(variation => {
+      return selectedEntries.every(([selName, selValue]) => {
+        return variation.attributes.some((varAttr: any) =>
+          attributeMatches(varAttr.name, selName, varAttr.option, selValue)
+        );
+      });
+    });
+
+    console.log('🔎 Partial matches found:', partialMatches.length);
+
+    if (partialMatches.length === 1) {
+      console.log('💰 Setting price to (partial):', partialMatches[0].price);
+      setSelectedVariation(partialMatches[0]);
+      if (partialMatches[0].image) {
+        setCurrentImages([partialMatches[0].image, ...defaultImages]);
+      } else {
+        setCurrentImages(defaultImages);
+      }
+    } else if (partialMatches.length > 1) {
+      const bestMatch = partialMatches.find(v => v.image);
+      if (bestMatch && bestMatch.image) {
+        setCurrentImages([bestMatch.image, ...defaultImages]);
+      } else if (partialMatches[0].image) {
+        setCurrentImages([partialMatches[0].image, ...defaultImages]);
+      }
+
+      if (selectedEntries.length === variationAttributes.length) {
+        console.log('💰 Setting price to (best of multiple):', partialMatches[0].price);
+        setSelectedVariation(partialMatches[0]);
+      } else {
+        console.log('⚠️ Not enough attributes selected');
+        setSelectedVariation(null);
+      }
+    } else {
+      console.log('❌ No matches found - resetting');
+      setSelectedVariation(null);
+      setCurrentImages(defaultImages);
+    }
+  }, []);
 
   if (loading) {
     return (
@@ -75,6 +186,8 @@ export default function ProductPage({ params }: { params: Promise<{ slug: string
   }
 
   if (error || !data?.product) {
+    console.error('❌ GraphQL Error:', error);
+    console.error('❌ GraphQL Response:', data);
     return (
       <div className="container mx-auto px-4 py-8">
         <Alert variant="destructive">
@@ -82,17 +195,79 @@ export default function ProductPage({ params }: { params: Promise<{ slug: string
           <AlertTitle>Erreur</AlertTitle>
           <AlertDescription>
             Produit introuvable ou erreur de chargement.
+            {error && (
+              <div className="mt-2 text-sm">
+                <strong>Détails :</strong> {error.message}
+              </div>
+            )}
           </AlertDescription>
         </Alert>
       </div>
     );
   }
 
-  const product = data.product;
+  const rawProduct = data.product;
+
+  const product = {
+    ...rawProduct,
+    variations: rawProduct.variations?.nodes ? {
+      nodes: rawProduct.variations.nodes.map((variation: any) => ({
+        ...variation,
+        attributes: variation.attributes?.nodes?.map((attr: any) => ({
+          name: attr.name,
+          option: attr.value || attr.option
+        })) || []
+      }))
+    } : undefined
+  };
+
+  console.log('🔄 Raw product loaded:', rawProduct.name);
+  console.log('🔄 Variations available:', rawProduct.variations?.nodes?.length || 0);
+  if (rawProduct.variations?.nodes && rawProduct.variations.nodes.length > 0) {
+    console.log('🔄 Raw variation sample:', rawProduct.variations.nodes[0]);
+    console.log('🔄 Mapped variation sample:', product.variations?.nodes[0]);
+  }
+
+  const sizeOrder = ['xs', 's', 'm', 'l', 'xl', 'xxl', 'xxxl'];
+
+  const sortSizes = (options: string[]) => {
+    return [...options].sort((a, b) => {
+      const aLower = a.toLowerCase();
+      const bLower = b.toLowerCase();
+      const aIndex = sizeOrder.indexOf(aLower);
+      const bIndex = sizeOrder.indexOf(bLower);
+
+      if (aIndex !== -1 && bIndex !== -1) {
+        return aIndex - bIndex;
+      }
+      if (aIndex !== -1) return -1;
+      if (bIndex !== -1) return 1;
+      return 0;
+    });
+  };
 
   const handleAddToCart = () => {
-    addToCart(product, quantity);
-    toast.success(`${quantity} × ${product.name} ajouté au panier !`);
+    if (isVariable && selectedVariation) {
+      const cartItem = {
+        ...product,
+        id: `${product.id}-${selectedVariation.id}`,
+        variationId: selectedVariation.id,
+        price: selectedVariation.price,
+        variationPrice: selectedVariation.price,
+        image: selectedVariation.image || product.image,
+        variationImage: selectedVariation.image,
+        selectedAttributes: selectedCharacteristics,
+      };
+      addToCart(cartItem, quantity);
+
+      const attributesText = Object.entries(selectedCharacteristics)
+        .map(([key, value]) => `${key}: ${value}`)
+        .join(', ');
+      toast.success(`${quantity} × ${product.name} (${attributesText}) ajouté au panier !`);
+    } else {
+      addToCart(product, quantity);
+      toast.success(`${quantity} × ${product.name} ajouté au panier !`);
+    }
   };
 
   const handleToggleWishlist = async () => {
@@ -141,7 +316,51 @@ export default function ProductPage({ params }: { params: Promise<{ slug: string
 
   const inWishlist = isInWishlist(product.slug);
   const galleryImages = product.galleryImages?.nodes || [];
-  const allImages = product.image ? [product.image, ...galleryImages] : galleryImages;
+  const defaultImages = product.image ? [product.image, ...galleryImages] : galleryImages;
+  const isVariable = product.__typename === 'VariableProduct';
+  const variations = product.variations?.nodes || [];
+  const variationAttributes = product.attributes?.nodes?.filter((attr: any) => attr.variation) || [];
+
+  const wrappedHandleVariationChange = (variation: any) => {
+    handleVariationChange(variation, defaultImages);
+  };
+
+  const wrappedHandleAttributeSelect = (attributeName: string, value: string) => {
+    handleAttributeSelect(attributeName, value, selectedCharacteristics, variations, variationAttributes, defaultImages);
+  };
+
+  const allImages = currentImages.length > 0 ? currentImages : defaultImages;
+  const displayPrice = selectedVariation ? selectedVariation.price : product.price;
+  const displayRegularPrice = selectedVariation ? selectedVariation.regular_price : product.regularPrice;
+  const isOnSale = selectedVariation
+    ? selectedVariation.sale_price && parseFloat(selectedVariation.sale_price) > 0
+    : product.onSale;
+  const displayStockQuantity = selectedVariation
+    ? selectedVariation.stock_quantity
+    : product.stockQuantity;
+  const displayStockStatus = selectedVariation
+    ? selectedVariation.stock_status
+    : ((product.stockQuantity ?? 0) > 0 ? 'instock' : 'outofstock');
+
+  console.log('🏷️ Product:', product.name);
+  console.log('📦 Is Variable:', isVariable);
+  console.log('🎯 Variations count:', variations.length);
+  console.log('🔧 Variation attributes:', variationAttributes.map((a: any) => a.name));
+
+  if (variations.length > 0) {
+    console.log('📋 First variation sample:', {
+      id: variations[0].id,
+      price: variations[0].price,
+      attributes: variations[0].attributes.map((a: any) => ({
+        name: a.name,
+        option: a.option
+      }))
+    });
+  }
+
+  console.log('✨ Current selected variation:', selectedVariation?.id || 'none');
+  console.log('💵 Display price:', displayPrice);
+  console.log('🎨 Selected characteristics:', selectedCharacteristics);
 
   return (
     <>
@@ -198,13 +417,13 @@ export default function ProductPage({ params }: { params: Promise<{ slug: string
                   {product.name}
                 </h1>
                 <div className="flex items-baseline gap-3 flex-wrap">
-                  {product.onSale && product.regularPrice ? (
+                  {isOnSale && displayRegularPrice ? (
                     <>
                       <p className="text-2xl text-gray-500 line-through">
-                        {formatPrice(product.regularPrice)}
+                        {formatPrice(displayRegularPrice)}
                       </p>
-                      <p className="text-3xl lg:text-4xl font-bold text-[#305F69]">
-                        {formatPrice(product.price)}
+                      <p className="text-3xl lg:text-4xl font-bold text-[#b8933d]">
+                        {formatPrice(displayPrice)}
                       </p>
                       <span className="bg-[#DF30CF] text-white px-3 py-1 rounded-full text-sm font-bold">
                         PROMO
@@ -212,26 +431,46 @@ export default function ProductPage({ params }: { params: Promise<{ slug: string
                     </>
                   ) : (
                     <p className="text-3xl lg:text-4xl font-bold text-[#b8933d]">
-                      {formatPrice(product.price)}
+                      {formatPrice(displayPrice)}
                     </p>
                   )}
                 </div>
+                {isVariable && !selectedVariation && (
+                  <p className="text-sm text-gray-600 italic mt-2">
+                    Sélectionnez les options ci-dessous pour découvrir le prix
+                  </p>
+                )}
               </div>
 
-              {product.stockQuantity !== null && product.stockQuantity !== undefined && (
+              {!isVariable && displayStockQuantity !== null && displayStockQuantity !== undefined && (
                 <div className="flex items-center gap-2">
                   <div
                     className={`h-3 w-3 rounded-full ${
-                      product.stockQuantity > 0 ? 'bg-[#B6914A]' : 'bg-[#DF30CF]'
+                      displayStockQuantity > 0 ? 'bg-[#B6914A]' : 'bg-[#DF30CF]'
                     }`}
                   />
                   <p className="text-sm font-medium">
-                    {product.stockQuantity > 0 ? (
+                    {displayStockQuantity > 0 ? (
                       <span className="text-[#B6914A]">Produit disponible</span>
                     ) : (
                       <span className="text-[#DF30CF]">Rupture de stock</span>
                     )}
                   </p>
+                </div>
+              )}
+
+              {isVariable && variationAttributes.length > 0 && (
+                <div className="border-t border-gray-200 pt-6">
+                  <ProductVariationSelector
+                    variations={variations}
+                    attributes={variationAttributes.map((attr: any) => ({
+                      name: attr.name,
+                      options: attr.options || []
+                    }))}
+                    onVariationChange={wrappedHandleVariationChange}
+                    onAttributeSelect={wrappedHandleAttributeSelect}
+                    externalSelectedAttributes={selectedCharacteristics}
+                  />
                 </div>
               )}
 
@@ -266,7 +505,14 @@ export default function ProductPage({ params }: { params: Promise<{ slug: string
                   </div>
                 </div>
 
-                {product.stockQuantity === 0 ? (
+                {(isVariable && !selectedVariation) ? (
+                  <Button
+                    disabled
+                    className="w-full bg-gray-400 text-white h-12 text-lg font-semibold cursor-not-allowed"
+                  >
+                    Veuillez sélectionner une option
+                  </Button>
+                ) : displayStockStatus === 'outofstock' || displayStockQuantity === 0 ? (
                   <Button
                     onClick={handleNotifyAvailability}
                     className="w-full bg-[#B6914A] hover:bg-[#a07c2f] text-white h-12 text-lg font-semibold"
@@ -278,7 +524,6 @@ export default function ProductPage({ params }: { params: Promise<{ slug: string
                   <Button
                     onClick={handleAddToCart}
                     className="w-full bg-[#b8933d] hover:bg-[#a07c2f] text-white h-12 text-lg font-semibold"
-                    disabled={product.stockQuantity === undefined}
                   >
                     <ShoppingCart className="mr-2 h-5 w-5" />
                     Ajouter au panier
@@ -311,25 +556,52 @@ export default function ProductPage({ params }: { params: Promise<{ slug: string
                 <div className="border-t pt-6">
                   <h3 className="text-lg font-semibold text-gray-900 mb-4">Caractéristiques</h3>
                   <div className="grid grid-cols-1 gap-3">
-                    {product.attributes.nodes.map((attr: any, index: number) => (
-                      <div key={index} className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
-                        <div className="flex-shrink-0 w-40">
-                          <span className="text-sm font-medium text-gray-700">{formatAttributeName(attr.name)} :</span>
-                        </div>
-                        <div className="flex-1">
-                          <div className="flex flex-wrap gap-2">
-                            {attr.options?.map((option: string, optIndex: number) => (
-                              <span
-                                key={optIndex}
-                                className="inline-flex items-center px-3 py-1 bg-white border border-gray-200 rounded-full text-sm text-gray-700"
-                              >
-                                {option}
-                              </span>
-                            ))}
+                    {product.attributes.nodes.filter((attr: any) => !attr.variation).map((attr: any, index: number) => {
+                      const isSizeAttribute = attr.name.toLowerCase().includes('taille');
+                      const isColorAttr = isColorAttribute(attr.name);
+                      const sortedOptions = isSizeAttribute ? sortSizes(attr.options || []) : (attr.options || []);
+
+                      return (
+                        <div key={index} className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
+                          <div className="flex-shrink-0 w-40">
+                            <span className="text-sm font-medium text-gray-700">{formatAttributeName(attr.name)} :</span>
+                          </div>
+                          <div className="flex-1">
+                            <div className="flex flex-wrap gap-2 items-center">
+                              {sortedOptions.map((option: string, optIndex: number) => {
+                                const isSelected = selectedCharacteristics[attr.name] === option;
+
+                                if (isColorAttr) {
+                                  return (
+                                    <ColorSwatch
+                                      key={optIndex}
+                                      color={option}
+                                      isSelected={isSelected}
+                                      onClick={() => wrappedHandleAttributeSelect(attr.name, option)}
+                                      size="md"
+                                    />
+                                  );
+                                }
+
+                                return (
+                                  <button
+                                    key={optIndex}
+                                    onClick={() => wrappedHandleAttributeSelect(attr.name, option)}
+                                    className={`inline-flex items-center px-3 py-1 border rounded-full text-sm transition-colors cursor-pointer ${
+                                      isSelected
+                                        ? 'bg-[#b8933d] border-[#b8933d] text-white'
+                                        : 'bg-white border-gray-200 text-gray-700 hover:border-[#b8933d] hover:bg-[#b8933d]/5'
+                                    }`}
+                                  >
+                                    {option}
+                                  </button>
+                                );
+                              })}
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               )}

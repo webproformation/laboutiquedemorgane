@@ -83,70 +83,66 @@ export default function Footer() {
 
   return (
     <footer className="bg-gray-900 text-gray-300 mt-auto">
-      <div className="py-8" style={{ backgroundColor: '#C6A15B' }}>
+      <div className="py-12 bg-white">
         <div className="container mx-auto px-4">
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
             <Link
-              href="/retours-gratuits"
-              className="flex flex-col items-center text-center gap-3 hover:scale-110 transition-all duration-300 animate-in fade-in"
-              style={{ animationDelay: '100ms', animationDuration: '600ms' }}
+              href="/le-droit-a-lerreur"
+              className="flex flex-col items-center text-center gap-3 hover:scale-105 transition-all duration-300 group"
             >
               <img
-                src="https://laboutiquedemorgane.webprocreation.fr/wp-content/uploads/2025/12/01.jpg"
-                alt="Retours gratuits"
-                className="w-16 h-16 object-contain transition-transform duration-300"
+                src="https://laboutiquedemorgane.webprocreation.fr/wp-content/uploads/2025/12/La-boutique-de-Morgane-Le-droit-a-lerreur.png"
+                alt="Le Droit à l'Erreur"
+                className="w-20 h-20 object-contain transition-transform duration-300 group-hover:scale-110"
               />
-              <div className="text-white">
-                <p className="font-semibold text-lg">Retours gratuits</p>
-                <p className="text-base">sous 14 jours</p>
+              <div>
+                <p className="font-semibold text-lg text-gray-900 mb-2">Le Droit à l'Erreur</p>
+                <p className="text-sm text-gray-600 leading-relaxed">Ça arrive ! Transformez votre retour en crédit boutique pour craquer sur votre prochain coup de cœur sans attendre.</p>
               </div>
             </Link>
 
             <Link
-              href="/frais-de-port"
-              className="flex flex-col items-center text-center gap-3 hover:scale-110 transition-all duration-300 animate-in fade-in"
-              style={{ animationDelay: '200ms', animationDuration: '600ms' }}
+              href="/vite-chez-vous"
+              className="flex flex-col items-center text-center gap-3 hover:scale-105 transition-all duration-300 group"
             >
               <img
-                src="https://laboutiquedemorgane.webprocreation.fr/wp-content/uploads/2025/12/02.jpg"
-                alt="Frais de port offerts"
-                className="w-16 h-16 object-contain transition-transform duration-300"
+                src="https://laboutiquedemorgane.webprocreation.fr/wp-content/uploads/2025/12/La-boutique-de-Morgane-Vite-chez-vous.png"
+                alt="Vite chez vous"
+                className="w-20 h-20 object-contain transition-transform duration-300 group-hover:scale-110"
               />
-              <div className="text-white">
-                <p className="font-semibold text-lg">Frais de port offerts</p>
-                <p className="text-base">sous conditions des jeux concours ou coupons</p>
+              <div>
+                <p className="font-semibold text-lg text-gray-900 mb-2">Vite chez vous</p>
+                <p className="text-sm text-gray-600 leading-relaxed">Vos pépites emballées avec soin et une expédition rapide. Livraison à prix mini (dès 3,90 €) pour un max de plaisir.</p>
               </div>
             </Link>
 
             <Link
-              href="/satisfait-rembourse"
-              className="flex flex-col items-center text-center gap-3 hover:scale-110 transition-all duration-300 animate-in fade-in"
-              style={{ animationDelay: '300ms', animationDuration: '600ms' }}
+              href="/transactions-protegees"
+              className="flex flex-col items-center text-center gap-3 hover:scale-105 transition-all duration-300 group"
             >
               <img
-                src="https://laboutiquedemorgane.webprocreation.fr/wp-content/uploads/2025/12/03.jpg"
-                alt="Satisfait(e) remboursé(e)"
-                className="w-16 h-16 object-contain transition-transform duration-300"
+                src="https://laboutiquedemorgane.webprocreation.fr/wp-content/uploads/2025/12/La-boutique-de-Morgane-Transaction-protegees.png"
+                alt="Transactions Protégées"
+                className="w-20 h-20 object-contain transition-transform duration-300 group-hover:scale-110"
               />
-              <div className="text-white">
-                <p className="font-semibold text-lg">Satisfait(e)</p>
-                <p className="text-base">remboursé(e)</p>
+              <div>
+                <p className="font-semibold text-lg text-gray-900 mb-2">Transactions Protégées</p>
+                <p className="text-sm text-gray-600 leading-relaxed">Règlement 100 % sécurisé et facilités de paiement (3x, 4x). La tranquillité d'esprit avant tout.</p>
               </div>
             </Link>
 
             <Link
-              href="/paiements-securises"
-              className="flex flex-col items-center text-center gap-3 hover:scale-110 transition-all duration-300 animate-in fade-in"
-              style={{ animationDelay: '400ms', animationDuration: '600ms' }}
+              href="/allo-morgane"
+              className="flex flex-col items-center text-center gap-3 hover:scale-105 transition-all duration-300 group"
             >
               <img
-                src="https://laboutiquedemorgane.webprocreation.fr/wp-content/uploads/2025/12/04.jpg"
-                alt="Paiements sécurisés"
-                className="w-16 h-16 object-contain transition-transform duration-300"
+                src="https://laboutiquedemorgane.webprocreation.fr/wp-content/uploads/2025/12/La-boutique-de-Morgane-Allo-Morgane.png"
+                alt="Allô Morgane ?"
+                className="w-20 h-20 object-contain transition-transform duration-300 group-hover:scale-110"
               />
-              <div className="text-white">
-                <p className="font-semibold text-lg">Paiements</p>
-                <p className="text-base">sécurisés</p>
+              <div>
+                <p className="font-semibold text-lg text-gray-900 mb-2">Allô Morgane ?</p>
+                <p className="text-sm text-gray-600 leading-relaxed">Plus qu'un site, un accompagnement. Morgane vous guide personnellement dans vos choix mode et beauté.</p>
               </div>
             </Link>
           </div>

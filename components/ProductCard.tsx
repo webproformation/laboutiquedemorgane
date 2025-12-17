@@ -165,6 +165,7 @@ export default function ProductCard({ product }: ProductCardProps) {
                 src={images[currentImageIndex]}
                 alt={product.name}
                 fill
+                sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, (max-width: 1024px) 25vw, 20vw"
                 className="object-cover transition-transform group-hover:scale-105"
               />
             ) : (
@@ -241,7 +242,7 @@ export default function ProductCard({ product }: ProductCardProps) {
               {product.onSale && product.regularPrice ? (
                 <>
                   <p className="text-xs text-gray-500 line-through">{formatPrice(product.regularPrice)}</p>
-                  <p className="text-lg font-bold text-[#305F69]">{formatPrice(product.price)}</p>
+                  <p className="text-lg font-bold text-[#b8933d]">{formatPrice(product.price)}</p>
                 </>
               ) : (
                 <p className="text-lg font-bold text-[#b8933d]">{formatPrice(product.price)}</p>

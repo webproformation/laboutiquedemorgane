@@ -69,7 +69,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
   };
 
   const cartTotal = cart.reduce((total, item) => {
-    const price = parsePrice(item.price);
+    const price = parsePrice(item.variationPrice || item.price);
     return total + price * item.quantity;
   }, 0);
 

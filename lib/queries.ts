@@ -107,6 +107,7 @@ export const GET_PRODUCTS_PAGINATED = gql`
 export const GET_PRODUCT_BY_SLUG = gql`
   query GetProductBySlug($slug: ID!) {
     product(id: $slug, idType: SLUG) {
+      __typename
       ... on SimpleProduct {
         id
         databaseId
@@ -160,10 +161,36 @@ export const GET_PRODUCT_BY_SLUG = gql`
         attributes {
           nodes {
             name
+            variation
             ... on GlobalProductAttribute {
               slug
             }
+            ... on LocalProductAttribute {
+              id
+            }
             options
+          }
+        }
+        variations(first: 100) {
+          nodes {
+            id
+            databaseId
+            name
+            price
+            regularPrice
+            salePrice
+            stockQuantity
+            stockStatus
+            onSale
+            image {
+              sourceUrl
+            }
+            attributes {
+              nodes {
+                name
+                value
+              }
+            }
           }
         }
       }
@@ -304,6 +331,7 @@ export const GET_PRODUCTS_BY_CATEGORY = gql`
           databaseId
           name
           slug
+          status
           onSale
           price
           regularPrice
@@ -336,6 +364,7 @@ export const GET_PRODUCTS_BY_CATEGORY = gql`
           databaseId
           name
           slug
+          status
           onSale
           price
           regularPrice
@@ -360,6 +389,18 @@ export const GET_PRODUCTS_BY_CATEGORY = gql`
               ... on LocalProductAttribute {
                 id
               }
+            }
+          }
+          variations {
+            nodes {
+              id
+              databaseId
+              name
+              price
+              regularPrice
+              salePrice
+              stockQuantity
+              stockStatus
             }
           }
         }
@@ -377,6 +418,7 @@ export const GET_PRODUCTS_BY_CATEGORIES = gql`
           databaseId
           name
           slug
+          status
           onSale
           price
           regularPrice
@@ -409,6 +451,7 @@ export const GET_PRODUCTS_BY_CATEGORIES = gql`
           databaseId
           name
           slug
+          status
           onSale
           price
           regularPrice
@@ -433,6 +476,18 @@ export const GET_PRODUCTS_BY_CATEGORIES = gql`
               ... on LocalProductAttribute {
                 id
               }
+            }
+          }
+          variations {
+            nodes {
+              id
+              databaseId
+              name
+              price
+              regularPrice
+              salePrice
+              stockQuantity
+              stockStatus
             }
           }
         }

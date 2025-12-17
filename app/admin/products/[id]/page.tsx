@@ -16,6 +16,7 @@ import RichTextEditor from '@/components/RichTextEditor';
 import WordPressMediaSelector from '@/components/WordPressMediaSelector';
 import ProductGalleryManager, { GalleryImage } from '@/components/ProductGalleryManager';
 import ProductAttributesManager from '@/components/ProductAttributesManager';
+import ProductVariationsManager, { ProductVariation } from '@/components/ProductVariationsManager';
 
 interface ProductAttribute {
   name: string;
@@ -49,6 +50,8 @@ interface ProductFormData {
   attributes: ProductAttribute[];
   categories: number[];
   status: 'publish' | 'draft';
+  type: 'simple' | 'variable';
+  variations: ProductVariation[];
 }
 
 export default function EditProductPage() {
@@ -73,6 +76,8 @@ export default function EditProductPage() {
     attributes: [],
     categories: [],
     status: 'publish',
+    type: 'simple',
+    variations: [],
   });
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -130,6 +135,8 @@ export default function EditProductPage() {
         attributes: product.attributes || [],
         categories: product.categories?.map((cat: any) => cat.id) || [],
         status: product.status || 'publish',
+        type: product.type || 'simple',
+        variations: product.variations || [],
       });
     } catch (error) {
       console.error('Error loading product:', error);
@@ -146,12 +153,13 @@ export default function EditProductPage() {
     try {
       const productData = {
         name: formData.name,
+        type: formData.type,
         description: formData.description,
         short_description: formData.short_description,
-        regular_price: formData.regular_price,
-        sale_price: formData.sale_price,
-        manage_stock: formData.manage_stock,
-        stock_quantity: formData.stock_quantity,
+        regular_price: formData.type === 'simple' ? formData.regular_price : '',
+        sale_price: formData.type === 'simple' ? formData.sale_price : '',
+        manage_stock: formData.type === 'simple' ? formData.manage_stock : false,
+        stock_quantity: formData.type === 'simple' ? formData.stock_quantity : undefined,
         stock_status: formData.stock_status,
         featured: formData.featured,
         images: formData.image_id ? [{ id: formData.image_id }, ...formData.gallery_images.map(img => ({ id: img.id }))] : formData.gallery_images.map(img => ({ id: img.id })),
@@ -159,6 +167,7 @@ export default function EditProductPage() {
         attributes: formData.attributes,
         categories: formData.categories.map(id => ({ id })),
         status: formData.status,
+        variations: formData.type === 'variable' ? formData.variations : undefined,
       };
 
       const response = await fetch('/api/woocommerce/products', {
@@ -369,87 +378,123 @@ export default function EditProductPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Prix</CardTitle>
+            <CardTitle>Type de produit</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="regular_price">Prix normal (€) *</Label>
-                <Input
-                  id="regular_price"
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={formData.regular_price}
-                  onChange={(e) => setFormData({ ...formData, regular_price: e.target.value })}
-                  required
-                  placeholder="55.99"
-                />
-                <p className="text-xs text-gray-500 mt-1">Ex: 55.99 pour 55,99 €</p>
-              </div>
-              <div>
-                <Label htmlFor="sale_price">Prix promo (€)</Label>
-                <Input
-                  id="sale_price"
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={formData.sale_price}
-                  onChange={(e) => setFormData({ ...formData, sale_price: e.target.value })}
-                  placeholder="50.00"
-                />
-                <p className="text-xs text-gray-500 mt-1">Ex: 50.00 pour 50,00 €</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Stock</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex items-center justify-between">
-              <Label htmlFor="manage_stock">Gérer le stock</Label>
-              <Switch
-                id="manage_stock"
-                checked={formData.manage_stock}
-                onCheckedChange={(checked) => setFormData({ ...formData, manage_stock: checked })}
-              />
-            </div>
-
-            {formData.manage_stock && (
-              <div>
-                <Label htmlFor="stock_quantity">Quantité en stock</Label>
-                <Input
-                  id="stock_quantity"
-                  type="number"
-                  value={formData.stock_quantity || ''}
-                  onChange={(e) => setFormData({
-                    ...formData,
-                    stock_quantity: e.target.value ? parseInt(e.target.value) : null
-                  })}
-                />
-              </div>
-            )}
-
-            <div className="flex items-center justify-between">
-              <Label htmlFor="stock_status">Statut du stock</Label>
+          <CardContent>
+            <div className="flex items-center gap-4">
+              <Label htmlFor="type">Type</Label>
               <select
-                id="stock_status"
-                value={formData.stock_status}
-                onChange={(e) => setFormData({
-                  ...formData,
-                  stock_status: e.target.value as 'instock' | 'outofstock'
-                })}
+                id="type"
+                value={formData.type}
+                onChange={(e) => {
+                  const newType = e.target.value as 'simple' | 'variable';
+                  setFormData({
+                    ...formData,
+                    type: newType,
+                    variations: newType === 'simple' ? [] : formData.variations,
+                  });
+                }}
                 className="border rounded px-3 py-2"
               >
-                <option value="instock">En stock</option>
-                <option value="outofstock">Rupture de stock</option>
+                <option value="simple">Produit simple</option>
+                <option value="variable">Produit variable</option>
               </select>
             </div>
+            <p className="text-xs text-gray-500 mt-2">
+              {formData.type === 'simple'
+                ? 'Un produit simple a un seul prix et stock'
+                : 'Un produit variable possède plusieurs variations (ex: différentes couleurs ou tailles)'}
+            </p>
           </CardContent>
         </Card>
+
+        {formData.type === 'simple' && (
+          <>
+            <Card>
+              <CardHeader>
+                <CardTitle>Prix</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="regular_price">Prix normal (€) *</Label>
+                    <Input
+                      id="regular_price"
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={formData.regular_price}
+                      onChange={(e) => setFormData({ ...formData, regular_price: e.target.value })}
+                      required
+                      placeholder="55.99"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">Ex: 55.99 pour 55,99 €</p>
+                  </div>
+                  <div>
+                    <Label htmlFor="sale_price">Prix promo (€)</Label>
+                    <Input
+                      id="sale_price"
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={formData.sale_price}
+                      onChange={(e) => setFormData({ ...formData, sale_price: e.target.value })}
+                      placeholder="50.00"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">Ex: 50.00 pour 50,00 €</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Stock</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="manage_stock">Gérer le stock</Label>
+                  <Switch
+                    id="manage_stock"
+                    checked={formData.manage_stock}
+                    onCheckedChange={(checked) => setFormData({ ...formData, manage_stock: checked })}
+                  />
+                </div>
+
+                {formData.manage_stock && (
+                  <div>
+                    <Label htmlFor="stock_quantity">Quantité en stock</Label>
+                    <Input
+                      id="stock_quantity"
+                      type="number"
+                      value={formData.stock_quantity || ''}
+                      onChange={(e) => setFormData({
+                        ...formData,
+                        stock_quantity: e.target.value ? parseInt(e.target.value) : null
+                      })}
+                    />
+                  </div>
+                )}
+
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="stock_status">Statut du stock</Label>
+                  <select
+                    id="stock_status"
+                    value={formData.stock_status}
+                    onChange={(e) => setFormData({
+                      ...formData,
+                      stock_status: e.target.value as 'instock' | 'outofstock'
+                    })}
+                    className="border rounded px-3 py-2"
+                  >
+                    <option value="instock">En stock</option>
+                    <option value="outofstock">Rupture de stock</option>
+                  </select>
+                </div>
+              </CardContent>
+            </Card>
+          </>
+        )}
 
         <Card>
           <CardHeader>
@@ -462,10 +507,27 @@ export default function EditProductPage() {
             />
             <p className="text-xs text-gray-500 mt-4">
               Les attributs permettent de définir des caractéristiques comme la couleur, la taille, etc.
-              Activez "Utilisé pour les variations" si vous souhaitez créer des variantes de produit.
+              {formData.type === 'variable' && (
+                <> Activez "Utilisé pour les variations" pour créer des variantes de produit.</>
+              )}
             </p>
           </CardContent>
         </Card>
+
+        {formData.type === 'variable' && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Variations du produit</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ProductVariationsManager
+                attributes={formData.attributes}
+                variations={formData.variations}
+                onChange={(variations) => setFormData({ ...formData, variations })}
+              />
+            </CardContent>
+          </Card>
+        )}
 
         <Card>
           <CardHeader>

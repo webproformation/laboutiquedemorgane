@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { ShoppingCart, Search, Heart, User, Menu, X, Package, MapPin, LogOut, Shield } from 'lucide-react';
+import { ShoppingCart, Search, Heart, User, Menu, X, Package, MapPin, LogOut, Shield, Settings } from 'lucide-react';
 import { useCart } from '@/context/CartContext';
 import { useWishlist } from '@/context/WishlistContext';
 import { useAuth } from '@/context/AuthContext';
@@ -110,7 +110,7 @@ export default function Header() {
       <DeliveryBatchBanner />
       <header className="sticky top-0 z-50 w-full bg-black shadow-lg">
         <div className="container mx-auto px-4">
-          <div className="flex items-center justify-between py-3">
+          <div className="flex items-center justify-between py-4">
             <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
               <SheetTrigger asChild className="md:hidden">
                 <Button variant="ghost" size="sm" className="text-white hover:bg-white/10">
@@ -129,7 +129,7 @@ export default function Header() {
               <img
                 src="/logolbdm.jpg"
                 alt="La Boutique De Morgane"
-                className="h-16 w-auto md:h-20 object-contain"
+                className="h-20 w-auto md:h-24 object-contain"
               />
             </Link>
 
@@ -267,6 +267,12 @@ export default function Header() {
               <Link href={user ? '/account' : '/auth/login'} className="md:hidden group">
                 <User className="h-5 w-5 text-white group-hover:text-[#D4AF37] transition-colors" />
               </Link>
+
+              {isAdmin && (
+                <Link href="/admin" className="md:hidden group">
+                  <Settings className="h-5 w-5 text-white group-hover:text-[#D4AF37] transition-colors" />
+                </Link>
+              )}
 
               <Link href="/cart" className="relative group">
                 <ShoppingCart className="h-5 w-5 text-white group-hover:text-[#D4AF37] transition-colors" />

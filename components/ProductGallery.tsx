@@ -63,6 +63,7 @@ export default function ProductGallery({ images, productName }: ProductGalleryPr
           src={allImages[currentIndex].sourceUrl}
           alt={`${productName} - Image ${currentIndex + 1}`}
           fill
+          sizes="(max-width: 768px) 100vw, (max-width: 1024px) 50vw, 40vw"
           className="object-cover"
           priority={currentIndex === 0}
         />
@@ -118,6 +119,7 @@ export default function ProductGallery({ images, productName }: ProductGalleryPr
                 src={image.sourceUrl}
                 alt={`${productName} miniature ${index + 1}`}
                 fill
+                sizes="100px"
                 className="object-cover"
               />
             </button>

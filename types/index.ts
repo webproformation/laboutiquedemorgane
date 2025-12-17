@@ -2,6 +2,25 @@ export interface ProductAttribute {
   name: string;
   slug?: string;
   options: string[];
+  variation?: boolean;
+}
+
+export interface ProductVariation {
+  id: number;
+  attributes: Array<{
+    name: string;
+    option: string;
+  }>;
+  price: string;
+  regular_price: string;
+  sale_price: string;
+  stock_status: string;
+  stock_quantity: number | null;
+  image?: {
+    src: string;
+    sourceUrl?: string;
+    alt?: string;
+  };
 }
 
 export interface Product {
@@ -14,6 +33,7 @@ export interface Product {
   onSale?: boolean;
   slug: string;
   status?: string;
+  type?: string;
   image?: {
     sourceUrl: string;
   };
@@ -32,10 +52,19 @@ export interface Product {
   attributes?: {
     nodes: ProductAttribute[];
   };
+  variations?: {
+    nodes: ProductVariation[];
+  };
 }
 
 export interface CartItem extends Product {
   quantity: number;
+  variationId?: number;
+  selectedAttributes?: Record<string, string>;
+  variationImage?: {
+    sourceUrl: string;
+  };
+  variationPrice?: string;
 }
 
 export interface TimelineItem {

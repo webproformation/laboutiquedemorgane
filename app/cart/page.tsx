@@ -45,7 +45,9 @@ export default function CartPage() {
       <div className="grid gap-8 lg:grid-cols-3">
         <div className="lg:col-span-2 space-y-4">
           {cart.map((item) => {
-            const price = parsePrice(item.price);
+            const displayPrice = item.variationPrice || item.price;
+            const displayImage = item.variationImage || item.image;
+            const price = parsePrice(displayPrice);
             const total = price * item.quantity;
 
             return (
@@ -53,11 +55,12 @@ export default function CartPage() {
                 <CardContent className="p-4">
                   <div className="flex gap-4">
                     <div className="relative h-24 w-24 flex-shrink-0 overflow-hidden rounded-md bg-gray-100">
-                      {item.image?.sourceUrl ? (
+                      {displayImage?.sourceUrl ? (
                         <Image
-                          src={item.image.sourceUrl}
+                          src={displayImage.sourceUrl}
                           alt={item.name}
                           fill
+                          sizes="96px"
                           className="object-cover"
                         />
                       ) : (
@@ -70,7 +73,26 @@ export default function CartPage() {
                     <div className="flex flex-1 flex-col justify-between">
                       <div>
                         <h3 className="font-semibold text-gray-900">{item.name}</h3>
-                        <p className="mt-1 text-sm font-medium text-[#b8933d]">{formatPrice(item.price)}</p>
+                        {item.selectedAttributes && Object.keys(item.selectedAttributes).length > 0 && (
+                          <div className="mt-2 space-y-1">
+                            {Object.entries(item.selectedAttributes).map(([key, value]) => {
+                              const formattedKey = key
+                                .replace(/^pa_/, '')
+                                .replace(/-/g, ' ')
+                                .replace(/_/g, ' ')
+                                .split(' ')
+                                .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+                                .join(' ');
+
+                              return (
+                                <div key={key} className="text-sm text-gray-700">
+                                  <span className="font-bold">{formattedKey}:</span> {value}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                        <p className="mt-2 text-sm font-medium text-[#b8933d]">{formatPrice(displayPrice)}</p>
                       </div>
 
                       <div className="flex items-center justify-between">

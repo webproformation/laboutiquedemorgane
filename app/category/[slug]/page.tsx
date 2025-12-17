@@ -54,7 +54,27 @@ export default function CategoryPage() {
   }
 
   // Always call hooks before any conditional returns
-  const products: Product[] = dataProducts?.products?.nodes || [];
+  const allProducts = dataProducts?.products?.nodes || [];
+
+  console.log('[CategoryPage] All products received:', allProducts.length);
+  console.log('[CategoryPage] Product details:', allProducts.map((p: any) => ({
+    name: p.name,
+    id: p.id,
+    type: p.__typename,
+    status: p.status,
+    slug: p.slug
+  })));
+
+  const products: Product[] = allProducts.filter((p: Product) => {
+    const shouldInclude = !p.status || p.status === 'publish' || p.status === 'PUBLISH';
+    if (!shouldInclude) {
+      console.log('[CategoryPage] Filtered out product:', p.name, 'with status:', p.status);
+    }
+    return shouldInclude;
+  });
+
+  console.log('[CategoryPage] Published products:', products.length);
+  console.log('[CategoryPage] Published product names:', products.map(p => p.name));
 
   const handleFilterChange = useCallback((newFilters: Record<string, string[]>, newPriceRange?: { min: number; max: number }) => {
     setFilters(newFilters);
@@ -65,20 +85,79 @@ export default function CategoryPage() {
     const hasAttributeFilters = Object.keys(filters).length > 0;
     const hasPriceFilter = priceFilter !== undefined;
 
+    console.log('[CategoryPage] Active filters:', {
+      filters,
+      priceFilter,
+      hasAttributeFilters,
+      hasPriceFilter,
+      filterKeys: Object.keys(filters),
+      filterValues: Object.values(filters)
+    });
+
     let result = [...products];
+
+    console.log('[CategoryPage] Before filtering:', result.map(p => ({
+      name: p.name,
+      type: p.type,
+      price: p.price,
+      parsedPrice: parsePrice(p.price),
+      hasAttributes: !!(p.attributes?.nodes?.length)
+    })));
 
     if (hasAttributeFilters || hasPriceFilter) {
       result = result.filter((product) => {
+        let included = true;
+
         if (hasPriceFilter) {
           const productPrice = parsePrice(product.price);
-          if (productPrice < priceFilter.min || productPrice > priceFilter.max) {
+
+          if (productPrice === 0 && product.price === null) {
+            const variations = product.variations?.nodes || [];
+            console.log('[CategoryPage] Checking variable product variations:', {
+              name: product.name,
+              variationCount: variations.length,
+              variations: variations.map((v: any) => ({
+                name: v.name,
+                price: v.price,
+                parsedPrice: parsePrice(v.price)
+              })),
+              range: priceFilter
+            });
+
+            if (variations.length > 0) {
+              const hasVariationInRange = variations.some((variation: any) => {
+                const varPrice = parsePrice(variation.price);
+                return varPrice >= priceFilter.min && varPrice <= priceFilter.max;
+              });
+
+              if (!hasVariationInRange) {
+                console.log('[CategoryPage] Variable product excluded - no variations in price range');
+                included = false;
+                return false;
+              }
+            }
+          } else if (productPrice < priceFilter.min || productPrice > priceFilter.max) {
+            console.log('[CategoryPage] Product excluded by price filter:', {
+              name: product.name,
+              price: product.price,
+              parsedPrice: productPrice,
+              range: priceFilter
+            });
+            included = false;
             return false;
           }
         }
 
         if (hasAttributeFilters) {
           const attributes = product.attributes?.nodes;
+
           if (!attributes || attributes.length === 0) {
+            console.log('[CategoryPage] Product without attributes excluded by attribute filter:', {
+              name: product.name,
+              type: product.type,
+              activeFilters: filters
+            });
+            included = false;
             return false;
           }
 
@@ -96,6 +175,10 @@ export default function CategoryPage() {
             );
 
             if (!productAttribute || !productAttribute.options) {
+              console.log('[CategoryPage] Product missing required attribute:', {
+                name: product.name,
+                missingAttribute: attributeSlug
+              });
               return false;
             }
 
@@ -105,13 +188,23 @@ export default function CategoryPage() {
               );
             });
 
+            if (!hasMatch) {
+              console.log('[CategoryPage] Product does not match attribute filter:', {
+                name: product.name,
+                attribute: attributeSlug,
+                selectedTerms: selectedTermNames,
+                productOptions: productAttribute.options
+              });
+            }
+
             return hasMatch;
           });
 
+          included = matchesAllFilters;
           return matchesAllFilters;
         }
 
-        return true;
+        return included;
       });
     }
 
@@ -120,6 +213,8 @@ export default function CategoryPage() {
       const priceB = parsePrice(b.price);
       return priceA - priceB;
     });
+
+    console.log('[CategoryPage] After filtering:', result.map(p => p.name));
 
     return result;
   }, [products, filters, priceFilter]);
@@ -225,9 +320,17 @@ export default function CategoryPage() {
               </Alert>
             ) : (
               <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
-                {filteredProducts.map((product) => (
-                  <ProductCard key={`${product.id}-${product.slug}`} product={product} />
-                ))}
+                {(() => {
+                  console.log('[CategoryPage] Rendering products:', filteredProducts.map(p => ({
+                    name: p.name,
+                    id: p.id,
+                    slug: p.slug,
+                    key: `${p.id}-${p.slug}`
+                  })));
+                  return filteredProducts.map((product) => (
+                    <ProductCard key={`${product.id}-${product.slug}`} product={product} />
+                  ));
+                })()}
               </div>
             )}
           </div>

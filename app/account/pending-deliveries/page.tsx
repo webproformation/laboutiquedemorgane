@@ -253,6 +253,7 @@ export default function PendingDeliveriesPage() {
                                 src={item.image_url}
                                 alt={item.product_name}
                                 fill
+                                sizes="80px"
                                 className="object-cover rounded"
                               />
                             ) : (

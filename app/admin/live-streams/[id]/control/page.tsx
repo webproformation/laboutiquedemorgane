@@ -337,6 +337,7 @@ export default function LiveControlPage({
                       src={currentProduct.product_image}
                       alt={currentProduct.product_name}
                       fill
+                      sizes="128px"
                       className="object-cover rounded"
                     />
                   </div>
@@ -401,6 +402,7 @@ export default function LiveControlPage({
                                   src={product.images[0].src}
                                   alt={product.name}
                                   fill
+                                  sizes="64px"
                                   className="object-cover rounded"
                                 />
                               </div>
@@ -437,6 +439,7 @@ export default function LiveControlPage({
                           src={product.product_image}
                           alt={product.product_name}
                           fill
+                          sizes="48px"
                           className="object-cover rounded"
                         />
                       </div>

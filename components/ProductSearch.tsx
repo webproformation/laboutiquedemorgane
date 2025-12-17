@@ -165,6 +165,7 @@ export default function ProductSearch({ open, onOpenChange }: ProductSearchProps
                         src={product.image.sourceUrl}
                         alt={product.name}
                         fill
+                        sizes="80px"
                         className="object-cover"
                       />
                     ) : (

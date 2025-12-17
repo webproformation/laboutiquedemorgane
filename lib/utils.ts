@@ -8,7 +8,7 @@ export function cn(...inputs: ClassValue[]) {
 export function formatPrice(price: string | undefined | null): string {
   if (!price) return '';
 
-  const decoded = price
+  let decoded = price
     .replace(/&nbsp;/g, ' ')
     .replace(/&#8364;/g, '€')
     .replace(/&euro;/g, '€')
@@ -18,7 +18,16 @@ export function formatPrice(price: string | undefined | null): string {
     .replace(/&quot;/g, '"')
     .replace(/&#039;/g, "'");
 
-  return decoded.trim();
+  decoded = decoded.trim();
+
+  if (decoded.includes(' - ') || decoded.includes('-')) {
+    const parts = decoded.split(/\s*-\s*/);
+    if (parts.length === 2 && parts[0].includes('€') && parts[1].includes('€')) {
+      return `de ${parts[0].trim()} à ${parts[1].trim()}`;
+    }
+  }
+
+  return decoded;
 }
 
 export function decodeHtmlEntities(text: string | undefined | null): string {
