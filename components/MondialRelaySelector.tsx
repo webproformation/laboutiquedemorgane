@@ -134,10 +134,15 @@ export default function MondialRelaySelector({
         zoom: 12,
         mapTypeControl: true,
         streetViewControl: false,
+        mapId: 'mondial-relay-map', // Required for AdvancedMarkerElement
       });
     }
 
-    markersRef.current.forEach(marker => marker.setMap(null));
+    markersRef.current.forEach(marker => {
+      if (marker.map) {
+        marker.map = null;
+      }
+    });
     markersRef.current = [];
 
     points.forEach((point) => {
@@ -149,16 +154,54 @@ export default function MondialRelaySelector({
       const position = { lat, lng };
       bounds.extend(position);
 
-      const marker = new window.google.maps.Marker({
-        position,
-        map: googleMapRef.current,
-        title: point.Name,
-        icon: {
-          url: deliveryMode === '24R'
-            ? 'https://maps.google.com/mapfiles/ms/icons/red-dot.png'
-            : 'https://maps.google.com/mapfiles/ms/icons/blue-dot.png',
-        },
-      });
+      // Use AdvancedMarkerElement if available, fallback to legacy Marker
+      let marker;
+      if (window.google.maps.marker && window.google.maps.marker.AdvancedMarkerElement) {
+        // Create a custom pin element
+        const pinElement = document.createElement('div');
+        pinElement.innerHTML = `
+          <div style="
+            width: 30px;
+            height: 30px;
+            background: ${deliveryMode === '24R' ? '#dc2626' : '#2563eb'};
+            border-radius: 50% 50% 50% 0;
+            transform: rotate(-45deg);
+            border: 2px solid white;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+          ">
+            <div style="
+              width: 100%;
+              height: 100%;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              transform: rotate(45deg);
+              color: white;
+              font-size: 16px;
+              font-weight: bold;
+            ">📍</div>
+          </div>
+        `;
+
+        marker = new window.google.maps.marker.AdvancedMarkerElement({
+          position,
+          map: googleMapRef.current,
+          title: point.Name,
+          content: pinElement,
+        });
+      } else {
+        // Fallback to legacy Marker
+        marker = new window.google.maps.Marker({
+          position,
+          map: googleMapRef.current,
+          title: point.Name,
+          icon: {
+            url: deliveryMode === '24R'
+              ? 'https://maps.google.com/mapfiles/ms/icons/red-dot.png'
+              : 'https://maps.google.com/mapfiles/ms/icons/blue-dot.png',
+          },
+        });
+      }
 
       const infoWindow = new window.google.maps.InfoWindow({
         content: `
@@ -171,9 +214,16 @@ export default function MondialRelaySelector({
         `,
       });
 
-      marker.addListener('click', () => {
-        infoWindow.open(googleMapRef.current, marker);
-      });
+      // AdvancedMarkerElement uses different event listener syntax
+      if (marker.addListener) {
+        marker.addListener('click', () => {
+          infoWindow.open(googleMapRef.current, marker);
+        });
+      } else if (marker.addEventListener) {
+        marker.addEventListener('click', () => {
+          infoWindow.open({ map: googleMapRef.current, anchor: marker });
+        });
+      }
 
       markersRef.current.push(marker);
     });
@@ -288,7 +338,7 @@ export default function MondialRelaySelector({
 
       // Create and add the script with callback
       const script = document.createElement('script');
-      script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places,marker&callback=initGoogleMaps`;
+      script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places,marker&loading=async&callback=initGoogleMaps`;
       script.async = true;
       script.defer = true;
       script.onerror = () => console.error('Failed to load Google Maps script');

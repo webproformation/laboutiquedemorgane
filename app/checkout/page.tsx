@@ -162,28 +162,33 @@ export default function CheckoutPage() {
     if (!user) return;
 
     try {
-      const [statusResponse] = await Promise.all([
-        fetch('/api/customers/check-status', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ userId: user.id }),
-        }),
+      // Load checkout options and addresses in parallel
+      await Promise.all([
         loadAddresses(),
         loadCheckoutOptions(),
         checkActiveBatch(),
       ]);
 
-      const statusResult = await statusResponse.json();
+      // Check customer status directly from Supabase
+      try {
+        const { data: profile, error: profileError } = await supabase
+          .from('profiles')
+          .select('blocked, blocked_reason')
+          .eq('id', user.id)
+          .maybeSingle();
 
-      if (statusResult.success && statusResult.blocked) {
-        toast.error(statusResult.blockedReason || 'Votre compte est bloqué. Contactez le service client.');
-        router.push('/account');
-        return;
+        if (!profileError && profile && profile.blocked) {
+          toast.error(profile.blocked_reason || 'Votre compte est bloqué. Contactez le service client.');
+          router.push('/account');
+          return;
+        }
+      } catch (statusError) {
+        console.error('Error checking customer status:', statusError);
+        // Continue with checkout even if status check fails
       }
     } catch (error) {
-      console.error('Error checking customer status:', error);
+      console.error('Error loading checkout data:', error);
+      toast.error('Erreur lors du chargement des données. Veuillez réessayer.');
     }
 
     setLoading(false);

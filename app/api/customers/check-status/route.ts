@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { supabase } from '@/lib/supabase-client';
 
 export async function POST(request: NextRequest) {
   try {
@@ -12,20 +13,34 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const apiUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/check-customer-status`;
+    // Query directly from Supabase
+    const { data: profile, error } = await supabase
+      .from('profiles')
+      .select('blocked, blocked_reason, cancelled_orders_count')
+      .eq('id', userId)
+      .maybeSingle();
 
-    const response = await fetch(apiUrl, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ userId }),
+    if (error) {
+      console.error('Error fetching profile:', error);
+      return NextResponse.json(
+        { success: false, error: 'Profile not found' },
+        { status: 404 }
+      );
+    }
+
+    if (!profile) {
+      return NextResponse.json(
+        { success: false, error: 'Profile not found' },
+        { status: 404 }
+      );
+    }
+
+    return NextResponse.json({
+      success: true,
+      blocked: profile.blocked || false,
+      blockedReason: profile.blocked_reason || null,
+      cancelledOrdersCount: profile.cancelled_orders_count || 0,
     });
-
-    const result = await response.json();
-
-    return NextResponse.json(result);
   } catch (error) {
     console.error('Error in check-status route:', error);
     return NextResponse.json(
