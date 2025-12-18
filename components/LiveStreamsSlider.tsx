@@ -41,7 +41,7 @@ export default function LiveStreamsSlider() {
         .eq('status', 'ended')
         .not('replay_url', 'is', null)
         .order('actual_end', { ascending: false })
-        .limit(8);
+        .limit(6);
 
       if (!error && data) {
         setStreams(data);

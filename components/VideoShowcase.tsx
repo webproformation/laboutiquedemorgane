@@ -32,7 +32,7 @@ export default function VideoShowcase() {
           .eq('status', 'completed')
           .not('replay_url', 'is', null)
           .order('created_at', { ascending: false })
-          .limit(6);
+          .limit(4);
 
         if (!error && data) {
           setVideos(data);

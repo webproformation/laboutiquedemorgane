@@ -656,7 +656,7 @@ export const SEARCH_PRODUCTS = gql`
 
 export const GET_FEATURED_PRODUCTS = gql`
   query GetFeaturedProducts {
-    products(first: 100, where: { featured: true, status: "publish" }) {
+    products(first: 12, where: { featured: true, status: "publish" }) {
       nodes {
         ... on SimpleProduct {
           id
@@ -673,7 +673,7 @@ export const GET_FEATURED_PRODUCTS = gql`
           image {
             sourceUrl
           }
-          galleryImages {
+          galleryImages(first: 2) {
             nodes {
               sourceUrl
             }
@@ -694,7 +694,7 @@ export const GET_FEATURED_PRODUCTS = gql`
           image {
             sourceUrl
           }
-          galleryImages {
+          galleryImages(first: 2) {
             nodes {
               sourceUrl
             }

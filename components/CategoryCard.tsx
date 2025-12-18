@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { ProductCategory } from '@/types';
 
 interface CategoryCardProps {
@@ -15,16 +16,19 @@ export default function CategoryCard({ category }: CategoryCardProps) {
       href={`/category/${category.slug}`}
       className="relative group block h-[500px] lg:h-[600px] overflow-hidden transition-transform duration-300 hover:scale-[1.02]"
     >
-      <div
-        className="absolute inset-0 bg-cover bg-center transition-transform duration-500 group-hover:scale-105"
-        style={{
-          backgroundImage: `url(${imageUrl})`,
-        }}
-      >
-        <div className="absolute inset-0 bg-black/40 group-hover:bg-black/30 transition-colors duration-300" />
+      <div className="absolute inset-0 overflow-hidden">
+        <Image
+          src={imageUrl}
+          alt={category.name}
+          fill
+          sizes="(max-width: 768px) 100vw, 50vw"
+          className="object-cover transition-transform duration-500 group-hover:scale-105"
+          quality={80}
+        />
+        <div className="absolute inset-0 bg-black/40 group-hover:bg-black/30 transition-colors duration-300 z-10" />
       </div>
 
-      <div className="relative h-full flex flex-col items-center justify-center p-8 text-center">
+      <div className="relative h-full flex flex-col items-center justify-center p-8 text-center z-20">
         <h2 className="text-4xl lg:text-5xl font-bold text-white mb-4 drop-shadow-lg">
           {category.name}
         </h2>

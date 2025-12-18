@@ -156,8 +156,7 @@ export default function HeroSlider() {
                     sizes="100vw"
                     className="object-cover"
                     priority={index === 0}
-                    loading={index === 0 ? 'eager' : 'lazy'}
-                    unoptimized
+                    quality={85}
                   />
                 )}
                 <div className="absolute inset-0 bg-gradient-to-r from-black/60 to-black/30">
