@@ -17,9 +17,37 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { formatPrice, parsePrice } from '@/lib/utils';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import CouponSelector from '@/components/CouponSelector';
 import GDPRConsent from '@/components/GDPRConsent';
-import MondialRelaySelector from '@/components/MondialRelaySelector';
+import dynamic from 'next/dynamic';
+
+const MondialRelaySelector = dynamic(
+  () => import('@/components/MondialRelaySelector'),
+  {
+    loading: () => (
+      <Card>
+        <CardContent className="p-8">
+          <div className="flex items-center justify-center">
+            <Loader2 className="h-6 w-6 animate-spin text-[#b8933d] mr-2" />
+            <span className="text-gray-600">Chargement du sélecteur de point relais...</span>
+          </div>
+        </CardContent>
+      </Card>
+    ),
+    ssr: false
+  }
+);
+
+const CouponSelector = dynamic(
+  () => import('@/components/CouponSelector'),
+  {
+    loading: () => (
+      <div className="py-2">
+        <Loader2 className="h-4 w-4 animate-spin text-[#b8933d]" />
+      </div>
+    ),
+    ssr: false
+  }
+);
 
 interface Address {
   id: string;
@@ -134,13 +162,18 @@ export default function CheckoutPage() {
     if (!user) return;
 
     try {
-      const statusResponse = await fetch('/api/customers/check-status', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ userId: user.id }),
-      });
+      const [statusResponse] = await Promise.all([
+        fetch('/api/customers/check-status', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ userId: user.id }),
+        }),
+        loadAddresses(),
+        loadCheckoutOptions(),
+        checkActiveBatch(),
+      ]);
 
       const statusResult = await statusResponse.json();
 
@@ -152,12 +185,6 @@ export default function CheckoutPage() {
     } catch (error) {
       console.error('Error checking customer status:', error);
     }
-
-    await Promise.all([
-      loadAddresses(),
-      loadCheckoutOptions(),
-      checkActiveBatch(),
-    ]);
 
     setLoading(false);
   };
@@ -204,10 +231,43 @@ export default function CheckoutPage() {
 
   const loadCheckoutOptions = async () => {
     try {
+      const cacheKey = 'checkout_options_cache';
+      const cacheTimeKey = 'checkout_options_cache_time';
+      const cacheExpiry = 60 * 60 * 1000;
+
+      const cachedTime = localStorage.getItem(cacheTimeKey);
+      const now = Date.now();
+
+      if (cachedTime && now - parseInt(cachedTime) < cacheExpiry) {
+        const cached = localStorage.getItem(cacheKey);
+        if (cached) {
+          const data = JSON.parse(cached);
+          setShippingMethods(data.shippingMethods || []);
+          setPaymentGateways(data.paymentGateways || []);
+          setTaxRates(data.taxRates || []);
+
+          if (data.shippingMethods && data.shippingMethods.length > 0) {
+            const availableMethods = data.shippingMethods.filter((m: ShippingMethod) => m.method_id !== 'free_shipping');
+            if (availableMethods.length > 0) {
+              setSelectedShippingMethod(availableMethods[0].id);
+            }
+          }
+
+          if (data.paymentGateways && data.paymentGateways.length > 0) {
+            setSelectedPaymentMethod(data.paymentGateways[0].id);
+          }
+          return;
+        }
+      }
+
       const response = await fetch('/api/woocommerce/checkout-options');
 
       if (response.ok) {
         const data = await response.json();
+
+        localStorage.setItem(cacheKey, JSON.stringify(data));
+        localStorage.setItem(cacheTimeKey, now.toString());
+
         setShippingMethods(data.shippingMethods || []);
         setPaymentGateways(data.paymentGateways || []);
         setTaxRates(data.taxRates || []);
