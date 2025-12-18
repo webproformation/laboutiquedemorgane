@@ -49,6 +49,11 @@ export default function AccountPage() {
   }, [profile, user]);
 
   const fetchSavingsData = async () => {
+    if (!user?.id) {
+      console.warn('No user ID available for fetching savings data');
+      return;
+    }
+
     try {
       const firstDayOfMonth = new Date();
       firstDayOfMonth.setDate(1);
@@ -57,10 +62,13 @@ export default function AccountPage() {
       const { data: batches, error } = await supabase
         .from('delivery_batches')
         .select('id, status, created_at, shipping_cost')
-        .eq('user_id', user?.id)
+        .eq('user_id', user.id)
         .eq('status', 'pending');
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error fetching batches:', error);
+        return;
+      }
 
       const estimatedShippingCostPerBatch = 4.90;
       const openBatches = batches?.length || 0;

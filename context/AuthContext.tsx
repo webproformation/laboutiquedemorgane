@@ -68,26 +68,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     })();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (event === 'TOKEN_REFRESHED') {
-        console.log('Token refreshed successfully');
-      } else if (event === 'SIGNED_OUT') {
-        setUser(null);
-        setProfile(null);
-      } else if (event === 'USER_UPDATED') {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      (async () => {
+        if (event === 'TOKEN_REFRESHED') {
+          console.log('Token refreshed successfully');
+        } else if (event === 'SIGNED_OUT') {
+          setUser(null);
+          setProfile(null);
+        } else if (event === 'USER_UPDATED') {
+          if (session?.user) {
+            setUser(session.user);
+            await loadProfile(session.user.id);
+          }
+        }
+
         if (session?.user) {
           setUser(session.user);
           await loadProfile(session.user.id);
+        } else {
+          setUser(null);
+          setProfile(null);
         }
-      }
-
-      if (session?.user) {
-        setUser(session.user);
-        await loadProfile(session.user.id);
-      } else {
-        setUser(null);
-        setProfile(null);
-      }
+      })();
     });
 
     return () => subscription.unsubscribe();
