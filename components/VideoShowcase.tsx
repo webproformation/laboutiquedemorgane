@@ -85,7 +85,7 @@ export default function VideoShowcase() {
                   className="inline-flex items-center gap-2 px-6 py-3 bg-[#D4AF37] hover:bg-[#b8933d] text-white font-semibold rounded-lg transition-all duration-300"
                 >
                   <Play className="h-5 w-5" />
-                  <span>Découvrir le live shopping</span>
+                  <span>Live & Replay</span>
                 </Link>
               </div>
             </Card>

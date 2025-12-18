@@ -278,10 +278,10 @@ export default function ProductPage({ params }: { params: Promise<{ slug: string
     try {
       if (isInWishlist(product.slug)) {
         await removeFromWishlist(product.slug);
-        toast.success(`${product.name} retiré de la wishlist`);
+        toast.success(`${product.name} retiré de vos coups de cœur`);
       } else {
         await addToWishlist(product);
-        toast.success(`${product.name} ajouté à la wishlist !`);
+        toast.success(`${product.name} ajouté à vos coups de cœur !`);
       }
     } catch (error) {
       toast.error('Une erreur est survenue');
@@ -546,7 +546,7 @@ export default function ProductPage({ params }: { params: Promise<{ slug: string
                     onClick={handleToggleWishlist}
                   >
                     <Heart className={`mr-2 h-4 w-4 ${inWishlist ? 'fill-current' : ''}`} />
-                    {inWishlist ? 'Dans la wishlist' : 'Wishlist'}
+                    {inWishlist ? 'Dans mes coups de cœur' : 'Coups de cœur'}
                   </Button>
                   <ShareButtons
                     title={product.name}

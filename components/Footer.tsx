@@ -174,8 +174,8 @@ export default function Footer() {
               </div>
               <div className="flex items-center gap-2 justify-center md:justify-start">
                 <Mail className="h-5 w-5 flex-shrink-0" />
-                <a href="mailto:contact@laboutiquedemorgane.fr" className="hover:text-white transition-colors">
-                  contact@laboutiquedemorgane.fr
+                <a href="mailto:contact@laboutiquedemorgane.com" className="hover:text-white transition-colors">
+                  contact@laboutiquedemorgane.com
                 </a>
               </div>
             </div>
@@ -232,7 +232,7 @@ export default function Footer() {
               </li>
               <li>
                 <Link href="/live" className="hover:text-white transition-colors">
-                  Découvrir le live shopping
+                  Live & Replay
                 </Link>
               </li>
               <li>
@@ -252,7 +252,7 @@ export default function Footer() {
               </li>
               <li>
                 <Link href="/wishlist" className="hover:text-white transition-colors">
-                  Ma liste de souhaits
+                  Mes coups de cœur
                 </Link>
               </li>
               <li>

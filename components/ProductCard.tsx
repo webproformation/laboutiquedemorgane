@@ -37,6 +37,8 @@ export default function ProductCard({ product }: ProductCardProps) {
   const [showNotifyDialog, setShowNotifyDialog] = useState(false);
   const [notifyEmail, setNotifyEmail] = useState('');
   const [isSubmittingNotification, setIsSubmittingNotification] = useState(false);
+  const [touchStart, setTouchStart] = useState<number | null>(null);
+  const [touchEnd, setTouchEnd] = useState<number | null>(null);
 
   const images = [
     product.image?.sourceUrl,
@@ -56,10 +58,10 @@ export default function ProductCard({ product }: ProductCardProps) {
     try {
       if (isInWishlist(product.slug)) {
         await removeFromWishlist(product.slug);
-        toast.success(`${product.name} retiré de la wishlist`);
+        toast.success(`${product.name} retiré de vos coups de cœur`);
       } else {
         await addToWishlist(product);
-        toast.success(`${product.name} ajouté à la wishlist !`);
+        toast.success(`${product.name} ajouté à vos coups de cœur !`);
       }
     } catch (error) {
       toast.error('Une erreur est survenue');
@@ -76,6 +78,36 @@ export default function ProductCard({ product }: ProductCardProps) {
     e.preventDefault();
     e.stopPropagation();
     setCurrentImageIndex((prev) => (prev === images.length - 1 ? 0 : prev + 1));
+  };
+
+  const minSwipeDistance = 50;
+
+  const onTouchStart = (e: React.TouchEvent) => {
+    setTouchEnd(null);
+    setTouchStart(e.targetTouches[0].clientX);
+  };
+
+  const onTouchMove = (e: React.TouchEvent) => {
+    setTouchEnd(e.targetTouches[0].clientX);
+  };
+
+  const onTouchEnd = (e: React.TouchEvent) => {
+    if (!touchStart || !touchEnd) return;
+
+    const distance = touchStart - touchEnd;
+    const isLeftSwipe = distance > minSwipeDistance;
+    const isRightSwipe = distance < -minSwipeDistance;
+
+    if (isLeftSwipe || isRightSwipe) {
+      e.preventDefault();
+      e.stopPropagation();
+
+      if (isLeftSwipe) {
+        setCurrentImageIndex((prev) => (prev === images.length - 1 ? 0 : prev + 1));
+      } else if (isRightSwipe) {
+        setCurrentImageIndex((prev) => (prev === 0 ? images.length - 1 : prev - 1));
+      }
+    }
   };
 
   const handleNotifyAvailability = async (e: React.MouseEvent) => {
@@ -154,6 +186,9 @@ export default function ProductCard({ product }: ProductCardProps) {
             className="relative aspect-square overflow-hidden bg-gray-100"
             onMouseEnter={() => setIsHovered(true)}
             onMouseLeave={() => setIsHovered(false)}
+            onTouchStart={onTouchStart}
+            onTouchMove={onTouchMove}
+            onTouchEnd={onTouchEnd}
           >
             {product.onSale && (
               <div className="absolute top-2 left-2 z-20 bg-[#DF30CF] text-white px-3 py-1 rounded-full text-xs font-bold">
@@ -174,22 +209,26 @@ export default function ProductCard({ product }: ProductCardProps) {
               </div>
             )}
 
-            {images.length > 1 && isHovered && (
+            {images.length > 1 && (
               <>
-                <button
-                  onClick={handlePreviousImage}
-                  className="absolute left-2 top-1/2 -translate-y-1/2 p-2 rounded-full bg-white/90 backdrop-blur-sm hover:bg-white transition-all shadow-md hover:shadow-lg z-10"
-                  aria-label="Image précédente"
-                >
-                  <ChevronLeft className="h-5 w-5 text-gray-800" />
-                </button>
-                <button
-                  onClick={handleNextImage}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-full bg-white/90 backdrop-blur-sm hover:bg-white transition-all shadow-md hover:shadow-lg z-10"
-                  aria-label="Image suivante"
-                >
-                  <ChevronRight className="h-5 w-5 text-gray-800" />
-                </button>
+                {isHovered && (
+                  <>
+                    <button
+                      onClick={handlePreviousImage}
+                      className="absolute left-2 top-1/2 -translate-y-1/2 p-2 rounded-full bg-white/90 backdrop-blur-sm hover:bg-white transition-all shadow-md hover:shadow-lg z-10"
+                      aria-label="Image précédente"
+                    >
+                      <ChevronLeft className="h-5 w-5 text-gray-800" />
+                    </button>
+                    <button
+                      onClick={handleNextImage}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-full bg-white/90 backdrop-blur-sm hover:bg-white transition-all shadow-md hover:shadow-lg z-10"
+                      aria-label="Image suivante"
+                    >
+                      <ChevronRight className="h-5 w-5 text-gray-800" />
+                    </button>
+                  </>
+                )}
                 <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-1 z-10">
                   {images.map((img, index) => (
                     <div
@@ -207,7 +246,7 @@ export default function ProductCard({ product }: ProductCardProps) {
             <button
               onClick={handleToggleWishlist}
               className="absolute top-2 right-2 p-2 rounded-full bg-white/90 backdrop-blur-sm hover:bg-white transition-all shadow-md hover:shadow-lg z-10"
-              aria-label={inWishlist ? "Retirer de la wishlist" : "Ajouter à la wishlist"}
+              aria-label={inWishlist ? "Retirer de mes coups de cœur" : "Ajouter à mes coups de cœur"}
             >
               <Heart
                 className={`h-5 w-5 transition-colors ${

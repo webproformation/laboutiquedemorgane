@@ -216,7 +216,7 @@ export default function CGVPage() {
           </p>
           <div className="bg-gray-50 p-6 rounded-lg">
             <p className="text-gray-700 mb-2">
-              <strong>Email :</strong> <a href="mailto:contact@laboutiquedemorgane.fr" className="text-blue-600 hover:underline">contact@laboutiquedemorgane.fr</a>
+              <strong>Email :</strong> <a href="mailto:contact@laboutiquedemorgane.com" className="text-blue-600 hover:underline">contact@laboutiquedemorgane.com</a>
             </p>
             <p className="text-gray-700 mb-2"><strong>Téléphone :</strong></p>
             <p className="text-gray-700 ml-4 mb-1">

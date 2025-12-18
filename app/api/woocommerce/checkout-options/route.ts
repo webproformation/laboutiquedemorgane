@@ -47,6 +47,21 @@ export async function GET() {
         const methods = await methodsResponse.json();
         methods.forEach((method: any) => {
           if (method.enabled) {
+            let cost = method.settings?.cost?.value || '0';
+
+            // Force Mondial Relay shipping cost to 3.80€
+            const isMondialRelay =
+              method.title?.toLowerCase().includes('mondial relay') ||
+              method.title?.toLowerCase().includes('relais') ||
+              method.title?.toLowerCase().includes('locker') ||
+              method.method_description?.toLowerCase().includes('mondial relay') ||
+              method.method_description?.toLowerCase().includes('relais') ||
+              method.method_description?.toLowerCase().includes('locker');
+
+            if (isMondialRelay && (parseFloat(cost) === 0 || !cost)) {
+              cost = '3.80';
+            }
+
             shippingMethods.push({
               id: `${zone.id}_${method.instance_id}`,
               zone_id: zone.id,
@@ -54,7 +69,7 @@ export async function GET() {
               instance_id: method.instance_id,
               method_id: method.method_id,
               title: method.title || method.method_title,
-              cost: method.settings?.cost?.value || '0',
+              cost: cost,
               description: method.method_description || '',
             });
           }

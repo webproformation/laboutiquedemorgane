@@ -185,8 +185,8 @@ export default function PaiementsSecurisesPage() {
               <p className="text-gray-800 font-medium">
                 Vous avez une question sur la sécurité de vos paiements ?
                 N'hésitez pas à nous contacter à{' '}
-                <a href="mailto:contact@laboutiquedemorgane.fr" className="text-[#C6A15B] hover:underline">
-                  contact@laboutiquedemorgane.fr
+                <a href="mailto:contact@laboutiquedemorgane.com" className="text-[#C6A15B] hover:underline">
+                  contact@laboutiquedemorgane.com
                 </a>
               </p>
             </div>

@@ -136,8 +136,8 @@ export default function SatisfaitRemboursePage() {
             <div className="bg-[#C6A15B] bg-opacity-10 border-l-4 border-[#C6A15B] p-6 rounded">
               <p className="text-gray-800 font-medium">
                 Une question sur notre garantie satisfaction ? Contactez notre service client à{' '}
-                <a href="mailto:contact@laboutiquedemorgane.fr" className="text-[#C6A15B] hover:underline">
-                  contact@laboutiquedemorgane.fr
+                <a href="mailto:contact@laboutiquedemorgane.com" className="text-[#C6A15B] hover:underline">
+                  contact@laboutiquedemorgane.com
                 </a>{' '}
                 ou au <a href="tel:+33641456671" className="text-[#C6A15B] hover:underline"><strong>Morgane</strong> : +33 6 41 45 66 71</a> / <a href="tel:+33603489662" className="text-[#C6A15B] hover:underline"><strong>André</strong> : +33 6 03 48 96 62</a>
               </p>

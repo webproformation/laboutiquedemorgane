@@ -99,7 +99,7 @@ export default function LivePage() {
       <div className="container mx-auto px-4">
         <div className="flex items-center gap-3 mb-8">
           <Radio className="h-8 w-8 text-red-600" />
-          <h1 className="text-4xl font-bold text-gray-900">Nos Lives Shopping</h1>
+          <h1 className="text-4xl font-bold text-gray-900">Live & Replay</h1>
         </div>
 
         {liveStream && (

@@ -72,10 +72,10 @@ export default function AlloMorganePage() {
                     <h3 className="text-xl font-semibold text-gray-900">Par Email</h3>
                   </div>
                   <a
-                    href="mailto:contact@laboutiquedemorgane.fr"
+                    href="mailto:contact@laboutiquedemorgane.com"
                     className="text-[#C6A15B] hover:underline text-lg font-medium"
                   >
-                    contact@laboutiquedemorgane.fr
+                    contact@laboutiquedemorgane.com
                   </a>
                   <p className="text-sm text-gray-600 mt-2">(Réponse sous 24h ouvrées)</p>
                 </div>

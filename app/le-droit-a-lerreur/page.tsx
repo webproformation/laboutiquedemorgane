@@ -66,7 +66,7 @@ export default function LeDroitALerreurPage() {
               <ol className="space-y-4 text-gray-700">
                 <li className="flex gap-4">
                   <span className="flex-shrink-0 flex items-center justify-center w-8 h-8 rounded-full bg-[#C6A15B] text-white font-semibold">1</span>
-                  <span className="pt-1">Envoyez un petit mail à <a href="mailto:contact@laboutiquedemorgane.fr" className="text-[#C6A15B] hover:underline">contact@laboutiquedemorgane.fr</a> avec votre numéro de commande en précisant si vous préférez un Avoir ou un Remboursement.</span>
+                  <span className="pt-1">Envoyez un petit mail à <a href="mailto:contact@laboutiquedemorgane.com" className="text-[#C6A15B] hover:underline">contact@laboutiquedemorgane.com</a> avec votre numéro de commande en précisant si vous préférez un Avoir ou un Remboursement.</span>
                 </li>
                 <li className="flex gap-4">
                   <span className="flex-shrink-0 flex items-center justify-center w-8 h-8 rounded-full bg-[#C6A15B] text-white font-semibold">2</span>

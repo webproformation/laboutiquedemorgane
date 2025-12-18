@@ -120,8 +120,8 @@ export default function FraisDePortPage() {
             <div className="bg-[#C6A15B] bg-opacity-10 border-l-4 border-[#C6A15B] p-6 rounded">
               <p className="text-gray-800 font-medium">
                 Pour toute question concernant la livraison, contactez-nous à{' '}
-                <a href="mailto:contact@laboutiquedemorgane.fr" className="text-[#C6A15B] hover:underline">
-                  contact@laboutiquedemorgane.fr
+                <a href="mailto:contact@laboutiquedemorgane.com" className="text-[#C6A15B] hover:underline">
+                  contact@laboutiquedemorgane.com
                 </a>
               </p>
             </div>

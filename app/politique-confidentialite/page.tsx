@@ -96,7 +96,7 @@ export default function PolitiqueConfidentialitePage() {
             <li>Droit de retirer votre consentement</li>
           </ul>
           <p className="text-gray-600 mt-4">
-            Pour exercer ces droits, contactez-nous à : <a href="mailto:contact@laboutiquedemorgane.fr" className="text-blue-600 hover:underline">contact@laboutiquedemorgane.fr</a>
+            Pour exercer ces droits, contactez-nous à : <a href="mailto:contact@laboutiquedemorgane.com" className="text-blue-600 hover:underline">contact@laboutiquedemorgane.com</a>
           </p>
           <p className="text-gray-600 mt-2">
             Vous avez également le droit d&apos;introduire une réclamation auprès de la CNIL (Commission Nationale de l&apos;Informatique et des Libertés).
@@ -137,7 +137,7 @@ export default function PolitiqueConfidentialitePage() {
             vous pouvez nous contacter :
           </p>
           <div className="bg-gray-50 p-6 rounded-lg mt-4">
-            <p className="text-gray-700"><strong>Email :</strong> <a href="mailto:contact@laboutiquedemorgane.fr" className="text-blue-600 hover:underline">contact@laboutiquedemorgane.fr</a></p>
+            <p className="text-gray-700"><strong>Email :</strong> <a href="mailto:contact@laboutiquedemorgane.com" className="text-blue-600 hover:underline">contact@laboutiquedemorgane.com</a></p>
             <p className="text-gray-700"><strong>Téléphone :</strong></p>
             <p className="text-gray-700 ml-4"><a href="tel:+33641456671" className="text-blue-600 hover:underline"><strong>Morgane</strong> : +33 6 41 45 66 71</a></p>
             <p className="text-gray-700 ml-4"><a href="tel:+33603489662" className="text-blue-600 hover:underline"><strong>André</strong> : +33 6 03 48 96 62</a></p>

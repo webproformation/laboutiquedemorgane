@@ -50,16 +50,16 @@ export default function GDPRConsent({
 
   return (
     <div className="space-y-2">
-      <div className="flex items-start gap-2">
+      <div className="flex items-start gap-3">
         <Checkbox
           id={`gdpr-consent-${type}`}
           checked={checked}
           onCheckedChange={onCheckedChange}
-          className="mt-1"
+          className={`mt-1 ${type === 'newsletter' ? 'h-5 w-5 border-2 border-white bg-white/10' : ''}`}
         />
         <Label
           htmlFor={`gdpr-consent-${type}`}
-          className="text-sm leading-relaxed cursor-pointer"
+          className={`leading-relaxed cursor-pointer ${type === 'newsletter' ? 'text-white text-base' : 'text-sm'}`}
         >
           {config.text}{' '}
           {config.links.map((link, index) => (

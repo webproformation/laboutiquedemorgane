@@ -212,7 +212,7 @@ export default function MobileMenu({ onLinkClick }: MobileMenuProps) {
           onClick={onLinkClick}
           className="block py-2 text-base font-medium text-gray-300 hover:text-[#D4AF37] transition-colors"
         >
-          Découvrir le live shopping
+          Live & Replay
         </Link>
         <Link
           href="/carte-cadeau"

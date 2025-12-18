@@ -30,7 +30,7 @@ export default function WishlistPage() {
   const handleRemove = async (slug: string, name: string) => {
     try {
       await removeFromWishlist(slug);
-      toast.success(`${name} retiré de la wishlist`);
+      toast.success(`${name} retiré de vos coups de cœur`);
     } catch (error) {
       toast.error('Une erreur est survenue');
     }
@@ -41,7 +41,7 @@ export default function WishlistPage() {
       <div className="min-h-screen bg-gray-50 py-12">
         <div className="container mx-auto px-4 py-16 text-center">
           <Heart className="mx-auto h-24 w-24 text-gray-300" />
-          <h1 className="mt-4 text-2xl font-bold text-gray-900">Votre wishlist est vide</h1>
+          <h1 className="mt-4 text-2xl font-bold text-gray-900">Vos coups de cœur sont vides</h1>
           <p className="mt-2 text-gray-600">
             Ajoutez vos produits préférés en cliquant sur le cœur !
           </p>
@@ -68,11 +68,11 @@ export default function WishlistPage() {
 
         <div className="flex items-center gap-3 mb-8">
           <Heart className="h-8 w-8 text-[#b8933d]" />
-          <h1 className="text-4xl font-bold text-gray-900">Ma Wishlist</h1>
+          <h1 className="text-4xl font-bold text-gray-900">Mes coups de cœur</h1>
         </div>
 
         <p className="text-gray-600 mb-8">
-          {wishlistItems.length} produit{wishlistItems.length > 1 ? 's' : ''} dans votre wishlist
+          {wishlistItems.length} produit{wishlistItems.length > 1 ? 's' : ''} dans vos coups de cœur
         </p>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -101,7 +101,7 @@ export default function WishlistPage() {
                         handleRemove(item.product_slug, item.product_name);
                       }}
                       className="absolute top-2 right-2 p-2 rounded-full bg-white/90 backdrop-blur-sm hover:bg-white transition-all shadow-md hover:shadow-lg z-10"
-                      aria-label="Retirer de la wishlist"
+                      aria-label="Retirer de mes coups de cœur"
                     >
                       <Heart className="h-5 w-5 fill-[#DF30CF] text-[#DF30CF]" />
                     </button>

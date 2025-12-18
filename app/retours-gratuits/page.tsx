@@ -96,7 +96,7 @@ export default function RetoursGratuitsPage() {
             <div className="bg-[#C6A15B] bg-opacity-10 border-l-4 border-[#C6A15B] p-6 rounded">
               <p className="text-gray-800 font-medium">
                 Pour toute question concernant un retour, n'hésitez pas à contacter
-                notre service client à <a href="mailto:contact@laboutiquedemorgane.fr" className="text-[#C6A15B] hover:underline">contact@laboutiquedemorgane.fr</a>
+                notre service client à <a href="mailto:contact@laboutiquedemorgane.com" className="text-[#C6A15B] hover:underline">contact@laboutiquedemorgane.com</a>
               </p>
             </div>
           </div>

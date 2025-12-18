@@ -298,7 +298,7 @@ export default function CategoryPage() {
           </p>
         </div>
 
-        <div className="flex flex-col lg:flex-row gap-8">
+        <div className="flex flex-col-reverse lg:flex-row gap-8">
           <aside className="lg:w-64 flex-shrink-0">
             <ProductFilters
               onFilterChange={handleFilterChange}

@@ -248,10 +248,10 @@ export default function ContactPage() {
                   <div>
                     <p className="font-semibold text-gray-900">Email</p>
                     <a
-                      href="mailto:contact@laboutiquedemorgane.fr"
+                      href="mailto:contact@laboutiquedemorgane.com"
                       className="text-gray-600 text-sm hover:text-[#C6A15B] transition-colors break-all"
                     >
-                      contact@laboutiquedemorgane.fr
+                      contact@laboutiquedemorgane.com
                     </a>
                   </div>
                 </div>
