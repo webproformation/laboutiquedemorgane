@@ -19,6 +19,7 @@ import { formatPrice, parsePrice } from '@/lib/utils';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import CouponSelector from '@/components/CouponSelector';
 import GDPRConsent from '@/components/GDPRConsent';
+import MondialRelaySelector from '@/components/MondialRelaySelector';
 
 interface Address {
   id: string;
@@ -107,6 +108,7 @@ export default function CheckoutPage() {
   const [gdprConsent, setGdprConsent] = useState(false);
   const [gdprError, setGdprError] = useState('');
   const [selectedInsurance, setSelectedInsurance] = useState<string>('none');
+  const [selectedRelayPoint, setSelectedRelayPoint] = useState<any>(null);
 
   const insuranceOptions = [
     { id: 'none', label: 'Sans assurance', description: 'Pas de protection supplémentaire', price: 0 },
@@ -289,6 +291,17 @@ export default function CheckoutPage() {
       return;
     }
 
+    const method = shippingMethods.find(m => m.id === selectedShippingMethod);
+    const isRelayDelivery = method?.title?.toLowerCase().includes('relais') ||
+                           method?.title?.toLowerCase().includes('locker') ||
+                           method?.description?.toLowerCase().includes('relais') ||
+                           method?.description?.toLowerCase().includes('locker');
+
+    if (isRelayDelivery && !selectedRelayPoint) {
+      toast.error('Veuillez sélectionner un point relais');
+      return;
+    }
+
     if (!selectedPaymentMethod) {
       toast.error('Veuillez sélectionner un mode de paiement');
       return;
@@ -381,7 +394,15 @@ export default function CheckoutPage() {
             email: user!.email || '',
             phone: selectedAddress!.phone,
           },
-          shipping: {
+          shipping: selectedRelayPoint ? {
+            first_name: selectedAddress!.first_name,
+            last_name: selectedAddress!.last_name,
+            address_1: selectedRelayPoint.LgAdr1 || selectedRelayPoint.LgAdr3,
+            address_2: selectedRelayPoint.LgAdr2 || '',
+            city: selectedRelayPoint.Ville,
+            postcode: selectedRelayPoint.CP,
+            country: selectedRelayPoint.Pays,
+          } : {
             first_name: selectedAddress!.first_name,
             last_name: selectedAddress!.last_name,
             address_1: selectedAddress!.address_line1,
@@ -408,6 +429,20 @@ export default function CheckoutPage() {
               key: '_stripe_payment_intent_id',
               value: paymentIntentId,
             }] : []),
+            ...(selectedRelayPoint ? [
+              {
+                key: '_mondial_relay_id',
+                value: selectedRelayPoint.Num,
+              },
+              {
+                key: '_mondial_relay_name',
+                value: selectedRelayPoint.LgAdr1 || selectedRelayPoint.LgAdr3,
+              },
+              {
+                key: '_mondial_relay_address',
+                value: `${selectedRelayPoint.LgAdr3 || ''} ${selectedRelayPoint.CP} ${selectedRelayPoint.Ville}`,
+              },
+            ] : []),
           ],
         };
 
@@ -492,7 +527,15 @@ export default function CheckoutPage() {
             email: user!.email || '',
             phone: selectedAddress!.phone,
           },
-          shipping: {
+          shipping: selectedRelayPoint ? {
+            first_name: selectedAddress!.first_name,
+            last_name: selectedAddress!.last_name,
+            address_1: selectedRelayPoint.LgAdr1 || selectedRelayPoint.LgAdr3,
+            address_2: selectedRelayPoint.LgAdr2 || '',
+            city: selectedRelayPoint.Ville,
+            postcode: selectedRelayPoint.CP,
+            country: selectedRelayPoint.Pays,
+          } : {
             first_name: selectedAddress!.first_name,
             last_name: selectedAddress!.last_name,
             address_1: selectedAddress!.address_line1,
@@ -519,6 +562,20 @@ export default function CheckoutPage() {
               key: '_stripe_payment_intent_id',
               value: paymentIntentId,
             }] : []),
+            ...(selectedRelayPoint ? [
+              {
+                key: '_mondial_relay_id',
+                value: selectedRelayPoint.Num,
+              },
+              {
+                key: '_mondial_relay_name',
+                value: selectedRelayPoint.LgAdr1 || selectedRelayPoint.LgAdr3,
+              },
+              {
+                key: '_mondial_relay_address',
+                value: `${selectedRelayPoint.LgAdr3 || ''} ${selectedRelayPoint.CP} ${selectedRelayPoint.Ville}`,
+              },
+            ] : []),
           ],
         };
 
@@ -590,6 +647,17 @@ export default function CheckoutPage() {
 
     if (!selectedShippingMethod) {
       toast.error('Veuillez sélectionner un mode de livraison');
+      return;
+    }
+
+    const method = shippingMethods.find(m => m.id === selectedShippingMethod);
+    const isRelayDelivery = method?.title?.toLowerCase().includes('relais') ||
+                           method?.title?.toLowerCase().includes('locker') ||
+                           method?.description?.toLowerCase().includes('relais') ||
+                           method?.description?.toLowerCase().includes('locker');
+
+    if (isRelayDelivery && !selectedRelayPoint) {
+      toast.error('Veuillez sélectionner un point relais');
       return;
     }
 
@@ -667,7 +735,15 @@ export default function CheckoutPage() {
           email: user!.email || '',
           phone: selectedAddress!.phone,
         },
-        shipping: {
+        shipping: selectedRelayPoint ? {
+          first_name: selectedAddress!.first_name,
+          last_name: selectedAddress!.last_name,
+          address_1: selectedRelayPoint.LgAdr1 || selectedRelayPoint.LgAdr3,
+          address_2: selectedRelayPoint.LgAdr2 || '',
+          city: selectedRelayPoint.Ville,
+          postcode: selectedRelayPoint.CP,
+          country: selectedRelayPoint.Pays,
+        } : {
           first_name: selectedAddress!.first_name,
           last_name: selectedAddress!.last_name,
           address_1: selectedAddress!.address_line1,
@@ -685,6 +761,22 @@ export default function CheckoutPage() {
           method_title: selectedShipping!.title,
           total: selectedShipping!.cost,
         }],
+        meta_data: [
+          ...(selectedRelayPoint ? [
+            {
+              key: '_mondial_relay_id',
+              value: selectedRelayPoint.Num,
+            },
+            {
+              key: '_mondial_relay_name',
+              value: selectedRelayPoint.LgAdr1 || selectedRelayPoint.LgAdr3,
+            },
+            {
+              key: '_mondial_relay_address',
+              value: `${selectedRelayPoint.LgAdr3 || ''} ${selectedRelayPoint.CP} ${selectedRelayPoint.Ville}`,
+            },
+          ] : []),
+        ],
       };
 
       const wooResponse = await fetch('/api/woocommerce/create-order', {
@@ -821,7 +913,10 @@ export default function CheckoutPage() {
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <RadioGroup value={selectedShippingMethod} onValueChange={setSelectedShippingMethod}>
+                    <RadioGroup value={selectedShippingMethod} onValueChange={(value) => {
+                      setSelectedShippingMethod(value);
+                      setSelectedRelayPoint(null);
+                    }}>
                       <div className="space-y-4">
                         {shippingMethods.filter(method => method.method_id !== 'free_shipping').map((method) => (
                           <div
@@ -831,7 +926,10 @@ export default function CheckoutPage() {
                                 ? 'border-[#b8933d] bg-[#b8933d]/5'
                                 : 'border-gray-200 hover:border-gray-300'
                             }`}
-                            onClick={() => setSelectedShippingMethod(method.id)}
+                            onClick={() => {
+                              setSelectedShippingMethod(method.id);
+                              setSelectedRelayPoint(null);
+                            }}
                           >
                             <RadioGroupItem value={method.id} id={method.id} className="mt-1" />
                             <div className="flex-1">
@@ -856,6 +954,27 @@ export default function CheckoutPage() {
                   </CardContent>
                 </Card>
               )}
+
+              {selectedShippingMethod &&
+               selectedAddressId &&
+               (() => {
+                 const method = shippingMethods.find(m => m.id === selectedShippingMethod);
+                 const isRelayDelivery = method?.title?.toLowerCase().includes('relais') ||
+                                        method?.title?.toLowerCase().includes('locker') ||
+                                        method?.description?.toLowerCase().includes('relais') ||
+                                        method?.description?.toLowerCase().includes('locker');
+                 const selectedAddress = addresses.find(addr => addr.id === selectedAddressId);
+
+                 return isRelayDelivery && selectedAddress ? (
+                   <MondialRelaySelector
+                     postalCode={selectedAddress.postal_code}
+                     country={selectedAddress.country}
+                     onRelaySelected={setSelectedRelayPoint}
+                     selectedRelay={selectedRelayPoint}
+                   />
+                 ) : null;
+               })()
+              }
 
               <Card>
                 <CardHeader>

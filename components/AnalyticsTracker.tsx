@@ -25,30 +25,10 @@ export default function AnalyticsTracker() {
 
     const createOrUpdateSession = async () => {
       try {
-        const { data: existingSession } = await supabase
-          .from('user_sessions')
-          .select('id')
-          .eq('session_id', sessionId!)
-          .maybeSingle();
-
-        if (existingSession) {
-          await supabase
-            .from('user_sessions')
-            .update({
-              last_activity_at: new Date().toISOString(),
-              user_id: user?.id || null,
-            })
-            .eq('session_id', sessionId!);
-        } else {
-          await supabase
-            .from('user_sessions')
-            .insert({
-              session_id: sessionId!,
-              user_id: user?.id || null,
-              started_at: new Date().toISOString(),
-              last_activity_at: new Date().toISOString(),
-            });
-        }
+        await supabase.rpc('upsert_user_session', {
+          p_session_id: sessionId!,
+          p_user_id: user?.id || null,
+        });
       } catch (error) {
         console.error('Error managing session:', error);
       }
