@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { User, Package, MapPin, LogOut, Clock, Gift, Ticket, Ruler, Users, PackageX } from 'lucide-react';
+import { User, Package, MapPin, LogOut, Clock, Wallet, Ticket, Ruler, Users, PackageX } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
@@ -24,7 +24,7 @@ export default function AccountNav() {
     { href: '/account/measurements', label: 'Mes mensurations', icon: Ruler },
     { href: '/account/returns', label: 'Les retours', icon: PackageX },
     { href: '/account/coupons', label: 'Mes coupons', icon: Ticket },
-    { href: '/account/loyalty', label: 'Programme de fidélité', icon: Gift },
+    { href: '/account/loyalty', label: 'Ma Cagnotte Fidélité', icon: Wallet },
     { href: '/account/referral', label: 'Parrainage', icon: Users },
   ];
 

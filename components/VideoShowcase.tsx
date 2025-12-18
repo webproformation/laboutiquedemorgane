@@ -18,8 +18,12 @@ interface VideoStream {
 export default function VideoShowcase() {
   const [videos, setVideos] = useState<VideoStream[]>([]);
   const [loading, setLoading] = useState(true);
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
+    setMounted(true);
+    setLoading(true);
+
     const fetchVideos = async () => {
       try {
         const { data, error } = await supabase
@@ -41,6 +45,10 @@ export default function VideoShowcase() {
     };
 
     fetchVideos();
+
+    return () => {
+      setMounted(false);
+    };
   }, []);
 
   return (
@@ -105,6 +113,11 @@ export default function VideoShowcase() {
                           src={video.thumbnail_url}
                           alt={video.title}
                           className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+                          loading="lazy"
+                          onError={(e) => {
+                            const target = e.target as HTMLImageElement;
+                            target.style.display = 'none';
+                          }}
                         />
                       ) : (
                         <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-[#D4AF37] to-[#b8933d]">

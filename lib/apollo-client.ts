@@ -17,16 +17,38 @@ const client = new ApolloClient({
       VariableProduct: {
         keyFields: ['id'],
       },
+      Query: {
+        fields: {
+          products: {
+            keyArgs: ['where'],
+            merge(existing, incoming, { args }) {
+              if (!args?.after) {
+                return incoming;
+              }
+              const existingNodes = existing?.nodes || [];
+              const incomingNodes = incoming?.nodes || [];
+              return {
+                ...incoming,
+                nodes: [...existingNodes, ...incomingNodes],
+              };
+            },
+          },
+        },
+      },
     },
   }),
   ssrMode: typeof window === 'undefined',
   defaultOptions: {
     watchQuery: {
-      fetchPolicy: 'cache-and-network',
+      fetchPolicy: 'cache-first',
+      nextFetchPolicy: 'cache-first',
       errorPolicy: 'all',
     },
     query: {
-      fetchPolicy: 'network-only',
+      fetchPolicy: 'cache-first',
+      errorPolicy: 'all',
+    },
+    mutate: {
       errorPolicy: 'all',
     },
   },

@@ -9,7 +9,7 @@ import { GetProductBySlugResponse } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { AlertCircle, ShoppingCart, Home, Heart, Bell } from 'lucide-react';
+import { CircleAlert as AlertCircle, ShoppingCart, Hop as Home, Heart, Bell } from 'lucide-react';
 import Link from 'next/link';
 import { toast } from 'sonner';
 import { useState, use, useCallback } from 'react';

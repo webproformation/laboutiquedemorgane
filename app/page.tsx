@@ -1,16 +1,19 @@
 "use client";
 
+import dynamic from 'next/dynamic';
 import HeroSlider from '@/components/HeroSlider';
-import ScratchCardGame from '@/components/ScratchCardGame';
-import WheelGame from '@/components/WheelGame';
 import HomeCategories from '@/components/HomeCategories';
-import FeaturedProductsSlider from '@/components/FeaturedProductsSlider';
-import VideoShowcase from '@/components/VideoShowcase';
-import LiveStreamsSlider from '@/components/LiveStreamsSlider';
-import CustomerReviewsSlider from '@/components/CustomerReviewsSlider';
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase-client';
+import { usePathname } from 'next/navigation';
+
+const ScratchCardGame = dynamic(() => import('@/components/ScratchCardGame'), { ssr: false });
+const WheelGame = dynamic(() => import('@/components/WheelGame'), { ssr: false });
+const FeaturedProductsSlider = dynamic(() => import('@/components/FeaturedProductsSlider'), { ssr: false });
+const VideoShowcase = dynamic(() => import('@/components/VideoShowcase'), { ssr: false });
+const LiveStreamsSlider = dynamic(() => import('@/components/LiveStreamsSlider'), { ssr: false });
+const CustomerReviewsSlider = dynamic(() => import('@/components/CustomerReviewsSlider'), { ssr: false });
 
 interface ScratchGameSettings {
   is_enabled: boolean;
@@ -32,6 +35,7 @@ type ActiveGame = 'scratch' | 'wheel' | null;
 
 export default function Home() {
   const { user } = useAuth();
+  const pathname = usePathname();
   const [showScratchGame, setShowScratchGame] = useState(false);
   const [showWheelGame, setShowWheelGame] = useState(false);
   const [scratchSettings, setScratchSettings] = useState<ScratchGameSettings | null>(null);
@@ -39,6 +43,13 @@ export default function Home() {
   const [activeGame, setActiveGame] = useState<ActiveGame>(null);
   const [canPlay, setCanPlay] = useState(false);
   const [sessionId] = useState(() => `session_${Date.now()}_${Math.random()}`);
+  const [mountKey, setMountKey] = useState(0);
+
+  useEffect(() => {
+    if (pathname === '/') {
+      setMountKey(prev => prev + 1);
+    }
+  }, [pathname]);
 
   useEffect(() => {
     const fetchGameSettings = async () => {
@@ -199,11 +210,11 @@ export default function Home() {
       {showWheelGame && activeGame === 'wheel' && (
         <WheelGame onClose={() => setShowWheelGame(false)} />
       )}
-      <HeroSlider />
+      <HeroSlider key={`hero-${mountKey}`} />
       <HomeCategories />
-      <FeaturedProductsSlider />
-      <VideoShowcase />
-      <LiveStreamsSlider />
+      <FeaturedProductsSlider key={`featured-${mountKey}`} />
+      <VideoShowcase key={`video-${mountKey}`} />
+      <LiveStreamsSlider key={`live-${mountKey}`} />
       <CustomerReviewsSlider />
     </>
   );

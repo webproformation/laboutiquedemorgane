@@ -28,8 +28,12 @@ interface LiveStream {
 export default function LiveStreamsSlider() {
   const [streams, setStreams] = useState<LiveStream[]>([]);
   const [loading, setLoading] = useState(true);
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
+    setMounted(true);
+    setLoading(true);
+
     const fetchStreams = async () => {
       const { data, error } = await supabase
         .from('live_streams')
@@ -46,6 +50,10 @@ export default function LiveStreamsSlider() {
     };
 
     fetchStreams();
+
+    return () => {
+      setMounted(false);
+    };
   }, []);
 
   if (loading) {
@@ -106,12 +114,17 @@ export default function LiveStreamsSlider() {
                   className="group block"
                 >
                   <div className="relative overflow-hidden rounded-lg shadow-lg hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-2">
-                    <div className="relative aspect-video">
+                    <div className="relative aspect-video bg-gray-200">
                       {stream.thumbnail_url ? (
                         <img
                           src={stream.thumbnail_url}
                           alt={stream.title}
                           className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-110"
+                          loading="lazy"
+                          onError={(e) => {
+                            const target = e.target as HTMLImageElement;
+                            target.style.display = 'none';
+                          }}
                         />
                       ) : (
                         <div className="w-full h-full bg-gradient-to-br from-gray-800 to-gray-900 flex items-center justify-center">

@@ -59,7 +59,7 @@ export default function GDPRConsent({
         />
         <Label
           htmlFor={`gdpr-consent-${type}`}
-          className={`leading-relaxed cursor-pointer ${type === 'newsletter' ? 'text-white text-base' : 'text-sm'}`}
+          className={`leading-relaxed cursor-pointer ${type === 'newsletter' ? 'text-white text-xs' : 'text-sm'}`}
         >
           {config.text}{' '}
           {config.links.map((link, index) => (

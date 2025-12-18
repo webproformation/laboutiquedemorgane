@@ -18,6 +18,7 @@ interface HomeCategory {
 export default function HomeCategories() {
   const [categories, setCategories] = useState<HomeCategory[]>([]);
   const [loading, setLoading] = useState(true);
+  const [mounted, setMounted] = useState(false);
 
   const decodeHtmlEntities = (text: string): string => {
     if (typeof window !== 'undefined') {
@@ -29,7 +30,13 @@ export default function HomeCategories() {
   };
 
   useEffect(() => {
+    setMounted(true);
+    setLoading(true);
     loadCategories();
+
+    return () => {
+      setMounted(false);
+    };
   }, []);
 
   const loadCategories = async () => {
@@ -109,6 +116,11 @@ export default function HomeCategories() {
                     src={category.image_url}
                     alt={category.category_name}
                     className="w-full h-full object-cover transition-transform group-hover:scale-110"
+                    loading="lazy"
+                    onError={(e) => {
+                      const target = e.target as HTMLImageElement;
+                      target.style.display = 'none';
+                    }}
                   />
                 ) : (
                   <div className="w-full h-full bg-gradient-to-br from-[#C6A15B] to-[#B7933F]" />

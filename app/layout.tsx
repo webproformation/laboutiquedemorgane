@@ -7,23 +7,37 @@ import { AuthProvider } from '@/context/AuthContext';
 import { LoyaltyProvider } from '@/context/LoyaltyContext';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
-import LoyaltyProgressBar from '@/components/LoyaltyProgressBar';
-import PageVisitTracker from '@/components/PageVisitTracker';
-import AnalyticsTracker from '@/components/AnalyticsTracker';
-import ScrollToTop from '@/components/ScrollToTop';
-import CookieConsent from '@/components/CookieConsent';
-import CookiePreferencesButton from '@/components/CookiePreferencesButton';
-import { Toaster } from '@/components/ui/sonner';
 import ApolloWrapper from '@/components/ApolloProvider';
+import {
+  EuroLoyaltyProgressBar,
+  DailyConnectionReward,
+  PageVisitTracker,
+  AnalyticsTracker,
+  ScrollToTop,
+  CookieConsent,
+  CookiePreferencesButton,
+  Toaster,
+} from '@/components/ClientComponents';
 
 const oxygen = Oxygen({
   weight: ['300', '400', '700'],
-  subsets: ['latin']
+  subsets: ['latin'],
+  display: 'swap',
+  preload: true,
 });
 
 export const metadata: Metadata = {
   title: 'La Boutique de Morgane - Live Shopping',
   description: 'Boutique en ligne avec live shopping interactif',
+  icons: {
+    icon: '/favicon.ico',
+  },
+  viewport: {
+    width: 'device-width',
+    initialScale: 1,
+    maximumScale: 5,
+  },
+  themeColor: '#D4AF37',
 };
 
 export default function RootLayout({
@@ -39,11 +53,12 @@ export default function RootLayout({
             <LoyaltyProvider>
               <CartProvider>
                 <WishlistProvider>
+                  <DailyConnectionReward />
                   <PageVisitTracker />
                   <AnalyticsTracker />
                   <div className="flex flex-col min-h-screen overflow-x-hidden">
                     <Header />
-                    <LoyaltyProgressBar />
+                    <EuroLoyaltyProgressBar />
                     <main className="flex-1 bg-gray-50">{children}</main>
                     <Footer />
                   </div>

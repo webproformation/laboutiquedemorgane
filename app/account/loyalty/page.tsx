@@ -1,20 +1,111 @@
 'use client';
 
-import { useLoyalty } from '@/context/LoyaltyContext';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { useState, useEffect } from 'react';
+import { useAuth } from '@/context/AuthContext';
+import { supabase } from '@/lib/supabase-client';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
-import { Gift, Sparkles, Eye, Video, TrendingUp, Award } from 'lucide-react';
+import {
+  Wallet,
+  TrendingUp,
+  Calendar,
+  Video,
+  ShoppingBag,
+  Gem,
+  Gift,
+  Star,
+  ChevronRight,
+  Sparkles
+} from 'lucide-react';
+import { toast } from 'sonner';
 import { Skeleton } from '@/components/ui/skeleton';
 
+interface TierInfo {
+  tier: number;
+  multiplier: number;
+  tier_name: string;
+  current_balance: number;
+  next_tier_threshold: number;
+}
+
+interface Transaction {
+  id: string;
+  amount: number;
+  type: string;
+  description: string;
+  created_at: string;
+  multiplier: number;
+  base_amount: number;
+}
+
 export default function LoyaltyPage() {
-  const {
-    loyaltyPoints,
-    loading,
-    visitDiscount,
-    liveDiscount,
-    totalDiscount,
-    progressToNextVisitDiscount,
-  } = useLoyalty();
+  const { user } = useAuth();
+  const [tierInfo, setTierInfo] = useState<TierInfo | null>(null);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [claimingDaily, setClaimingDaily] = useState(false);
+
+  useEffect(() => {
+    if (user) {
+      loadData();
+    }
+  }, [user]);
+
+  const loadData = async () => {
+    if (!user) return;
+
+    try {
+      const [tierData, transactionsData] = await Promise.all([
+        supabase.rpc('get_loyalty_tier', { p_user_id: user.id }),
+        supabase
+          .from('loyalty_transactions')
+          .select('*')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false })
+          .limit(50)
+      ]);
+
+      if (tierData.error) throw tierData.error;
+      if (transactionsData.error) throw transactionsData.error;
+
+      if (tierData.data && tierData.data.length > 0) {
+        setTierInfo(tierData.data[0]);
+      }
+
+      setTransactions(transactionsData.data || []);
+    } catch (error) {
+      console.error('Error loading data:', error);
+      toast.error('Erreur lors du chargement des données');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const claimDailyBonus = async () => {
+    if (!user || claimingDaily) return;
+
+    setClaimingDaily(true);
+    try {
+      const { data, error } = await supabase.rpc('award_daily_connection_bonus', {
+        p_user_id: user.id
+      });
+
+      if (error) throw error;
+
+      if (data.success) {
+        toast.success(data.message);
+        loadData();
+      } else {
+        toast.info(data.message);
+      }
+    } catch (error) {
+      console.error('Error claiming daily bonus:', error);
+      toast.error('Erreur lors de la réclamation du bonus');
+    } finally {
+      setClaimingDaily(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -23,8 +114,8 @@ export default function LoyaltyPage() {
           <Skeleton className="h-8 w-64 mb-2" />
           <Skeleton className="h-4 w-96" />
         </div>
-        <div className="grid gap-6 md:grid-cols-2">
-          {[1, 2, 3, 4].map((i) => (
+        <div className="grid gap-6">
+          {[1, 2, 3].map((i) => (
             <Skeleton key={i} className="h-48" />
           ))}
         </div>
@@ -32,230 +123,263 @@ export default function LoyaltyPage() {
     );
   }
 
-  const pointsToNextDiscount = loyaltyPoints
-    ? (Math.floor(loyaltyPoints.page_visit_points / 500) + 1) * 500 - loyaltyPoints.page_visit_points
-    : 500;
+  if (!user) {
+    return (
+      <Card>
+        <CardContent className="text-center py-12">
+          <p>Connecte-toi pour accéder à ton programme de fidélité</p>
+        </CardContent>
+      </Card>
+    );
+  }
 
-  const livesUntilMaxDiscount = Math.max(0, 5 - (loyaltyPoints?.live_participation_count || 0));
-  const pointsUntilMaxDiscount = Math.max(0, 1500 - (loyaltyPoints?.page_visit_points || 0));
+  const progressPercentage = tierInfo && tierInfo.tier !== 3
+    ? ((tierInfo.current_balance / tierInfo.next_tier_threshold) * 100)
+    : 100;
+
+  const getTypeIcon = (type: string) => {
+    switch (type) {
+      case 'daily_connection':
+        return <Calendar className="w-4 h-4" />;
+      case 'live_presence':
+        return <Video className="w-4 h-4" />;
+      case 'order_reward':
+        return <ShoppingBag className="w-4 h-4" />;
+      case 'diamond_find':
+        return <Gem className="w-4 h-4" />;
+      case 'review_reward':
+        return <Star className="w-4 h-4" />;
+      default:
+        return <Gift className="w-4 h-4" />;
+    }
+  };
+
+  const getTypeLabel = (type: string) => {
+    switch (type) {
+      case 'daily_connection':
+        return 'Connexion quotidienne';
+      case 'live_presence':
+        return 'Présence en live';
+      case 'order_reward':
+        return 'Récompense commande';
+      case 'diamond_find':
+        return 'Diamant trouvé';
+      case 'review_reward':
+        return 'Avis produit';
+      default:
+        return type;
+    }
+  };
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold text-gray-900 mb-2">Programme de Fidélité</h1>
         <p className="text-gray-600">
-          Gagnez des points et des réductions en naviguant sur le site et en participant aux lives
+          Gagne des euros en naviguant sur le site, en participant aux lives et en achetant
         </p>
       </div>
 
-      <Card className="bg-gradient-to-br from-amber-50 to-yellow-50 border-amber-200">
+      <Card className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white">
         <CardHeader>
-          <div className="flex items-center gap-3">
-            <div className="bg-amber-500 rounded-full p-3">
-              <Award className="h-6 w-6 text-white" />
-            </div>
-            <div>
-              <CardTitle className="text-2xl">Votre Réduction Actuelle</CardTitle>
-              <CardDescription>Cumulez visites et participations aux lives</CardDescription>
-            </div>
-          </div>
+          <CardTitle className="flex items-center justify-between">
+            <span className="flex items-center gap-2">
+              <Wallet className="w-6 h-6" />
+              Ma Cagnotte Fidélité
+            </span>
+            <Button
+              onClick={claimDailyBonus}
+              disabled={claimingDaily}
+              variant="secondary"
+              size="sm"
+            >
+              Bonus du jour
+            </Button>
+          </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="flex items-center gap-4">
-            <div className="text-6xl font-bold text-amber-600">
-              {totalDiscount}%
+          <div className="text-5xl font-bold mb-4">
+            {tierInfo?.current_balance.toFixed(2)} €
+          </div>
+          <div className="flex items-center gap-4 mb-4">
+            <div className="bg-white/20 px-3 py-1 rounded-full text-sm">
+              {tierInfo?.tier_name}
             </div>
-            <div className="flex-1">
-              <div className="grid grid-cols-2 gap-4 text-sm">
-                <div className="bg-white rounded-lg p-3 shadow-sm">
-                  <div className="flex items-center gap-2 text-gray-600 mb-1">
-                    <Eye className="h-4 w-4" />
-                    <span>Visites</span>
-                  </div>
-                  <div className="text-2xl font-bold text-amber-600">{visitDiscount}%</div>
-                  <div className="text-xs text-gray-500">Max 3%</div>
-                </div>
-                <div className="bg-white rounded-lg p-3 shadow-sm">
-                  <div className="flex items-center gap-2 text-gray-600 mb-1">
-                    <Video className="h-4 w-4" />
-                    <span>Lives</span>
-                  </div>
-                  <div className="text-2xl font-bold text-amber-600">{liveDiscount}%</div>
-                  <div className="text-xs text-gray-500">Max 5%</div>
-                </div>
-              </div>
+            <div className="bg-white/20 px-3 py-1 rounded-full text-sm font-bold flex items-center gap-1">
+              <Sparkles className="w-4 h-4" />
+              Multiplicateur x{tierInfo?.multiplier}
             </div>
           </div>
+          {tierInfo && tierInfo.tier !== 3 && (
+            <div className="space-y-2">
+              <div className="flex justify-between text-sm">
+                <span>Progression vers {tierInfo.tier === 1 ? 'Palier 2' : 'Palier 3'}</span>
+                <span>{tierInfo.next_tier_threshold} €</span>
+              </div>
+              <Progress value={progressPercentage} className="h-2 bg-white/20" />
+              <p className="text-sm text-white/80">
+                Plus que {(tierInfo.next_tier_threshold - tierInfo.current_balance).toFixed(2)} € pour débloquer le multiplicateur x{tierInfo.multiplier + 1}
+              </p>
+            </div>
+          )}
+          {tierInfo && tierInfo.tier === 3 && (
+            <div className="flex items-center gap-2 text-sm">
+              <Sparkles className="w-4 h-4" />
+              <span>Palier maximum atteint ! Toutes tes récompenses sont triplées</span>
+            </div>
+          )}
         </CardContent>
       </Card>
 
-      <div className="grid gap-6 md:grid-cols-2">
+      <div className="grid md:grid-cols-3 gap-4">
         <Card>
-          <CardHeader>
-            <div className="flex items-center gap-2">
-              <Eye className="h-5 w-5 text-amber-600" />
-              <CardTitle>Points de Visites</CardTitle>
-            </div>
-            <CardDescription>1 visite = 1 point, 500 points = 1% de réduction</CardDescription>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-medium text-gray-600">
+              Les Paliers
+            </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <div>
-              <div className="flex justify-between items-center mb-2">
-                <span className="text-sm text-gray-600">Progression</span>
-                <span className="text-2xl font-bold text-amber-600">
-                  {loyaltyPoints?.page_visit_points || 0}
-                </span>
-              </div>
-              <Progress value={progressToNextVisitDiscount} className="h-3 bg-amber-100" />
-              {visitDiscount < 3 ? (
-                <p className="text-sm text-gray-600 mt-2">
-                  Plus que <span className="font-semibold">{pointsToNextDiscount} points</span> pour atteindre {visitDiscount + 1}%
-                </p>
-              ) : (
-                <p className="text-sm text-green-600 font-semibold mt-2 flex items-center gap-1">
-                  <Sparkles className="h-4 w-4" />
-                  Réduction maximum atteinte!
-                </p>
-              )}
-            </div>
-
-            <div className="pt-4 border-t">
-              <div className="flex justify-between text-sm">
-                <span className="text-gray-600">Réduction actuelle:</span>
-                <span className="font-semibold text-amber-600">{visitDiscount}%</span>
-              </div>
-              <div className="flex justify-between text-sm mt-1">
-                <span className="text-gray-600">Réduction maximum:</span>
-                <span className="font-semibold">3%</span>
-              </div>
-            </div>
-
-            {pointsUntilMaxDiscount > 0 && (
-              <div className="bg-amber-50 rounded-lg p-3">
-                <div className="flex items-start gap-2">
-                  <TrendingUp className="h-4 w-4 text-amber-600 mt-0.5" />
-                  <div className="text-sm">
-                    <p className="font-medium text-gray-900">Continuez comme ça!</p>
-                    <p className="text-gray-600">
-                      Encore {pointsUntilMaxDiscount} points pour la réduction maximum
-                    </p>
-                  </div>
+          <CardContent>
+            <div className="space-y-2">
+              <div className={`p-3 rounded-lg ${tierInfo?.tier === 1 ? 'bg-blue-100 border-2 border-blue-500' : 'bg-gray-50'}`}>
+                <div className="font-semibold text-sm flex items-center justify-between">
+                  <span>Palier 1</span>
+                  <span className="text-blue-600">x1</span>
                 </div>
+                <div className="text-xs text-gray-600">0 € - 5 €</div>
               </div>
-            )}
+              <div className={`p-3 rounded-lg ${tierInfo?.tier === 2 ? 'bg-blue-100 border-2 border-blue-500' : 'bg-gray-50'}`}>
+                <div className="font-semibold text-sm flex items-center justify-between">
+                  <span>Palier 2</span>
+                  <span className="text-blue-600">x2</span>
+                </div>
+                <div className="text-xs text-gray-600">5 € - 15 €</div>
+                <div className="text-xs text-blue-600 mt-1">Gains doublés !</div>
+              </div>
+              <div className={`p-3 rounded-lg ${tierInfo?.tier === 3 ? 'bg-blue-100 border-2 border-blue-500' : 'bg-gray-50'}`}>
+                <div className="font-semibold text-sm flex items-center justify-between">
+                  <span>Palier 3</span>
+                  <span className="text-blue-600">x3</span>
+                </div>
+                <div className="text-xs text-gray-600">15 € - 30 €</div>
+                <div className="text-xs text-blue-600 mt-1">Gains triplés !</div>
+              </div>
+            </div>
           </CardContent>
         </Card>
 
         <Card>
-          <CardHeader>
-            <div className="flex items-center gap-2">
-              <Video className="h-5 w-5 text-amber-600" />
-              <CardTitle>Participations aux Lives</CardTitle>
-            </div>
-            <CardDescription>1 live = 1% de réduction</CardDescription>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-medium text-gray-600">
+              Comment gagner
+            </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <div>
-              <div className="flex justify-between items-center mb-2">
-                <span className="text-sm text-gray-600">Lives regardés</span>
-                <span className="text-2xl font-bold text-amber-600">
-                  {loyaltyPoints?.live_participation_count || 0}
-                </span>
+          <CardContent>
+            <div className="space-y-2 text-sm">
+              <div className="flex items-center gap-2">
+                <Calendar className="w-4 h-4 text-blue-500 flex-shrink-0" />
+                <span>0,10 € / jour (connexion)</span>
               </div>
-              <Progress
-                value={((loyaltyPoints?.live_participation_count || 0) / 5) * 100}
-                className="h-3 bg-amber-100"
-              />
-              {liveDiscount < 5 ? (
-                <p className="text-sm text-gray-600 mt-2">
-                  Plus que <span className="font-semibold">{livesUntilMaxDiscount} live(s)</span> pour atteindre {liveDiscount + 1}%
-                </p>
-              ) : (
-                <p className="text-sm text-green-600 font-semibold mt-2 flex items-center gap-1">
-                  <Sparkles className="h-4 w-4" />
-                  Réduction maximum atteinte!
-                </p>
-              )}
-            </div>
-
-            <div className="pt-4 border-t">
-              <div className="flex justify-between text-sm">
-                <span className="text-gray-600">Réduction actuelle:</span>
-                <span className="font-semibold text-amber-600">{liveDiscount}%</span>
+              <div className="flex items-center gap-2">
+                <Video className="w-4 h-4 text-blue-500 flex-shrink-0" />
+                <span>0,20 € (10 min en live)</span>
               </div>
-              <div className="flex justify-between text-sm mt-1">
-                <span className="text-gray-600">Réduction maximum:</span>
-                <span className="font-semibold">5%</span>
+              <div className="flex items-center gap-2">
+                <ShoppingBag className="w-4 h-4 text-blue-500 flex-shrink-0" />
+                <span>2 % de tes commandes</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Gem className="w-4 h-4 text-blue-500 flex-shrink-0" />
+                <span>0,10 € / diamant trouvé</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Star className="w-4 h-4 text-blue-500 flex-shrink-0" />
+                <span>0,20 € / avis produit</span>
+              </div>
+              <div className="pt-2 border-t text-xs text-gray-500">
+                Tous les gains sont multipliés selon ton palier !
               </div>
             </div>
+          </CardContent>
+        </Card>
 
-            {livesUntilMaxDiscount > 0 && (
-              <div className="bg-amber-50 rounded-lg p-3">
-                <div className="flex items-start gap-2">
-                  <Video className="h-4 w-4 text-amber-600 mt-0.5" />
-                  <div className="text-sm">
-                    <p className="font-medium text-gray-900">Participez aux lives!</p>
-                    <p className="text-gray-600">
-                      Encore {livesUntilMaxDiscount} live(s) pour la réduction maximum
-                    </p>
-                  </div>
-                </div>
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-medium text-gray-600">
+              Chasse aux Diamants
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-center py-4">
+              <Gem className="w-12 h-12 mx-auto mb-2 text-blue-500" />
+              <p className="text-sm text-gray-600 mb-4">
+                3 diamants cachés par semaine dans le site !
+              </p>
+              <div className="text-xs text-gray-500 bg-blue-50 rounded p-2">
+                Trouve-les pour gagner 0,10 € par diamant
               </div>
-            )}
+            </div>
           </CardContent>
         </Card>
       </div>
 
       <Card>
         <CardHeader>
-          <div className="flex items-center gap-2">
-            <Gift className="h-5 w-5 text-amber-600" />
-            <CardTitle>Comment ça marche?</CardTitle>
-          </div>
+          <CardTitle className="flex items-center gap-2">
+            <TrendingUp className="w-5 h-5" />
+            Historique des Gains
+          </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="space-y-4">
-            <div className="flex gap-3">
-              <div className="bg-amber-100 rounded-full p-2 h-fit">
-                <Eye className="h-5 w-5 text-amber-600" />
-              </div>
-              <div>
-                <h3 className="font-semibold text-gray-900 mb-1">Points de Visite</h3>
-                <p className="text-sm text-gray-600">
-                  Chaque page que vous visitez sur le site vous rapporte 1 point.
-                  Accumulez 500 points pour débloquer 1% de réduction sur vos achats.
-                  Maximum 3% de réduction (1500 points).
-                </p>
-              </div>
+          {transactions.length === 0 ? (
+            <div className="text-center py-8 text-gray-500">
+              <Wallet className="w-12 h-12 mx-auto mb-3 text-gray-400" />
+              <p className="font-medium">Aucune transaction pour le moment</p>
+              <p className="text-sm mt-2">Commence à gagner des euros en naviguant sur le site !</p>
             </div>
-
-            <div className="flex gap-3">
-              <div className="bg-amber-100 rounded-full p-2 h-fit">
-                <Video className="h-5 w-5 text-amber-600" />
-              </div>
-              <div>
-                <h3 className="font-semibold text-gray-900 mb-1">Participation aux Lives</h3>
-                <p className="text-sm text-gray-600">
-                  Chaque live auquel vous participez vous donne 1% de réduction supplémentaire.
-                  Assistez à 5 lives pour obtenir la réduction maximum de 5%.
-                </p>
-              </div>
+          ) : (
+            <div className="space-y-3">
+              {transactions.map((transaction) => (
+                <div
+                  key={transaction.id}
+                  className="flex items-start justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
+                >
+                  <div className="flex items-start gap-3 flex-1">
+                    <div className="p-2 bg-white rounded-lg">
+                      {getTypeIcon(transaction.type)}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium text-sm">
+                        {getTypeLabel(transaction.type)}
+                      </div>
+                      <div className="text-xs text-gray-600 mt-1">
+                        {transaction.description}
+                      </div>
+                      <div className="text-xs text-gray-500 mt-1">
+                        {new Date(transaction.created_at).toLocaleDateString('fr-FR', {
+                          day: 'numeric',
+                          month: 'long',
+                          year: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit'
+                        })}
+                      </div>
+                      {transaction.multiplier > 1 && (
+                        <div className="text-xs text-blue-600 mt-1 flex items-center gap-1">
+                          <Sparkles className="w-3 h-3" />
+                          {transaction.base_amount.toFixed(2)} € × {transaction.multiplier} = {transaction.amount.toFixed(2)} €
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <div className="text-right ml-4">
+                    <div className="font-bold text-green-600">
+                      +{transaction.amount.toFixed(2)} €
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
-
-            <div className="flex gap-3">
-              <div className="bg-amber-100 rounded-full p-2 h-fit">
-                <Sparkles className="h-5 w-5 text-amber-600" />
-              </div>
-              <div>
-                <h3 className="font-semibold text-gray-900 mb-1">Réduction Totale</h3>
-                <p className="text-sm text-gray-600">
-                  Vos réductions de visite et de lives se cumulent!
-                  Obtenez jusqu&apos;à 8% de réduction maximum (3% visites + 5% lives)
-                  sur tous vos achats.
-                </p>
-              </div>
-            </div>
-          </div>
+          )}
         </CardContent>
       </Card>
     </div>

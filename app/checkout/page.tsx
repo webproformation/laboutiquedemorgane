@@ -1294,6 +1294,79 @@ export default function CheckoutPage() {
                 </CardContent>
               </Card>
 
+              {selectedPaymentMethod === 'bacs' && (
+                <Card className="border-2 border-blue-200 bg-blue-50">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2 text-blue-900">
+                      <Info className="h-5 w-5 text-blue-600" />
+                      Coordonnées bancaires pour le virement
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <div className="bg-white rounded-lg p-4 space-y-3">
+                      <div>
+                        <p className="text-sm font-semibold text-gray-700">Compte Courant</p>
+                        <p className="text-base font-medium text-gray-900">31822952121 - SAS A U MORGANE DEWANIN</p>
+                      </div>
+
+                      <Separator />
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div>
+                          <p className="text-sm font-semibold text-gray-700">IBAN</p>
+                          <p className="text-base font-mono text-gray-900">FR76 1350 7000 4331 8229 5212 127</p>
+                        </div>
+
+                        <div>
+                          <p className="text-sm font-semibold text-gray-700">BIC</p>
+                          <p className="text-base font-mono text-gray-900">CCBPFRPPLIL</p>
+                        </div>
+                      </div>
+
+                      <Separator />
+
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                        <div>
+                          <p className="text-xs font-semibold text-gray-700">Code banque</p>
+                          <p className="text-sm font-mono text-gray-900">13507</p>
+                        </div>
+
+                        <div>
+                          <p className="text-xs font-semibold text-gray-700">Code guichet</p>
+                          <p className="text-sm font-mono text-gray-900">00043</p>
+                        </div>
+
+                        <div>
+                          <p className="text-xs font-semibold text-gray-700">N° du compte</p>
+                          <p className="text-sm font-mono text-gray-900">31822952121</p>
+                        </div>
+
+                        <div>
+                          <p className="text-xs font-semibold text-gray-700">Clé RIB</p>
+                          <p className="text-sm font-mono text-gray-900">27</p>
+                        </div>
+                      </div>
+
+                      <Separator />
+
+                      <div>
+                        <p className="text-sm font-semibold text-gray-700">Banque</p>
+                        <p className="text-base font-medium text-gray-900">BANQUE POPULAIRE DU NORD</p>
+                        <p className="text-sm text-gray-600">Agence : AG CENTRALE</p>
+                      </div>
+                    </div>
+
+                    <Alert className="bg-blue-100 border-blue-300">
+                      <Info className="h-4 w-4 text-blue-700" />
+                      <AlertDescription className="text-blue-900">
+                        Veuillez effectuer le virement en indiquant votre numéro de commande en référence.
+                        Votre commande sera expédiée dès réception du paiement.
+                      </AlertDescription>
+                    </Alert>
+                  </CardContent>
+                </Card>
+              )}
+
               <Card className="border-2 border-blue-200 bg-blue-50">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2 text-blue-900">

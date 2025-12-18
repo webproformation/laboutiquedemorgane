@@ -29,6 +29,7 @@ interface Slide {
 export default function HeroSlider() {
   const [slides, setSlides] = useState<Slide[]>([]);
   const [loading, setLoading] = useState(true);
+  const [mounted, setMounted] = useState(false);
   const plugin = useRef(
     Autoplay({ delay: 5000, stopOnInteraction: true })
   );
@@ -36,7 +37,26 @@ export default function HeroSlider() {
   const [current, setCurrent] = useState(0);
 
   useEffect(() => {
+    setMounted(true);
+    setLoading(true);
+
     const fetchSlides = async () => {
+      const cacheKey = 'home_slides_active';
+      const cached = sessionStorage.getItem(cacheKey);
+
+      if (cached) {
+        try {
+          const cachedData = JSON.parse(cached);
+          if (cachedData.timestamp && Date.now() - cachedData.timestamp < 300000) {
+            setSlides(cachedData.data);
+            setLoading(false);
+            return;
+          }
+        } catch (e) {
+          console.error('Cache error:', e);
+        }
+      }
+
       const { data, error } = await supabase
         .from('home_slides')
         .select('*')
@@ -45,11 +65,16 @@ export default function HeroSlider() {
 
       if (!error && data) {
         setSlides(data);
+        sessionStorage.setItem(cacheKey, JSON.stringify({ data, timestamp: Date.now() }));
       }
       setLoading(false);
     };
 
     fetchSlides();
+
+    return () => {
+      setMounted(false);
+    };
   }, []);
 
   useEffect(() => {
@@ -122,7 +147,7 @@ export default function HeroSlider() {
         <CarouselContent>
           {slides.map((slide, index) => (
             <CarouselItem key={slide.id}>
-              <div className="relative w-full h-[400px] md:h-[600px] overflow-hidden">
+              <div className="relative w-full h-[400px] md:h-[600px] overflow-hidden bg-gray-200">
                 {slide.image_url && (
                   <Image
                     src={slide.image_url}
@@ -130,7 +155,9 @@ export default function HeroSlider() {
                     fill
                     sizes="100vw"
                     className="object-cover"
-                    priority
+                    priority={index === 0}
+                    loading={index === 0 ? 'eager' : 'lazy'}
+                    unoptimized
                   />
                 )}
                 <div className="absolute inset-0 bg-gradient-to-r from-black/60 to-black/30">
