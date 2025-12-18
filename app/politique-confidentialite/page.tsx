@@ -140,7 +140,7 @@ export default function PolitiqueConfidentialitePage() {
             <p className="text-gray-700"><strong>Email :</strong> <a href="mailto:contact@laboutiquedemorgane.fr" className="text-blue-600 hover:underline">contact@laboutiquedemorgane.fr</a></p>
             <p className="text-gray-700"><strong>Téléphone :</strong></p>
             <p className="text-gray-700 ml-4"><a href="tel:+33641456671" className="text-blue-600 hover:underline"><strong>Morgane</strong> : +33 6 41 45 66 71</a></p>
-            <p className="text-gray-700 ml-4"><a href="tel:+33603489600" className="text-blue-600 hover:underline"><strong>André</strong> : +33 6 03 48 96</a></p>
+            <p className="text-gray-700 ml-4"><a href="tel:+33603489662" className="text-blue-600 hover:underline"><strong>André</strong> : +33 6 03 48 96 62</a></p>
             <p className="text-gray-700"><strong>Courrier :</strong> 1062 rue d&apos;Armentières, 59850 Nieppe</p>
           </div>
         </section>

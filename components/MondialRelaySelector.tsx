@@ -119,9 +119,25 @@ export default function MondialRelaySelector({
 
     const loadWidget = async () => {
       try {
+        console.log('[MondialRelay] Starting widget load...');
+
         if (!window.mondialRelayScriptsLoaded) {
+          console.log('[MondialRelay] Loading jQuery...');
           await loadScript('https://code.jquery.com/jquery-3.6.0.min.js', 'jquery-script');
 
+          await new Promise(resolve => {
+            const checkJQuery = () => {
+              if (window.jQuery) {
+                console.log('[MondialRelay] jQuery loaded');
+                resolve(true);
+              } else {
+                setTimeout(checkJQuery, 50);
+              }
+            };
+            checkJQuery();
+          });
+
+          console.log('[MondialRelay] Loading Mondial Relay plugin...');
           await loadScript(
             'https://widget.mondialrelay.com/parcelshop-picker/jquery.plugin.mondialrelay.parcelshoppicker.min.js',
             'mondial-relay-widget-script'
@@ -133,30 +149,42 @@ export default function MondialRelaySelector({
           );
 
           window.mondialRelayScriptsLoaded = true;
+          console.log('[MondialRelay] Scripts loaded');
         }
 
         if (!mountedRef.current) return;
 
-        await new Promise(resolve => setTimeout(resolve, 100));
+        await new Promise(resolve => setTimeout(resolve, 200));
 
         if (window.jQuery && widgetContainerRef.current && mountedRef.current && !widgetInitializedRef.current) {
           const $ = window.jQuery;
+
+          if (typeof $.fn.MR_ParcelShopPicker !== 'function') {
+            console.error('[MondialRelay] Plugin not available');
+            throw new Error('Le plugin Mondial Relay n\'est pas disponible');
+          }
+
           const containerId = `mr-widget-${postalCode}-${country}`;
 
           if (widgetContainerRef.current) {
             widgetContainerRef.current.id = containerId;
           }
 
+          console.log('[MondialRelay] Initializing widget with ID:', containerId);
+          console.log('[MondialRelay] PostalCode:', postalCode, 'Country:', country);
+
           $(`#${containerId}`).MR_ParcelShopPicker({
             Target: `#${containerId}`,
-            Brand: 'BDTEST13',
+            Brand: 'CC20T067',
             Country: country,
             PostCode: postalCode,
             ColLivMod: 'REL',
             NbResults: '7',
             ShowResultsOnMap: true,
             DisplayMapInfo: true,
+            GoogleMapsKey: 'AIzaSyCaMpoky_a5DGD5Hs1cA9OBLw2pUkqjTRU',
             OnParcelShopSelected: (relay: RelayPoint) => {
+              console.log('[MondialRelay] Relay selected:', relay);
               if (mountedRef.current) {
                 onRelaySelected(relay);
               }
@@ -164,6 +192,7 @@ export default function MondialRelaySelector({
           });
 
           widgetInitializedRef.current = true;
+          console.log('[MondialRelay] Widget initialized');
 
           if (mountedRef.current) {
             setLoading(false);
@@ -171,9 +200,9 @@ export default function MondialRelaySelector({
           }
         }
       } catch (err) {
-        console.error('Error loading Mondial Relay widget:', err);
+        console.error('[MondialRelay] Error loading widget:', err);
         if (mountedRef.current) {
-          setError('Erreur lors du chargement de la carte des points relais');
+          setError('Erreur lors du chargement de la carte des points relais. Veuillez réessayer.');
           setLoading(false);
         }
       }

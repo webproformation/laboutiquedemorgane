@@ -167,8 +167,8 @@ export default function Footer() {
                   <a href="tel:+33641456671" className="hover:text-white transition-colors block">
                     <strong>Morgane</strong> : +33 6 41 45 66 71
                   </a>
-                  <a href="tel:+33603489600" className="hover:text-white transition-colors block">
-                    <strong>André</strong> : +33 6 03 48 96
+                  <a href="tel:+33603489662" className="hover:text-white transition-colors block">
+                    <strong>André</strong> : +33 6 03 48 96 62
                   </a>
                 </div>
               </div>

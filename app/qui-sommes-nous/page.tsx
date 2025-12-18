@@ -1,5 +1,5 @@
 import { Card, CardContent } from '@/components/ui/card';
-import { Heart, Sparkles, Users, Smile, ShoppingBag, Tv, Facebook, Instagram } from 'lucide-react';
+import { Heart, Sparkles, Users, Smile, ShoppingBag, Tv, Facebook, Instagram, Phone } from 'lucide-react';
 import Image from 'next/image';
 
 export default function QuiSommesNousPage() {
@@ -180,6 +180,36 @@ export default function QuiSommesNousPage() {
                     <p className="text-lg mb-2">Avec tout notre amour,</p>
                     <p className="text-2xl font-bold">Morgane & Doudou</p>
                     <p className="text-white/90">Vos complices mode.</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="border-2 border-[#D4AF37]">
+              <CardContent className="pt-6">
+                <div className="text-center">
+                  <div className="flex items-center justify-center gap-3 mb-4">
+                    <Phone className="h-8 w-8 text-[#D4AF37]" />
+                    <h3 className="text-2xl font-bold text-gray-900">Besoin de nous contacter ?</h3>
+                  </div>
+                  <p className="text-gray-700 mb-4">
+                    N'hésitez pas à nous appeler, nous sommes là pour vous accompagner !
+                  </p>
+                  <div className="bg-gradient-to-r from-[#D4AF37]/10 to-[#b8933d]/10 rounded-lg p-6 mb-6">
+                    <div className="space-y-3">
+                      <a
+                        href="tel:+33641456671"
+                        className="text-lg font-semibold text-[#D4AF37] hover:underline block"
+                      >
+                        Morgane : +33 6 41 45 66 71
+                      </a>
+                      <a
+                        href="tel:+33603489662"
+                        className="text-lg font-semibold text-[#D4AF37] hover:underline block"
+                      >
+                        André : +33 6 03 48 96 62
+                      </a>
+                    </div>
                   </div>
                 </div>
               </CardContent>

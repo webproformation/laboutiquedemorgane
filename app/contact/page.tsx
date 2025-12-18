@@ -234,10 +234,10 @@ export default function ContactPage() {
                         <strong>Morgane</strong> : +33 6 41 45 66 71
                       </a>
                       <a
-                        href="tel:+33603489600"
+                        href="tel:+33603489662"
                         className="text-gray-600 text-sm hover:text-[#C6A15B] transition-colors block"
                       >
-                        <strong>André</strong> : +33 6 03 48 96
+                        <strong>André</strong> : +33 6 03 48 96 62
                       </a>
                     </div>
                   </div>

@@ -102,13 +102,13 @@ export default function AlloMorganePage() {
                       href="tel:+33641456671"
                       className="text-green-600 hover:underline text-lg font-medium block"
                     >
-                      06 41 45 66 71
+                      <strong>Morgane</strong> : +33 6 41 45 66 71
                     </a>
                     <a
                       href="tel:+33603489662"
                       className="text-green-600 hover:underline text-lg font-medium block"
                     >
-                      06 03 48 96 62
+                      <strong>André</strong> : +33 6 03 48 96 62
                     </a>
                     <p className="text-sm text-gray-600 mt-2">(Du lundi au vendredi, de 10h à 18h)</p>
                   </div>

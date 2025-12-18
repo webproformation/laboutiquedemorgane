@@ -223,7 +223,7 @@ export default function CGVPage() {
               <a href="tel:+33641456671" className="text-blue-600 hover:underline">Morgane : +33 6 41 45 66 71</a>
             </p>
             <p className="text-gray-700 ml-4 mb-2">
-              <a href="tel:+33603489600" className="text-blue-600 hover:underline">André : +33 6 03 48 96</a>
+              <a href="tel:+33603489662" className="text-blue-600 hover:underline">André : +33 6 03 48 96 62</a>
             </p>
             <p className="text-gray-700">
               <strong>Courrier :</strong> 1062 rue d&apos;Armentières, 59850 Nieppe

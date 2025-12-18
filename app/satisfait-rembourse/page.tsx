@@ -139,7 +139,7 @@ export default function SatisfaitRemboursePage() {
                 <a href="mailto:contact@laboutiquedemorgane.fr" className="text-[#C6A15B] hover:underline">
                   contact@laboutiquedemorgane.fr
                 </a>{' '}
-                ou au <a href="tel:+33641456671" className="text-[#C6A15B] hover:underline"><strong>Morgane</strong> : +33 6 41 45 66 71</a> / <a href="tel:+33603489600" className="text-[#C6A15B] hover:underline"><strong>André</strong> : +33 6 03 48 96</a>
+                ou au <a href="tel:+33641456671" className="text-[#C6A15B] hover:underline"><strong>Morgane</strong> : +33 6 41 45 66 71</a> / <a href="tel:+33603489662" className="text-[#C6A15B] hover:underline"><strong>André</strong> : +33 6 03 48 96 62</a>
               </p>
             </div>
           </div>
