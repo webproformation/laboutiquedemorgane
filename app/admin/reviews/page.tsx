@@ -1,10 +1,11 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Star, CheckCircle, XCircle, Trash2, Heart, MessageSquare } from 'lucide-react';
+import { Star, CheckCircle, XCircle, Trash2, Heart, MessageSquare, BookHeart } from 'lucide-react';
 import { supabase } from '@/lib/supabase-client';
 import { toast } from 'sonner';
 import {
@@ -30,15 +31,25 @@ interface Review {
 }
 
 export default function ReviewsAdminPage() {
+  const searchParams = useSearchParams();
+  const isGuestbookMode = searchParams.get('filter') === 'guestbook';
+
   const [reviews, setReviews] = useState<Review[]>([]);
   const [filteredReviews, setFilteredReviews] = useState<Review[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filterStatus, setFilterStatus] = useState<string>('all');
-  const [filterSource, setFilterSource] = useState<string>('all');
+  const [filterStatus, setFilterStatus] = useState<string>(isGuestbookMode ? 'pending' : 'all');
+  const [filterSource, setFilterSource] = useState<string>(isGuestbookMode ? 'website' : 'all');
 
   useEffect(() => {
     loadReviews();
   }, []);
+
+  useEffect(() => {
+    if (isGuestbookMode) {
+      setFilterStatus('pending');
+      setFilterSource('website');
+    }
+  }, [isGuestbookMode]);
 
   useEffect(() => {
     let filtered = reviews;
@@ -187,11 +198,22 @@ export default function ReviewsAdminPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold flex items-center gap-2">
-            <MessageSquare className="h-8 w-8 text-[#b8933d]" />
-            Gestion des avis clients
+            {isGuestbookMode ? (
+              <>
+                <BookHeart className="h-8 w-8 text-[#b8933d]" />
+                Livre d'Or - Messages en attente
+              </>
+            ) : (
+              <>
+                <MessageSquare className="h-8 w-8 text-[#b8933d]" />
+                Gestion des avis clients
+              </>
+            )}
           </h1>
           <p className="text-gray-600 mt-1">
-            Modérer et gérer tous les avis clients
+            {isGuestbookMode
+              ? 'Valider les messages du livre d\'or laissés par les clients'
+              : 'Modérer et gérer tous les avis clients'}
           </p>
         </div>
       </div>

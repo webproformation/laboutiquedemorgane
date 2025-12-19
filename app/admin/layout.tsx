@@ -22,7 +22,8 @@ import {
   Star,
   Video,
   BarChart,
-  MessageSquare
+  MessageSquare,
+  BookHeart
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
@@ -72,6 +73,7 @@ export default function AdminLayout({
     { href: '/admin/orders', icon: ShoppingCart, label: 'Commandes' },
     { href: '/admin/contact-messages', icon: MessageSquare, label: 'Messages de contact' },
     { href: '/admin/reviews', icon: Star, label: 'Avis clients' },
+    { href: '/admin/reviews?filter=guestbook', icon: BookHeart, label: 'Livre d\'Or' },
     { href: '/admin/slides', icon: Image, label: 'Slides Accueil' },
     { href: '/admin/live-streams', icon: Video, label: 'Live Streams' },
     { href: '/admin/featured-products', icon: Star, label: 'Produits Vedette' },
