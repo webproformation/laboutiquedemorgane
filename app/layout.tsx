@@ -1,6 +1,6 @@
 import './globals.css';
 import type { Metadata } from 'next';
-import { Oxygen } from 'next/font/google';
+import { Oxygen, Dancing_Script } from 'next/font/google';
 import { CartProvider } from '@/context/CartContext';
 import { WishlistProvider } from '@/context/WishlistContext';
 import { AuthProvider } from '@/context/AuthContext';

@@ -613,6 +613,33 @@ export const GET_POSTS_BY_CATEGORY = gql`
   }
 `;
 
+export const GET_POST_BY_SLUG = gql`
+  query GetPostBySlug($slug: String!) {
+    post(id: $slug, idType: SLUG) {
+      id
+      databaseId
+      title
+      slug
+      excerpt
+      date
+      content
+      featuredImage {
+        node {
+          sourceUrl
+          altText
+        }
+      }
+      categories {
+        nodes {
+          id
+          name
+          slug
+        }
+      }
+    }
+  }
+`;
+
 export const SEARCH_PRODUCTS = gql`
   query SearchProducts($search: String!) {
     products(first: 20, where: { search: $search }) {

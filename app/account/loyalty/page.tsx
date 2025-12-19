@@ -174,13 +174,13 @@ export default function LoyaltyPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">Programme de Fidélité</h1>
-        <p className="text-gray-600">
-          Gagne des euros en naviguant sur le site, en participant aux lives et en achetant
+        <h1 className="text-3xl font-bold text-gray-900 mb-3">Programme Fidélité</h1>
+        <p className="text-lg text-gray-700 italic" style={{ fontFamily: "'Dancing Script', 'Brush Script MT', cursive" }}>
+          Ici, chaque moment passé ensemble fait grandir ta cagnotte. Profites-en pour t'offrir tes prochaines pépites !
         </p>
       </div>
 
-      <Card className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white">
+      <Card className="bg-gradient-to-r from-[#b8933d] to-[#8b6f2f] text-white">
         <CardHeader>
           <CardTitle className="flex items-center justify-between">
             <span className="flex items-center gap-2">
@@ -228,6 +228,21 @@ export default function LoyaltyPage() {
               <span>Palier maximum atteint ! Toutes tes récompenses sont triplées</span>
             </div>
           )}
+          <div className="mt-6 pt-4 border-t border-white/20">
+            <Button
+              className="w-full bg-white text-[#b8933d] hover:bg-gray-50 font-semibold"
+              size="lg"
+              disabled={!tierInfo || tierInfo.current_balance < 1}
+            >
+              <Gift className="w-5 h-5 mr-2" />
+              Je me fais plaisir
+            </Button>
+            {tierInfo && tierInfo.current_balance < 1 && (
+              <p className="text-sm text-white/80 text-center mt-2">
+                Minimum 1 € pour utiliser ta cagnotte
+              </p>
+            )}
+          </div>
         </CardContent>
       </Card>
 
@@ -240,28 +255,28 @@ export default function LoyaltyPage() {
           </CardHeader>
           <CardContent>
             <div className="space-y-2">
-              <div className={`p-3 rounded-lg ${tierInfo?.tier === 1 ? 'bg-blue-100 border-2 border-blue-500' : 'bg-gray-50'}`}>
+              <div className={`p-3 rounded-lg ${tierInfo?.tier === 1 ? 'bg-[#b8933d]/10 border-2 border-[#b8933d]' : 'bg-gray-50'}`}>
                 <div className="font-semibold text-sm flex items-center justify-between">
                   <span>Palier 1</span>
-                  <span className="text-blue-600">x1</span>
+                  <span className="text-[#b8933d]">x1</span>
                 </div>
                 <div className="text-xs text-gray-600">0 € - 5 €</div>
               </div>
-              <div className={`p-3 rounded-lg ${tierInfo?.tier === 2 ? 'bg-blue-100 border-2 border-blue-500' : 'bg-gray-50'}`}>
+              <div className={`p-3 rounded-lg ${tierInfo?.tier === 2 ? 'bg-[#b8933d]/10 border-2 border-[#b8933d]' : 'bg-gray-50'}`}>
                 <div className="font-semibold text-sm flex items-center justify-between">
                   <span>Palier 2</span>
-                  <span className="text-blue-600">x2</span>
+                  <span className="text-[#b8933d]">x2</span>
                 </div>
                 <div className="text-xs text-gray-600">5 € - 15 €</div>
-                <div className="text-xs text-blue-600 mt-1">Gains doublés !</div>
+                <div className="text-xs text-[#b8933d] mt-1">Gains doublés !</div>
               </div>
-              <div className={`p-3 rounded-lg ${tierInfo?.tier === 3 ? 'bg-blue-100 border-2 border-blue-500' : 'bg-gray-50'}`}>
+              <div className={`p-3 rounded-lg ${tierInfo?.tier === 3 ? 'bg-[#b8933d]/10 border-2 border-[#b8933d]' : 'bg-gray-50'}`}>
                 <div className="font-semibold text-sm flex items-center justify-between">
                   <span>Palier 3</span>
-                  <span className="text-blue-600">x3</span>
+                  <span className="text-[#b8933d]">x3</span>
                 </div>
                 <div className="text-xs text-gray-600">15 € - 30 €</div>
-                <div className="text-xs text-blue-600 mt-1">Gains triplés !</div>
+                <div className="text-xs text-[#b8933d] mt-1">Gains triplés !</div>
               </div>
             </div>
           </CardContent>
@@ -276,23 +291,23 @@ export default function LoyaltyPage() {
           <CardContent>
             <div className="space-y-2 text-sm">
               <div className="flex items-center gap-2">
-                <Calendar className="w-4 h-4 text-blue-500 flex-shrink-0" />
+                <Calendar className="w-4 h-4 text-[#b8933d] flex-shrink-0" />
                 <span>0,10 € / jour (connexion)</span>
               </div>
               <div className="flex items-center gap-2">
-                <Video className="w-4 h-4 text-blue-500 flex-shrink-0" />
+                <Video className="w-4 h-4 text-[#b8933d] flex-shrink-0" />
                 <span>0,20 € (10 min en live)</span>
               </div>
               <div className="flex items-center gap-2">
-                <ShoppingBag className="w-4 h-4 text-blue-500 flex-shrink-0" />
+                <ShoppingBag className="w-4 h-4 text-[#b8933d] flex-shrink-0" />
                 <span>2 % de tes commandes</span>
               </div>
               <div className="flex items-center gap-2">
-                <Gem className="w-4 h-4 text-blue-500 flex-shrink-0" />
+                <Gem className="w-4 h-4 text-[#b8933d] flex-shrink-0" />
                 <span>0,10 € / diamant trouvé</span>
               </div>
               <div className="flex items-center gap-2">
-                <Star className="w-4 h-4 text-blue-500 flex-shrink-0" />
+                <Star className="w-4 h-4 text-[#b8933d] flex-shrink-0" />
                 <span>0,20 € / avis produit</span>
               </div>
               <div className="pt-2 border-t text-xs text-gray-500">
@@ -310,11 +325,11 @@ export default function LoyaltyPage() {
           </CardHeader>
           <CardContent>
             <div className="text-center py-4">
-              <Gem className="w-12 h-12 mx-auto mb-2 text-blue-500" />
+              <Gem className="w-12 h-12 mx-auto mb-2 text-[#b8933d]" />
               <p className="text-sm text-gray-600 mb-4">
                 3 diamants cachés par semaine dans le site !
               </p>
-              <div className="text-xs text-gray-500 bg-blue-50 rounded p-2">
+              <div className="text-xs text-gray-500 bg-[#b8933d]/10 rounded p-2">
                 Trouve-les pour gagner 0,10 € par diamant
               </div>
             </div>
@@ -364,7 +379,7 @@ export default function LoyaltyPage() {
                         })}
                       </div>
                       {transaction.multiplier > 1 && (
-                        <div className="text-xs text-blue-600 mt-1 flex items-center gap-1">
+                        <div className="text-xs text-[#b8933d] mt-1 flex items-center gap-1">
                           <Sparkles className="w-3 h-3" />
                           {transaction.base_amount.toFixed(2)} € × {transaction.multiplier} = {transaction.amount.toFixed(2)} €
                         </div>

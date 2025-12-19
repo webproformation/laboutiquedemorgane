@@ -42,11 +42,11 @@ export default function AccountLayout({ children }: { children: React.ReactNode 
           <div className="flex items-center gap-3 mb-2">
             <Sparkles className="h-6 w-6" />
             <h1 className="text-3xl font-bold">
-              {getGreeting()} {profile?.first_name || 'chère cliente'}
+              Bienvenue dans ton cocon, {profile?.first_name || 'chère cliente'} !
             </h1>
           </div>
           <p className="text-lg text-white/90">
-            Ravie de te revoir ! Gérer ton compte et découvre nos nouveautés.
+            Ici, chaque visite, chaque échange en live et chaque coup de cœur te rapproche de ta prochaine pépite. Ta fidélité a de la valeur, et je suis ravie de la récompenser chaque jour.
           </p>
         </div>
 

@@ -18,6 +18,8 @@ import Link from 'next/link';
 import { formatPrice, parsePrice } from '@/lib/utils';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import GDPRConsent from '@/components/GDPRConsent';
+import StripeCheckoutForm from '@/components/StripeCheckoutForm';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import dynamic from 'next/dynamic';
 
 const MondialRelaySelector = dynamic(
@@ -137,6 +139,9 @@ export default function CheckoutPage() {
   const [gdprError, setGdprError] = useState('');
   const [selectedInsurance, setSelectedInsurance] = useState<string>('none');
   const [selectedRelayPoint, setSelectedRelayPoint] = useState<any>(null);
+  const [showStripeModal, setShowStripeModal] = useState(false);
+  const [stripeClientSecret, setStripeClientSecret] = useState<string | null>(null);
+  const [pendingOrderNumber, setPendingOrderNumber] = useState<string>('');
 
   const insuranceOptions = [
     { id: 'none', label: 'Sans assurance', description: 'Pas de protection supplémentaire', price: 0 },
@@ -705,6 +710,192 @@ export default function CheckoutPage() {
     }
   };
 
+  const handleStripePayment = async (
+    orderNumber: string,
+    selectedAddress: Address,
+    selectedShipping: ShippingMethod,
+    shippingCost: number,
+    taxAmount: number,
+    totalAmount: number
+  ) => {
+    try {
+      const { data: order, error: orderError } = await supabase
+        .from('orders')
+        .insert({
+          user_id: user!.id,
+          order_number: orderNumber,
+          status: 'pending',
+          total_amount: totalAmount,
+          shipping_address: selectedAddress,
+          shipping_method_id: selectedShippingMethod,
+          shipping_cost: shippingCost,
+          tax_amount: taxAmount,
+        })
+        .select()
+        .single();
+
+      if (orderError || !order) {
+        throw new Error('Erreur lors de la création de la commande');
+      }
+
+      const orderItems = cart.map((item) => ({
+        order_id: order.id,
+        product_name: item.name,
+        product_slug: item.slug,
+        product_image: item.image?.sourceUrl || '',
+        price: item.price,
+        quantity: item.quantity,
+      }));
+
+      const { error: itemsError } = await supabase
+        .from('order_items')
+        .insert(orderItems);
+
+      if (itemsError) {
+        throw new Error('Erreur lors de l\'enregistrement des articles');
+      }
+
+      if (selectedCoupon) {
+        await supabase
+          .from('user_coupons')
+          .update({
+            is_used: true,
+            used_at: new Date().toISOString(),
+            order_id: order.id,
+          })
+          .eq('id', selectedCoupon.id);
+      }
+
+      const { data: { session } } = await supabase.auth.getSession();
+
+      const paymentResponse = await fetch(
+        `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/create-payment-intent`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${session?.access_token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            amount: totalAmount,
+            currency: 'eur',
+            orderId: order.id,
+          }),
+        }
+      );
+
+      if (!paymentResponse.ok) {
+        throw new Error('Erreur lors de la création du paiement Stripe');
+      }
+
+      const paymentData = await paymentResponse.json();
+
+      setPendingOrderNumber(orderNumber);
+      setStripeClientSecret(paymentData.clientSecret);
+      setShowStripeModal(true);
+
+    } catch (error) {
+      console.error('Stripe payment error:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Une erreur est survenue lors du paiement Stripe';
+      toast.error(errorMessage);
+      setProcessing(false);
+    }
+  };
+
+  const handleStripeSuccess = async () => {
+    try {
+      const selectedAddress = addresses.find((addr) => addr.id === selectedAddressId);
+      const selectedShipping = shippingMethods.find(m => m.id === selectedShippingMethod);
+
+      const wooOrderData = {
+        status: 'processing',
+        payment_method: 'stripe',
+        payment_method_title: 'Carte bancaire (Stripe)',
+        set_paid: true,
+        billing: {
+          first_name: selectedAddress!.first_name,
+          last_name: selectedAddress!.last_name,
+          address_1: selectedAddress!.address_line1,
+          address_2: selectedAddress!.address_line2 || '',
+          city: selectedAddress!.city,
+          postcode: selectedAddress!.postal_code,
+          country: selectedAddress!.country,
+          email: user!.email || '',
+          phone: selectedAddress!.phone,
+        },
+        shipping: selectedRelayPoint ? {
+          first_name: selectedAddress!.first_name,
+          last_name: selectedAddress!.last_name,
+          address_1: selectedRelayPoint.LgAdr1 || selectedRelayPoint.LgAdr3,
+          address_2: selectedRelayPoint.LgAdr2 || '',
+          city: selectedRelayPoint.Ville,
+          postcode: selectedRelayPoint.CP,
+          country: selectedRelayPoint.Pays,
+        } : {
+          first_name: selectedAddress!.first_name,
+          last_name: selectedAddress!.last_name,
+          address_1: selectedAddress!.address_line1,
+          address_2: selectedAddress!.address_line2 || '',
+          city: selectedAddress!.city,
+          postcode: selectedAddress!.postal_code,
+          country: selectedAddress!.country,
+        },
+        line_items: cart.map(item => ({
+          product_id: item.databaseId || parseInt(item.id) || 0,
+          quantity: item.quantity,
+        })),
+        shipping_lines: [{
+          method_id: selectedShipping!.method_id,
+          method_title: selectedShipping!.title,
+          total: selectedShipping!.cost,
+        }],
+        meta_data: [
+          ...(selectedRelayPoint ? [
+            {
+              key: '_mondial_relay_id',
+              value: selectedRelayPoint.Num,
+            },
+            {
+              key: '_mondial_relay_name',
+              value: selectedRelayPoint.LgAdr1 || selectedRelayPoint.LgAdr3,
+            },
+            {
+              key: '_mondial_relay_address',
+              value: `${selectedRelayPoint.LgAdr3 || ''} ${selectedRelayPoint.CP} ${selectedRelayPoint.Ville}`,
+            },
+          ] : []),
+        ],
+      };
+
+      const wooResponse = await fetch('/api/woocommerce/create-order', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(wooOrderData),
+      });
+
+      if (!wooResponse.ok) {
+        console.error('WooCommerce order creation failed');
+      }
+
+      clearCart();
+      setShowStripeModal(false);
+      toast.success('Paiement réussi !');
+      router.push(`/order-confirmation/${pendingOrderNumber}`);
+    } catch (error) {
+      console.error('Error completing Stripe order:', error);
+      toast.error('Paiement effectué mais erreur lors de la finalisation de la commande');
+      setShowStripeModal(false);
+      setProcessing(false);
+    }
+  };
+
+  const handleStripeError = (error: string) => {
+    toast.error(`Erreur de paiement: ${error}`);
+    setProcessing(false);
+  };
+
   const handlePayPalPayment = async (
     orderNumber: string,
     selectedAddress: Address,
@@ -870,6 +1061,11 @@ export default function CheckoutPage() {
 
       if (selectedPaymentMethod === 'paypal') {
         await handlePayPalPayment(orderNumber, selectedAddress!, selectedShipping!, shippingCost, taxAmount, totalAmount);
+        return;
+      }
+
+      if (selectedPaymentMethod === 'stripe') {
+        await handleStripePayment(orderNumber, selectedAddress!, selectedShipping!, shippingCost, taxAmount, totalAmount);
         return;
       }
 
@@ -1240,6 +1436,31 @@ export default function CheckoutPage() {
                 <CardContent>
                   <RadioGroup value={selectedPaymentMethod} onValueChange={setSelectedPaymentMethod}>
                     <div className="space-y-4">
+                      <div
+                        className={`flex items-start space-x-3 p-4 rounded-lg border-2 transition-colors cursor-pointer ${
+                          selectedPaymentMethod === 'stripe'
+                            ? 'border-[#b8933d] bg-[#b8933d]/5'
+                            : 'border-gray-200 hover:border-gray-300'
+                        }`}
+                        onClick={() => setSelectedPaymentMethod('stripe')}
+                      >
+                        <RadioGroupItem value="stripe" id="stripe" className="mt-1" />
+                        <div className="flex-1">
+                          <Label htmlFor="stripe" className="cursor-pointer">
+                            <div className="flex items-center gap-2">
+                              <p className="font-semibold text-gray-900">Carte bancaire</p>
+                              <svg className="h-6 w-auto" viewBox="0 0 60 25" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <rect width="60" height="25" rx="4" fill="#635BFF"/>
+                                <path d="M13.3 11.5c0-.4.3-.7.7-.7h2.6c.4 0 .7.3.7.7v2.2c0 .4-.3.7-.7.7H14c-.4 0-.7-.3-.7-.7v-2.2zm4 0c0-.4.3-.7.7-.7h2.6c.4 0 .7.3.7.7v2.2c0 .4-.3.7-.7.7h-2.6c-.4 0-.7-.3-.7-.7v-2.2zm4 0c0-.4.3-.7.7-.7h2.6c.4 0 .7.3.7.7v2.2c0 .4-.3.7-.7.7h-2.6c-.4 0-.7-.3-.7-.7v-2.2z" fill="white"/>
+                                <path d="M36.2 11.8h-2.3l1.5 5h2.3l1.5-5h-2.3l-.7 3.3-.7-3.3z" fill="white"/>
+                                <path d="M41.8 11.8h-2v5h2v-5zm8.5 0h-2.3l-1.5 5h2.3l.2-.8h1.3l.2.8h2.3l-2.5-5zm-.8 3.2l.3-1.2.3 1.2h-.6z" fill="white"/>
+                              </svg>
+                            </div>
+                            <p className="text-sm text-gray-600 mt-1">Paiement sécurisé par carte bancaire (Stripe)</p>
+                          </Label>
+                        </div>
+                      </div>
+
                       <div
                         className={`flex items-start space-x-3 p-4 rounded-lg border-2 transition-colors cursor-pointer ${
                           selectedPaymentMethod === 'paypal'
@@ -1625,6 +1846,30 @@ export default function CheckoutPage() {
             </div>
           </div>
       </div>
+
+      <Dialog open={showStripeModal} onOpenChange={setShowStripeModal}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-2xl">
+              <CreditCard className="h-6 w-6 text-[#b8933d]" />
+              Paiement sécurisé par carte bancaire
+            </DialogTitle>
+            <DialogDescription>
+              Complétez votre paiement pour valider votre commande #{pendingOrderNumber}
+            </DialogDescription>
+          </DialogHeader>
+
+          {stripeClientSecret && (
+            <StripeCheckoutForm
+              clientSecret={stripeClientSecret}
+              amount={calculateTotal()}
+              onSuccess={handleStripeSuccess}
+              onError={handleStripeError}
+              returnUrl={`${window.location.origin}/order-confirmation/${pendingOrderNumber}`}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

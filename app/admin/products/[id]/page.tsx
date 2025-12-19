@@ -17,6 +17,7 @@ import WordPressMediaSelector from '@/components/WordPressMediaSelector';
 import ProductGalleryManager, { GalleryImage } from '@/components/ProductGalleryManager';
 import ProductAttributesManager from '@/components/ProductAttributesManager';
 import ProductVariationsManager, { ProductVariation } from '@/components/ProductVariationsManager';
+import SeoMetadataEditor from '@/components/SeoMetadataEditor';
 
 interface ProductAttribute {
   name: string;
@@ -35,6 +36,7 @@ interface WooCategory {
 
 interface ProductFormData {
   name: string;
+  slug: string;
   description: string;
   short_description: string;
   regular_price: string;
@@ -61,6 +63,7 @@ export default function EditProductPage() {
 
   const [formData, setFormData] = useState<ProductFormData>({
     name: '',
+    slug: '',
     description: '',
     short_description: '',
     regular_price: '',
@@ -120,6 +123,7 @@ export default function EditProductPage() {
 
       setFormData({
         name: product.name || '',
+        slug: product.slug || '',
         description: product.description || '',
         short_description: product.short_description || '',
         regular_price: product.regular_price || '',
@@ -569,6 +573,14 @@ export default function EditProductPage() {
             </div>
           </CardContent>
         </Card>
+
+        {formData.slug && (
+          <SeoMetadataEditor
+            entityType="category"
+            entityIdentifier={formData.slug}
+            autoSave={false}
+          />
+        )}
 
         <div className="flex justify-end gap-4">
           <Link href="/admin/products">

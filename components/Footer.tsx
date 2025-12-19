@@ -237,7 +237,12 @@ export default function Footer() {
               </li>
               <li>
                 <Link href="/actualites" className="hover:text-white transition-colors">
-                  Actualités
+                  Le Carnet de Morgane
+                </Link>
+              </li>
+              <li>
+                <Link href="/livre-dor" className="hover:text-white transition-colors">
+                  Livre d'or
                 </Link>
               </li>
               <li>

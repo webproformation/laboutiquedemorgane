@@ -1,5 +1,6 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import { Star, Quote } from 'lucide-react';
 import {
   Carousel,
@@ -9,61 +10,60 @@ import {
   CarouselPrevious,
 } from '@/components/ui/carousel';
 import Autoplay from 'embla-carousel-autoplay';
+import { supabase } from '@/lib/supabase-client';
+import Link from 'next/link';
 
 interface Review {
   id: string;
-  name: string;
+  customer_name: string;
   rating: number;
   comment: string;
-  date: string;
+  created_at: string;
+  is_featured: boolean;
 }
 
-const reviews: Review[] = [
-  {
-    id: '1',
-    name: 'Sophie M.',
-    rating: 5,
-    comment: 'Excellente expérience ! Les produits sont de qualité et la livraison rapide. Je recommande vivement La Boutique de Morgane pour son service client impeccable.',
-    date: '2025-12-01',
-  },
-  {
-    id: '2',
-    name: 'Marie L.',
-    rating: 5,
-    comment: 'Ravie de ma commande ! Les articles correspondent parfaitement aux photos. Morgane a un vrai talent pour sélectionner des pièces tendance et de qualité.',
-    date: '2025-11-28',
-  },
-  {
-    id: '3',
-    name: 'Claire D.',
-    rating: 5,
-    comment: 'Super boutique ! J\'adore les lives shopping, c\'est convivial et on découvre de belles choses. Les prix sont justes et la qualité au rendez-vous.',
-    date: '2025-11-25',
-  },
-  {
-    id: '4',
-    name: 'Julie P.',
-    rating: 5,
-    comment: 'Toujours satisfaite de mes achats ! L\'emballage est soigné et les produits arrivent en parfait état. Morgane est très réactive et à l\'écoute.',
-    date: '2025-11-20',
-  },
-  {
-    id: '5',
-    name: 'Émilie R.',
-    rating: 5,
-    comment: 'Une vraie pépite cette boutique ! Les produits sont uniques et le service irréprochable. J\'apprécie particulièrement les conseils personnalisés de Morgane.',
-    date: '2025-11-15',
-  },
-  {
-    id: '6',
-    name: 'Isabelle B.',
-    rating: 5,
-    comment: 'Excellente découverte ! La sélection est variée et de qualité. Les lives sont un moment convivial où on se sent comme entre amies. Bravo Morgane !',
-    date: '2025-11-10',
-  },
-];
-
 export default function CustomerReviewsSlider() {
+  const [reviews, setReviews] = useState<Review[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    loadReviews();
+  }, []);
+
+  const loadReviews = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('customer_reviews')
+        .select('id, customer_name, rating, comment, created_at, is_featured')
+        .eq('is_approved', true)
+        .eq('is_featured', true)
+        .order('created_at', { ascending: false })
+        .limit(6);
+
+      if (error) throw error;
+      setReviews(data || []);
+    } catch (error) {
+      console.error('Error loading reviews:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <section className="py-16 bg-white">
+        <div className="container mx-auto px-4">
+          <div className="text-center">
+            <p className="text-gray-600">Chargement des avis...</p>
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  if (reviews.length === 0) {
+    return null;
+  }
   return (
     <section className="py-16 bg-white">
       <div className="container mx-auto px-4">
@@ -113,16 +113,16 @@ export default function CustomerReviewsSlider() {
 
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="font-bold text-gray-900">{review.name}</p>
+                        <p className="font-bold text-gray-900">{review.customer_name}</p>
                         <p className="text-sm text-gray-500">
-                          {new Date(review.date).toLocaleDateString('fr-FR', {
+                          {new Date(review.created_at).toLocaleDateString('fr-FR', {
                             year: 'numeric',
                             month: 'long',
                           })}
                         </p>
                       </div>
                       <div className="w-12 h-12 rounded-full bg-gradient-to-br from-[#C6A15B] to-[#b8933d] flex items-center justify-center text-white font-bold text-lg">
-                        {review.name.charAt(0)}
+                        {review.customer_name.charAt(0).toUpperCase()}
                       </div>
                     </div>
                   </div>
@@ -134,7 +134,13 @@ export default function CustomerReviewsSlider() {
           <CarouselNext className="hidden md:flex" />
         </Carousel>
 
-        <div className="text-center mt-8">
+        <div className="text-center mt-8 flex flex-col sm:flex-row gap-4 justify-center">
+          <Link href="/livre-dor">
+            <button className="inline-flex items-center gap-2 bg-gradient-to-r from-[#C6A15B] to-[#b8933d] text-white px-8 py-3 rounded-full font-semibold hover:opacity-90 transition-all">
+              <Quote className="w-5 h-5" />
+              Voir tous les avis
+            </button>
+          </Link>
           <a
             href="https://www.facebook.com/profile.php?id=100057420760713&sk=reviews"
             target="_blank"

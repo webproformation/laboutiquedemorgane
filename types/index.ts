@@ -168,10 +168,12 @@ export interface PostCategory {
 
 export interface Post {
   id: string;
+  databaseId?: number;
   title: string;
   slug: string;
   excerpt: string;
   date: string;
+  content?: string;
   featuredImage?: {
     node: {
       sourceUrl: string;
@@ -193,4 +195,8 @@ export interface GetPostsResponse {
   posts: {
     nodes: Post[];
   };
+}
+
+export interface GetPostBySlugResponse {
+  post: Post;
 }

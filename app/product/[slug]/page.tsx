@@ -9,10 +9,11 @@ import { GetProductBySlugResponse } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { CircleAlert as AlertCircle, ShoppingCart, Hop as Home, Heart, Bell } from 'lucide-react';
+import { CircleAlert as AlertCircle, ShoppingCart, Hop as Home, Heart, Bell, Sparkles } from 'lucide-react';
 import Link from 'next/link';
 import { toast } from 'sonner';
-import { useState, use, useCallback } from 'react';
+import { useState, use, useCallback, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import ProductGallery from '@/components/ProductGallery';
 import ShareButtons from '@/components/ShareButtons';
 import {
@@ -40,6 +41,7 @@ import { isColorAttribute } from '@/lib/colors';
 export default function ProductPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug: rawSlug } = use(params);
   const slug = decodeURIComponent(rawSlug);
+  const router = useRouter();
   const { loading, error, data } = useQuery<GetProductBySlugResponse>(GET_PRODUCT_BY_SLUG, {
     variables: { slug },
   });
@@ -53,6 +55,7 @@ export default function ProductPage({ params }: { params: Promise<{ slug: string
   const [selectedVariation, setSelectedVariation] = useState<any>(null);
   const [currentImages, setCurrentImages] = useState<any[]>([]);
   const [selectedCharacteristics, setSelectedCharacteristics] = useState<Record<string, string>>({});
+  const [redirectCountdown, setRedirectCountdown] = useState(5);
 
   const handleVariationChange = useCallback((variation: any, defaultImages: any[]) => {
     setSelectedVariation(variation);
@@ -185,23 +188,73 @@ export default function ProductPage({ params }: { params: Promise<{ slug: string
     );
   }
 
+  useEffect(() => {
+    if ((error || !data?.product) && !loading) {
+      const timer = setInterval(() => {
+        setRedirectCountdown((prev) => {
+          if (prev <= 1) {
+            clearInterval(timer);
+            router.push('/');
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+
+      return () => clearInterval(timer);
+    }
+  }, [error, data, loading, router]);
+
   if (error || !data?.product) {
     console.error('❌ GraphQL Error:', error);
     console.error('❌ GraphQL Response:', data);
     return (
-      <div className="container mx-auto px-4 py-8">
-        <Alert variant="destructive">
-          <AlertCircle className="h-4 w-4" />
-          <AlertTitle>Erreur</AlertTitle>
-          <AlertDescription>
-            Produit introuvable ou erreur de chargement.
-            {error && (
-              <div className="mt-2 text-sm">
-                <strong>Détails :</strong> {error.message}
+      <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white flex items-center justify-center px-4">
+        <div className="max-w-2xl w-full">
+          <div className="text-center mb-8">
+            <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-[#b8933d]/10 mb-6">
+              <Sparkles className="w-10 h-10 text-[#b8933d]" />
+            </div>
+            <h1 className="text-4xl font-bold text-gray-900 mb-4">
+              Oups, cette pépite a été victime de son succès !
+            </h1>
+            <p className="text-xl text-gray-600 mb-8">
+              Mais ne t'inquiète pas, j'ai plein d'autres merveilles à te montrer.
+            </p>
+          </div>
+
+          <Alert className="bg-white border-[#b8933d]/20 shadow-lg">
+            <Sparkles className="h-5 w-5 text-[#b8933d]" />
+            <AlertTitle className="text-lg font-semibold text-gray-900 mb-2">
+              Redirection automatique dans {redirectCountdown} seconde{redirectCountdown > 1 ? 's' : ''}...
+            </AlertTitle>
+            <AlertDescription className="text-gray-700">
+              <p className="mb-4">
+                Ce produit n'est plus disponible, mais nos nouveautés vont te plaire !
+              </p>
+              <div className="flex flex-col sm:flex-row gap-3">
+                <Link href="/" className="flex-1">
+                  <Button className="w-full bg-[#b8933d] hover:bg-[#a07c2f] text-white">
+                    <Home className="w-4 h-4 mr-2" />
+                    Découvrir nos nouveautés
+                  </Button>
+                </Link>
+                <Link href="/promos" className="flex-1">
+                  <Button variant="outline" className="w-full border-[#b8933d] text-[#b8933d] hover:bg-[#b8933d]/5">
+                    <Sparkles className="w-4 h-4 mr-2" />
+                    Voir les promotions
+                  </Button>
+                </Link>
               </div>
-            )}
-          </AlertDescription>
-        </Alert>
+            </AlertDescription>
+          </Alert>
+
+          {error && (
+            <p className="text-center text-sm text-gray-500 mt-4">
+              Erreur technique : {error.message}
+            </p>
+          )}
+        </div>
       </div>
     );
   }
