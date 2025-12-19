@@ -57,6 +57,23 @@ export default function ProductPage({ params }: { params: Promise<{ slug: string
   const [selectedCharacteristics, setSelectedCharacteristics] = useState<Record<string, string>>({});
   const [redirectCountdown, setRedirectCountdown] = useState(5);
 
+  useEffect(() => {
+    if ((error || !data?.product) && !loading) {
+      const timer = setInterval(() => {
+        setRedirectCountdown((prev) => {
+          if (prev <= 1) {
+            clearInterval(timer);
+            router.push('/');
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+
+      return () => clearInterval(timer);
+    }
+  }, [error, data, loading, router]);
+
   const handleVariationChange = useCallback((variation: any, defaultImages: any[]) => {
     setSelectedVariation(variation);
     if (variation && variation.image) {
@@ -187,23 +204,6 @@ export default function ProductPage({ params }: { params: Promise<{ slug: string
       </div>
     );
   }
-
-  useEffect(() => {
-    if ((error || !data?.product) && !loading) {
-      const timer = setInterval(() => {
-        setRedirectCountdown((prev) => {
-          if (prev <= 1) {
-            clearInterval(timer);
-            router.push('/');
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
-
-      return () => clearInterval(timer);
-    }
-  }, [error, data, loading, router]);
 
   if (error || !data?.product) {
     console.error('❌ GraphQL Error:', error);
