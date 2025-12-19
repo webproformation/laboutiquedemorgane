@@ -35,7 +35,6 @@ const nextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
   compress: true,
-  swcMinify: true,
   experimental: {
     optimizePackageImports: ['@apollo/client', 'lucide-react', '@radix-ui/react-dropdown-menu', '@radix-ui/react-dialog'],
   },
