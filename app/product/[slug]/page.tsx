@@ -37,6 +37,7 @@ import { supabase } from '@/lib/supabase-client';
 import ProductVariationSelector from '@/components/ProductVariationSelector';
 import ColorSwatch from '@/components/ColorSwatch';
 import { isColorAttribute } from '@/lib/colors';
+import ProductReviews from '@/components/ProductReviews';
 
 export default function ProductPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug: rawSlug } = use(params);
@@ -702,6 +703,10 @@ export default function ProductPage({ params }: { params: Promise<{ slug: string
               )}
             </div>
           </div>
+        </div>
+
+        <div className="container mx-auto px-4 py-8">
+          <ProductReviews productId={product.databaseId?.toString() || product.id} productName={product.name} />
         </div>
       </div>
     </div>

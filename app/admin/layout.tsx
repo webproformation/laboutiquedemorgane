@@ -71,6 +71,7 @@ export default function AdminLayout({
     { href: '/admin/products', icon: Package, label: 'Produits' },
     { href: '/admin/orders', icon: ShoppingCart, label: 'Commandes' },
     { href: '/admin/contact-messages', icon: MessageSquare, label: 'Messages de contact' },
+    { href: '/admin/reviews', icon: Star, label: 'Avis clients' },
     { href: '/admin/slides', icon: Image, label: 'Slides Accueil' },
     { href: '/admin/live-streams', icon: Video, label: 'Live Streams' },
     { href: '/admin/featured-products', icon: Star, label: 'Produits Vedette' },

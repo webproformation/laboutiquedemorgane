@@ -234,6 +234,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     if (!error && data.user) {
       await claimPendingPrize(data.user.id);
+
+      const { data: userProfile } = await supabase
+        .from('profiles')
+        .select('first_name, last_name, phone')
+        .eq('id', data.user.id)
+        .maybeSingle();
+
+      if (userProfile?.phone && userProfile.phone.trim() !== '') {
+        try {
+          const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+          const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+          await fetch(`${supabaseUrl}/functions/v1/send-login-sms`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${supabaseAnonKey}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              phoneNumber: userProfile.phone,
+              firstName: userProfile.first_name || 'Client',
+              lastName: userProfile.last_name || '',
+            }),
+          });
+        } catch (smsError) {
+          console.error('Erreur lors de l\'envoi du SMS de connexion:', smsError);
+        }
+      }
     }
 
     return { error };

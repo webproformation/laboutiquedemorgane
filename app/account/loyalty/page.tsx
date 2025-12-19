@@ -175,8 +175,8 @@ export default function LoyaltyPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold text-gray-900 mb-3">Programme Fidélité</h1>
-        <p className="text-lg text-gray-700 italic" style={{ fontFamily: "'Dancing Script', 'Brush Script MT', cursive" }}>
-          Ici, chaque moment passé ensemble fait grandir ta cagnotte. Profites-en pour t'offrir tes prochaines pépites !
+        <p className="text-lg text-white italic" style={{ fontFamily: "'Dancing Script', 'Brush Script MT', cursive" }}>
+          Ici, chaque visite, chaque échange en live et chaque coup de cœur te rapproche de ta prochaine pépite. Ta fidélité a de la valeur, et je suis ravie de la récompenser chaque jour.
         </p>
       </div>
 
