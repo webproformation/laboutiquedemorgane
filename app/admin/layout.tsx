@@ -23,11 +23,13 @@ import {
   Video,
   BarChart,
   MessageSquare,
-  BookHeart
+  Newspaper
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/context/AuthContext';
+import { supabase } from '@/lib/supabase-client';
 
 export default function AdminLayout({
   children,
@@ -39,6 +41,8 @@ export default function AdminLayout({
   const { isAdmin, loading: adminLoading } = useAdmin();
   const { user, loading: authLoading, signOut } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [pendingReviewsCount, setPendingReviewsCount] = useState(0);
+  const [unreadMessagesCount, setUnreadMessagesCount] = useState(0);
 
   useEffect(() => {
     if (!authLoading && !adminLoading) {
@@ -54,6 +58,58 @@ export default function AdminLayout({
     setMobileMenuOpen(false);
   }, [pathname]);
 
+  useEffect(() => {
+    if (isAdmin) {
+      loadCounts();
+
+      const reviewsChannel = supabase
+        .channel('admin-reviews')
+        .on('postgres_changes', {
+          event: '*',
+          schema: 'public',
+          table: 'customer_reviews',
+        }, () => {
+          loadCounts();
+        })
+        .subscribe();
+
+      const messagesChannel = supabase
+        .channel('admin-messages')
+        .on('postgres_changes', {
+          event: '*',
+          schema: 'public',
+          table: 'contact_messages',
+        }, () => {
+          loadCounts();
+        })
+        .subscribe();
+
+      return () => {
+        supabase.removeChannel(reviewsChannel);
+        supabase.removeChannel(messagesChannel);
+      };
+    }
+  }, [isAdmin]);
+
+  const loadCounts = async () => {
+    try {
+      const { count: reviewsCount } = await supabase
+        .from('customer_reviews')
+        .select('*', { count: 'exact', head: true })
+        .eq('is_approved', false);
+
+      const { count: messagesCount } = await supabase
+        .from('contact_messages')
+        .select('*', { count: 'exact', head: true })
+        .eq('status', 'new');
+
+      setPendingReviewsCount(reviewsCount || 0);
+      setUnreadMessagesCount(messagesCount || 0);
+    } catch (error) {
+      console.error('Error loading counts:', error);
+    }
+  };
+
   if (authLoading || adminLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -67,21 +123,21 @@ export default function AdminLayout({
   }
 
   const navItems = [
-    { href: '/admin', icon: LayoutDashboard, label: 'Tableau de bord' },
-    { href: '/admin/analytics', icon: BarChart, label: 'Analytics' },
-    { href: '/admin/products', icon: Package, label: 'Produits' },
-    { href: '/admin/orders', icon: ShoppingCart, label: 'Commandes' },
-    { href: '/admin/contact-messages', icon: MessageSquare, label: 'Messages de contact' },
-    { href: '/admin/reviews', icon: Star, label: 'Avis clients' },
-    { href: '/admin/reviews?filter=guestbook', icon: BookHeart, label: 'Livre d\'Or' },
-    { href: '/admin/slides', icon: Image, label: 'Slides Accueil' },
-    { href: '/admin/live-streams', icon: Video, label: 'Live Streams' },
-    { href: '/admin/featured-products', icon: Star, label: 'Produits Vedette' },
-    { href: '/admin/home-categories', icon: FolderTree, label: 'Catégories Accueil' },
-    { href: '/admin/games', icon: Gamepad2, label: 'Gestion des Jeux' },
-    { href: '/admin/coupons', icon: Ticket, label: 'Coupons' },
-    { href: '/admin/customers', icon: Users, label: 'Clients' },
-    { href: '/admin/backups', icon: Database, label: 'Sauvegardes' },
+    { href: '/admin', icon: LayoutDashboard, label: 'Tableau de bord', badge: 0 },
+    { href: '/admin/analytics', icon: BarChart, label: 'Analytics', badge: 0 },
+    { href: '/admin/products', icon: Package, label: 'Produits', badge: 0 },
+    { href: '/admin/orders', icon: ShoppingCart, label: 'Commandes', badge: 0 },
+    { href: '/admin/actualites', icon: Newspaper, label: 'Actualités', badge: 0 },
+    { href: '/admin/contact-messages', icon: MessageSquare, label: 'Messages de contact', badge: unreadMessagesCount },
+    { href: '/admin/reviews', icon: Star, label: 'Avis clients', badge: pendingReviewsCount },
+    { href: '/admin/slides', icon: Image, label: 'Slides Accueil', badge: 0 },
+    { href: '/admin/live-streams', icon: Video, label: 'Live Streams', badge: 0 },
+    { href: '/admin/featured-products', icon: Star, label: 'Produits Vedette', badge: 0 },
+    { href: '/admin/home-categories', icon: FolderTree, label: 'Catégories Accueil', badge: 0 },
+    { href: '/admin/games', icon: Gamepad2, label: 'Gestion des Jeux', badge: 0 },
+    { href: '/admin/coupons', icon: Ticket, label: 'Coupons', badge: 0 },
+    { href: '/admin/customers', icon: Users, label: 'Clients', badge: 0 },
+    { href: '/admin/backups', icon: Database, label: 'Sauvegardes', badge: 0 },
   ];
 
   const handleBackToSite = () => {
@@ -96,12 +152,19 @@ export default function AdminLayout({
           <Link
             key={item.href}
             href={item.href}
-            className={`flex items-center space-x-3 px-4 py-2 rounded-lg transition-colors text-sm ${
+            className={`flex items-center justify-between px-4 py-2 rounded-lg transition-colors text-sm ${
               isActive ? 'bg-blue-800 font-medium' : 'hover:bg-blue-800'
             }`}
           >
-            <item.icon className="w-4 h-4" />
-            <span>{item.label}</span>
+            <div className="flex items-center space-x-3">
+              <item.icon className="w-4 h-4" />
+              <span>{item.label}</span>
+            </div>
+            {item.badge > 0 && (
+              <Badge className="bg-red-500 text-white hover:bg-red-600 ml-2">
+                {item.badge}
+              </Badge>
+            )}
           </Link>
         );
       })}
