@@ -1,6 +1,6 @@
 import './globals.css';
 import type { Metadata } from 'next';
-import { Oxygen, Dancing_Script } from 'next/font/google';
+import { Pangolin } from 'next/font/google';
 import { CartProvider } from '@/context/CartContext';
 import { WishlistProvider } from '@/context/WishlistContext';
 import { AuthProvider } from '@/context/AuthContext';
@@ -19,11 +19,12 @@ import {
   Toaster,
 } from '@/components/ClientComponents';
 
-const oxygen = Oxygen({
-  weight: ['300', '400', '700'],
+const pangolin = Pangolin({
+  weight: ['400'],
   subsets: ['latin'],
   display: 'swap',
   preload: true,
+  variable: '--font-pangolin',
 });
 
 export const metadata: Metadata = {
@@ -47,7 +48,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="fr">
-      <body className={`${oxygen.className} overflow-x-hidden`}>
+      <body className={`${pangolin.className} overflow-x-hidden`}>
         <ApolloWrapper>
           <AuthProvider>
             <LoyaltyProvider>
