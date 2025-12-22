@@ -356,7 +356,7 @@ export default function AdminOrders() {
                     </ul>
                   </div>
 
-                  {order.status === 'processing' && (
+                  {(order.status === 'processing' || invoices[order.id]) && (
                     <div className="border-t pt-4 mt-4">
                       <div className="flex flex-wrap gap-2">
                         {invoices[order.id] ? (
@@ -404,7 +404,7 @@ export default function AdminOrders() {
                               </span>
                             )}
                           </>
-                        ) : (
+                        ) : order.status === 'processing' && (
                           <Button
                             size="sm"
                             variant="outline"
