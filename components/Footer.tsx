@@ -150,7 +150,7 @@ export default function Footer() {
       </div>
 
       <div className="container mx-auto px-4 py-12">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-8 mb-8">
           <div className="text-center md:text-left">
             <h3 className="text-white font-bold text-xl md:text-lg mb-4">Contact</h3>
             <div className="space-y-2 text-base md:text-sm">
@@ -218,54 +218,81 @@ export default function Footer() {
           </div>
 
           <div className="text-center md:text-left">
-            <h3 className="text-white font-bold text-xl md:text-lg mb-4">Liens rapides</h3>
+            <h3 className="text-white font-bold text-xl md:text-lg mb-4">Informations</h3>
             <ul className="space-y-2 text-base md:text-sm">
               <li>
                 <Link href="/qui-sommes-nous" className="hover:text-white transition-colors">
-                  Qui sommes-nous ?
+                  Qui sommes-nous
                 </Link>
               </li>
               <li>
                 <Link href="/contact" className="hover:text-white transition-colors">
-                  Contactez-nous
+                  Contact
                 </Link>
               </li>
               <li>
-                <Link href="/live" className="hover:text-white transition-colors">
-                  Live & Replay
+                <Link href="/frais-de-port" className="hover:text-white transition-colors">
+                  Frais de port
+                </Link>
+              </li>
+              <li>
+                <Link href="/retours-gratuits" className="hover:text-white transition-colors">
+                  Retours gratuits
+                </Link>
+              </li>
+              <li>
+                <Link href="/paiements-securises" className="hover:text-white transition-colors">
+                  Paiements sécurisés
+                </Link>
+              </li>
+              <li>
+                <Link href="/satisfait-rembourse" className="hover:text-white transition-colors">
+                  Satisfait ou remboursé
                 </Link>
               </li>
               <li>
                 <Link href="/actualites" className="hover:text-white transition-colors">
-                  Le Carnet de Morgane
+                  Le carnet de Morgane
                 </Link>
               </li>
               <li>
                 <Link href="/livre-dor" className="hover:text-white transition-colors">
-                  Livre d'or
+                  Le livre d&apos;or
                 </Link>
               </li>
               <li>
-                <Link href="/carte-cadeau" className="hover:text-white transition-colors">
-                  Carte cadeau
-                </Link>
-              </li>
-              <li>
-                <Link href="/account" className="hover:text-white transition-colors">
-                  Mon compte
-                </Link>
-              </li>
-              <li>
-                <Link href="/wishlist" className="hover:text-white transition-colors">
-                  Mes coups de cœur
-                </Link>
-              </li>
-              <li>
-                <Link href="/cart" className="hover:text-white transition-colors">
-                  Mon panier
+                <Link href="/live" className="hover:text-white transition-colors">
+                  Lives
                 </Link>
               </li>
             </ul>
+          </div>
+
+          <div className="text-center md:text-left">
+            <h3 className="text-white font-bold text-xl md:text-lg mb-4">Horaires</h3>
+            <div className="space-y-4 text-base md:text-sm">
+              <div className="flex items-start gap-2 justify-center md:justify-start">
+                <MapPin className="h-5 w-5 mt-0.5 flex-shrink-0" />
+                <div>
+                  <p className="font-semibold text-white">En boutique sur rendez-vous</p>
+                  <p>Le mercredi de 09h à 19h</p>
+                </div>
+              </div>
+              <div className="flex items-start gap-2 justify-center md:justify-start">
+                <Phone className="h-5 w-5 mt-0.5 flex-shrink-0" />
+                <div>
+                  <p className="font-semibold text-white">Par téléphone</p>
+                  <p>Du lundi au vendredi de 09h à 18h</p>
+                </div>
+              </div>
+              <div className="flex items-start gap-2 justify-center md:justify-start">
+                <Mail className="h-5 w-5 mt-0.5 flex-shrink-0" />
+                <div>
+                  <p className="font-semibold text-white">En dehors de ces horaires</p>
+                  <p>Laissez-nous un SMS ou un e-mail,<br />réponse garantie le plus rapidement possible</p>
+                </div>
+              </div>
+            </div>
           </div>
 
           <div className="text-center md:text-left">

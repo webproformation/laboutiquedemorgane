@@ -64,7 +64,7 @@ export default function ActualiteSeoPage({ params }: { params: Promise<{ slug: s
         <CardHeader>
           <div className="flex items-center justify-between">
             <CardTitle>Contenu de l'article</CardTitle>
-            <Link href={`https://wordpress.laboutiquemorgane.fr/wp-admin/post.php?post=${post.databaseId}&action=edit`} target="_blank">
+            <Link href={`/admin/actualites/edit/${post.databaseId}`}>
               <Button variant="outline" size="sm">
                 <ExternalLink className="h-4 w-4 mr-2" />
                 Modifier l'article

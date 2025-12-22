@@ -1,18 +1,27 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase-client';
-import { toast } from 'sonner';
+import RewardNotification from '@/components/RewardNotification';
 
 interface LivePresenceTrackerProps {
   streamId: string;
+}
+
+interface BonusResult {
+  success: boolean;
+  message: string;
+  amount?: number;
+  new_balance?: number;
 }
 
 export default function LivePresenceTracker({ streamId }: LivePresenceTrackerProps) {
   const { user } = useAuth();
   const startTimeRef = useRef<number>(Date.now());
   const hasClaimedRef = useRef<boolean>(false);
+  const [showReward, setShowReward] = useState(false);
+  const [bonusData, setBonusData] = useState<BonusResult | null>(null);
 
   useEffect(() => {
     if (!user || !streamId) return;
@@ -44,16 +53,26 @@ export default function LivePresenceTracker({ streamId }: LivePresenceTrackerPro
 
       if (error) throw error;
 
-      if (data.success) {
+      if (data.success && data.amount) {
         hasClaimedRef.current = true;
-        toast.success(data.message, {
-          duration: 5000
-        });
+        setBonusData(data);
+        setShowReward(true);
       }
     } catch (error) {
       console.error('Error claiming live bonus:', error);
     }
   };
 
-  return null;
+  if (!bonusData) return null;
+
+  return (
+    <RewardNotification
+      isOpen={showReward}
+      onClose={() => setShowReward(false)}
+      amount={bonusData.amount || 0}
+      type="other"
+      message={bonusData.message}
+      newBalance={bonusData.new_balance}
+    />
+  );
 }

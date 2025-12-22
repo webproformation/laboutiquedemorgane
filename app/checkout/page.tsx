@@ -51,6 +51,13 @@ const CouponSelector = dynamic(
   }
 );
 
+const WalletSelector = dynamic(
+  () => import('@/components/WalletSelector'),
+  {
+    ssr: false,
+  }
+);
+
 interface Address {
   id: string;
   label: string;
@@ -142,11 +149,13 @@ export default function CheckoutPage() {
   const [showStripeModal, setShowStripeModal] = useState(false);
   const [stripeClientSecret, setStripeClientSecret] = useState<string | null>(null);
   const [pendingOrderNumber, setPendingOrderNumber] = useState<string>('');
+  const [walletAmount, setWalletAmount] = useState(0);
+  const [isFirstOrder, setIsFirstOrder] = useState(true);
 
   const insuranceOptions = [
     { id: 'none', label: 'Sans assurance', description: 'Pas de protection supplémentaire', price: 0 },
-    { id: 'standard', label: 'Assurance standard', description: 'Protection contre la casse et la perte', price: 2.99 },
-    { id: 'premium', label: 'Assurance premium', description: 'Protection complète + remboursement express', price: 4.99 },
+    { id: 'standard', label: 'Garantie Sérénité ✨', description: 'Protection en cas de perte, remboursement après enquête du transporteur (délai : 30 jours)', price: 1 },
+    { id: 'premium', label: 'Protection Diamant 💎', description: 'La plus choisie. Remboursement ou renvoi immédiat sous 48h en cas de perte/casse, sans attendre l\'enquête', price: 2.90 },
   ];
 
   useEffect(() => {
@@ -163,6 +172,18 @@ export default function CheckoutPage() {
     loadCheckoutData();
   }, [user, cart]);
 
+  useEffect(() => {
+    const savedWalletAmount = localStorage.getItem('cart_wallet_amount');
+    if (savedWalletAmount) {
+      const amount = parseFloat(savedWalletAmount);
+      if (amount > 0 && amount <= cartTotal) {
+        setWalletAmount(amount);
+      } else {
+        localStorage.removeItem('cart_wallet_amount');
+      }
+    }
+  }, [cartTotal]);
+
   const loadCheckoutData = async () => {
     if (!user) return;
 
@@ -172,6 +193,7 @@ export default function CheckoutPage() {
         loadAddresses(),
         loadCheckoutOptions(),
         checkActiveBatch(),
+        checkIfFirstOrder(),
       ]);
 
       // Check customer status directly from Supabase
@@ -197,6 +219,25 @@ export default function CheckoutPage() {
     }
 
     setLoading(false);
+  };
+
+  const checkIfFirstOrder = async () => {
+    if (!user) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('orders')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', user.id)
+        .in('status', ['processing', 'completed', 'shipped']);
+
+      if (!error) {
+        setIsFirstOrder((data?.length || 0) === 0);
+      }
+    } catch (error) {
+      console.error('Error checking first order:', error);
+      setIsFirstOrder(true);
+    }
   };
 
   const checkActiveBatch = async () => {
@@ -339,18 +380,32 @@ export default function CheckoutPage() {
   };
 
   const calculateTax = () => {
-    const TAX_RATE = 20;
     const subtotalAfterDiscount = cartTotal - calculateCartDiscount();
-    const baseTaxableHT = subtotalAfterDiscount + calculateShippingCost() + calculateInsuranceCost();
-    const taxAmount = baseTaxableHT * (TAX_RATE / 100);
+    const totalTTC = subtotalAfterDiscount + calculateShippingCost() + calculateInsuranceCost();
+    const taxAmount = totalTTC - (totalTTC / 1.20);
     return taxAmount;
   };
 
   const calculateTotal = () => {
     const subtotalAfterDiscount = cartTotal - calculateCartDiscount();
-    const baseTaxableHT = subtotalAfterDiscount + calculateShippingCost() + calculateInsuranceCost();
-    const taxAmount = calculateTax();
-    return baseTaxableHT + taxAmount;
+    const totalTTC = subtotalAfterDiscount + calculateShippingCost() + calculateInsuranceCost();
+    const totalAfterWallet = Math.max(0, totalTTC - walletAmount);
+    return totalAfterWallet;
+  };
+
+  const calculateTotalBeforeWallet = () => {
+    const subtotalAfterDiscount = cartTotal - calculateCartDiscount();
+    const totalTTC = subtotalAfterDiscount + calculateShippingCost() + calculateInsuranceCost();
+    return totalTTC;
+  };
+
+  const handleWalletAmountChange = (amount: number) => {
+    setWalletAmount(amount);
+    if (amount > 0) {
+      localStorage.setItem('cart_wallet_amount', amount.toString());
+    } else {
+      localStorage.removeItem('cart_wallet_amount');
+    }
   };
 
   const generateOrderNumber = () => {
@@ -360,8 +415,8 @@ export default function CheckoutPage() {
   };
 
   const createDeliveryBatch = async () => {
-    if (cartTotal < MINIMUM_ORDER_AMOUNT) {
-      toast.error(`Le montant minimum de commande est de ${MINIMUM_ORDER_AMOUNT.toFixed(2)} €`);
+    if (isFirstOrder && cartTotal < MINIMUM_ORDER_AMOUNT) {
+      toast.error(`Le montant minimum pour votre première commande est de ${MINIMUM_ORDER_AMOUNT.toFixed(2)} €`);
       return;
     }
 
@@ -766,6 +821,20 @@ export default function CheckoutPage() {
           .eq('id', selectedCoupon.id);
       }
 
+      if (walletAmount > 0) {
+        await supabase
+          .from('loyalty_transactions')
+          .insert({
+            user_id: user!.id,
+            amount: -walletAmount,
+            type: 'admin_adjustment',
+            description: `Utilisation de la cagnotte pour la commande ${orderNumber}`,
+            reference_id: order.id,
+          });
+
+        localStorage.removeItem('cart_wallet_amount');
+      }
+
       const { data: { session } } = await supabase.auth.getSession();
 
       const paymentResponse = await fetch(
@@ -952,6 +1021,20 @@ export default function CheckoutPage() {
           .eq('id', selectedCoupon.id);
       }
 
+      if (walletAmount > 0) {
+        await supabase
+          .from('loyalty_transactions')
+          .insert({
+            user_id: user!.id,
+            amount: -walletAmount,
+            type: 'admin_adjustment',
+            description: `Utilisation de la cagnotte pour la commande ${orderNumber}`,
+            reference_id: order.id,
+          });
+
+        localStorage.removeItem('cart_wallet_amount');
+      }
+
       const paypalResponse = await fetch('/api/paypal/create-order', {
         method: 'POST',
         headers: {
@@ -1018,8 +1101,9 @@ export default function CheckoutPage() {
 
     setGdprError('');
 
-    if (cartTotal < MINIMUM_ORDER_AMOUNT) {
-      toast.error(`Le montant minimum de commande est de ${MINIMUM_ORDER_AMOUNT.toFixed(2)} €`);
+    const finalTotal = calculateTotal();
+    if (isFirstOrder && finalTotal < MINIMUM_ORDER_AMOUNT) {
+      toast.error(`Le montant minimum pour votre première commande est de ${MINIMUM_ORDER_AMOUNT.toFixed(2)} €`);
       return;
     }
 
@@ -1114,6 +1198,20 @@ export default function CheckoutPage() {
             order_id: order.id,
           })
           .eq('id', selectedCoupon.id);
+      }
+
+      if (walletAmount > 0) {
+        await supabase
+          .from('loyalty_transactions')
+          .insert({
+            user_id: user!.id,
+            amount: -walletAmount,
+            type: 'admin_adjustment',
+            description: `Utilisation de la cagnotte pour la commande ${orderNumber}`,
+            reference_id: order.id,
+          });
+
+        localStorage.removeItem('cart_wallet_amount');
       }
 
       const { data: { session } } = await supabase.auth.getSession();
@@ -1685,7 +1783,26 @@ export default function CheckoutPage() {
                           <div className="flex flex-1 justify-between">
                             <div>
                               <p className="text-sm font-medium text-gray-900">{item.name}</p>
-                              <p className="text-sm text-gray-500">Quantité: {item.quantity}</p>
+                              {item.selectedAttributes && Object.keys(item.selectedAttributes).length > 0 && (
+                                <div className="mt-1 space-y-0.5">
+                                  {Object.entries(item.selectedAttributes).map(([key, value]) => {
+                                    const formattedKey = key
+                                      .replace(/^pa_/, '')
+                                      .replace(/-/g, ' ')
+                                      .replace(/_/g, ' ')
+                                      .split(' ')
+                                      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+                                      .join(' ');
+
+                                    return (
+                                      <div key={key} className="text-xs text-gray-600">
+                                        <span className="font-semibold">{formattedKey}:</span> {value}
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              )}
+                              <p className="text-sm text-gray-500 mt-1">Quantité: {item.quantity}</p>
                             </div>
                             <p className="text-sm font-semibold text-gray-900">
                               {total.toFixed(2)} €
@@ -1707,7 +1824,7 @@ export default function CheckoutPage() {
 
                   <div className="space-y-2">
                     <div className="flex justify-between text-sm">
-                      <span className="text-gray-600">Sous-total</span>
+                      <span className="text-gray-600">Sous-total TTC</span>
                       <span className="font-medium">{cartTotal.toFixed(2)} €</span>
                     </div>
                     {selectedCoupon && calculateDiscount() > 0 && (
@@ -1738,15 +1855,28 @@ export default function CheckoutPage() {
                         <span className="font-medium">{calculateInsuranceCost().toFixed(2)} €</span>
                       </div>
                     )}
+                    <Separator className="my-2" />
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-600">Total HT</span>
+                      <span className="font-medium">
+                        {useDeliveryBatch ? (() => {
+                          const subtotalAfterDiscount = cartTotal - calculateCartDiscount();
+                          const totalTTC = activeBatch
+                            ? (subtotalAfterDiscount + calculateInsuranceCost())
+                            : (subtotalAfterDiscount + calculateShippingCost() + calculateInsuranceCost());
+                          return (totalTTC / 1.20).toFixed(2);
+                        })() : (calculateTotal() / 1.20).toFixed(2)} €
+                      </span>
+                    </div>
                     <div className="flex justify-between text-sm">
                       <span className="text-gray-600">TVA (20%)</span>
                       <span className="font-medium">
                         {useDeliveryBatch ? (() => {
                           const subtotalAfterDiscount = cartTotal - calculateCartDiscount();
-                          const baseHT = activeBatch
+                          const totalTTC = activeBatch
                             ? (subtotalAfterDiscount + calculateInsuranceCost())
                             : (subtotalAfterDiscount + calculateShippingCost() + calculateInsuranceCost());
-                          return (baseHT * 0.20).toFixed(2);
+                          return (totalTTC - (totalTTC / 1.20)).toFixed(2);
                         })() : calculateTax().toFixed(2)} €
                       </span>
                     </div>
@@ -1767,11 +1897,10 @@ export default function CheckoutPage() {
                         <span className="text-[#b8933d]">
                           {(() => {
                             const subtotalAfterDiscount = cartTotal - calculateCartDiscount();
-                            const baseHT = activeBatch
+                            const totalTTC = activeBatch
                               ? (subtotalAfterDiscount + calculateInsuranceCost())
                               : (subtotalAfterDiscount + calculateShippingCost() + calculateInsuranceCost());
-                            const tva = baseHT * 0.20;
-                            return (baseHT + tva).toFixed(2);
+                            return totalTTC.toFixed(2);
                           })()
                           } €
                         </span>
@@ -1786,16 +1915,36 @@ export default function CheckoutPage() {
                   ) : (
                     <div className="flex justify-between text-lg font-bold">
                       <span>Total TTC</span>
-                      <span className="text-[#b8933d]">{calculateTotal().toFixed(2)} €</span>
+                      <span className="text-[#b8933d]">{calculateTotalBeforeWallet().toFixed(2)} €</span>
                     </div>
                   )}
 
-                  {cartTotal < MINIMUM_ORDER_AMOUNT && (
+                  <WalletSelector
+                    cartTotal={calculateTotalBeforeWallet()}
+                    onWalletAmountChange={handleWalletAmountChange}
+                    currentWalletAmount={walletAmount}
+                  />
+
+                  {walletAmount > 0 && (
+                    <div className="bg-green-50 border border-green-200 rounded-md p-3">
+                      <div className="flex justify-between text-sm">
+                        <span className="text-green-800">Cagnotte utilisée</span>
+                        <span className="font-semibold text-green-900">-{walletAmount.toFixed(2)} €</span>
+                      </div>
+                      <Separator className="my-2 bg-green-200" />
+                      <div className="flex justify-between text-base font-bold">
+                        <span className="text-gray-900">Reste à payer</span>
+                        <span className="text-[#b8933d]">{calculateTotal().toFixed(2)} €</span>
+                      </div>
+                    </div>
+                  )}
+
+                  {isFirstOrder && calculateTotal() < MINIMUM_ORDER_AMOUNT && (
                     <Alert className="bg-orange-50 border-orange-200">
                       <Info className="h-4 w-4 text-orange-600" />
                       <AlertDescription className="text-orange-800">
-                        Le montant minimum de commande est de {MINIMUM_ORDER_AMOUNT.toFixed(2)} € (hors frais de port).
-                        Il vous manque {(MINIMUM_ORDER_AMOUNT - cartTotal).toFixed(2)} €.
+                        Pour votre première commande, le montant minimum est de {MINIMUM_ORDER_AMOUNT.toFixed(2)} €.
+                        Il vous manque {(MINIMUM_ORDER_AMOUNT - calculateTotal()).toFixed(2)} €.
                       </AlertDescription>
                     </Alert>
                   )}
@@ -1815,7 +1964,7 @@ export default function CheckoutPage() {
                       !selectedAddressId ||
                       !selectedShippingMethod ||
                       !selectedPaymentMethod ||
-                      cartTotal < MINIMUM_ORDER_AMOUNT
+                      (isFirstOrder && calculateTotal() < MINIMUM_ORDER_AMOUNT)
                     }
                     className="w-full bg-[#b8933d] hover:bg-[#a07c2f] text-white"
                     size="lg"

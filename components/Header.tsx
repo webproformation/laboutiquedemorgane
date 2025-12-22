@@ -57,7 +57,7 @@ export default function Header() {
     { name: 'Bonnes affaires', href: '/category/bonnes-affaires', hasMegaMenu: false },
     { name: 'Live & Replay', href: '/live', hasMegaMenu: false },
     { name: 'Carte cadeau', href: '/carte-cadeau', hasMegaMenu: false },
-    { name: 'Actus', href: '/actualites', hasMegaMenu: false },
+    { name: 'Le carnet de Morgane', href: '/actualites', hasMegaMenu: false },
   ];
 
   const isActive = (href: string) => {
@@ -127,9 +127,9 @@ export default function Header() {
 
             <Link href="/" className="flex-shrink-0">
               <img
-                src="/logolbdm.jpg"
+                src="/image copy.png"
                 alt="La Boutique De Morgane"
-                className="h-20 w-auto md:h-24 object-contain"
+                className="h-16 w-auto md:h-20 object-contain"
               />
             </Link>
 

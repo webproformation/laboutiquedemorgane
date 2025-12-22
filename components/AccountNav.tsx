@@ -22,7 +22,7 @@ export default function AccountNav() {
     { href: '/account/pending-deliveries', label: 'Mon colis ouvert', icon: Clock },
     { href: '/account/addresses', label: 'Mes adresses', icon: MapPin },
     { href: '/account/measurements', label: 'Mes mensurations', icon: Ruler },
-    { href: '/account/returns', label: 'Les retours', icon: PackageX },
+    { href: '/account/returns-management', label: 'Mes retours', icon: PackageX },
     { href: '/account/reviews', label: 'Mes avis', icon: MessageSquare },
     { href: '/account/coupons', label: 'Mes coupons', icon: Ticket },
     { href: '/account/loyalty', label: 'Ma Cagnotte Fidélité', icon: Wallet },

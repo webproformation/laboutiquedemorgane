@@ -323,8 +323,24 @@ export default function ProductPage({ params }: { params: Promise<{ slug: string
         .join(', ');
       toast.success(`${quantity} × ${product.name} (${attributesText}) ajouté au panier !`);
     } else {
-      addToCart(product, quantity);
-      toast.success(`${quantity} × ${product.name} ajouté au panier !`);
+      const hasSelectedAttributes = Object.keys(selectedCharacteristics).length > 0;
+
+      const cartItem = hasSelectedAttributes ? {
+        ...product,
+        id: `${product.id}-${Object.values(selectedCharacteristics).join('-')}`,
+        selectedAttributes: selectedCharacteristics,
+      } : product;
+
+      addToCart(cartItem, quantity);
+
+      if (hasSelectedAttributes) {
+        const attributesText = Object.entries(selectedCharacteristics)
+          .map(([key, value]) => `${formatAttributeName(key)}: ${value}`)
+          .join(', ');
+        toast.success(`${quantity} × ${product.name} (${attributesText}) ajouté au panier !`);
+      } else {
+        toast.success(`${quantity} × ${product.name} ajouté au panier !`);
+      }
     }
   };
 
@@ -615,13 +631,14 @@ export default function ProductPage({ params }: { params: Promise<{ slug: string
                 <div className="border-t pt-6">
                   <h3 className="text-lg font-semibold text-gray-900 mb-4">Caractéristiques</h3>
                   <p className="text-sm text-gray-500 mb-3">
-                    {isVariable ? 'Ces caractéristiques sont disponibles dans les variations ci-dessus.' : 'Caractéristiques du produit :'}
+                    {isVariable ? 'Ces caractéristiques sont disponibles dans les variations ci-dessus.' : 'Sélectionnez vos options :'}
                   </p>
                   <div className="grid grid-cols-1 gap-3">
                     {product.attributes.nodes.filter((attr: any) => !attr.variation).map((attr: any, index: number) => {
                       const isSizeAttribute = attr.name.toLowerCase().includes('taille');
                       const isColorAttr = isColorAttribute(attr.name);
                       const sortedOptions = isSizeAttribute ? sortSizes(attr.options || []) : (attr.options || []);
+                      const normalizedAttrName = attr.name.replace(/^pa_/, '');
 
                       return (
                         <div key={index} className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
@@ -631,13 +648,22 @@ export default function ProductPage({ params }: { params: Promise<{ slug: string
                           <div className="flex-1">
                             <div className="flex flex-wrap gap-2 items-center">
                               {sortedOptions.map((option: string, optIndex: number) => {
+                                const isSelected = selectedCharacteristics[normalizedAttrName] === option;
+
                                 if (isColorAttr) {
                                   return (
                                     <div key={optIndex} className="relative">
                                       <ColorSwatch
                                         color={option}
-                                        isSelected={false}
-                                        onClick={() => {}}
+                                        isSelected={isSelected}
+                                        onClick={() => {
+                                          if (!isVariable) {
+                                            setSelectedCharacteristics(prev => ({
+                                              ...prev,
+                                              [normalizedAttrName]: option
+                                            }));
+                                          }
+                                        }}
                                         size="sm"
                                       />
                                     </div>
@@ -645,12 +671,25 @@ export default function ProductPage({ params }: { params: Promise<{ slug: string
                                 }
 
                                 return (
-                                  <span
+                                  <button
                                     key={optIndex}
-                                    className="inline-flex items-center px-3 py-1 border border-gray-200 bg-white rounded-full text-sm text-gray-700"
+                                    onClick={() => {
+                                      if (!isVariable) {
+                                        setSelectedCharacteristics(prev => ({
+                                          ...prev,
+                                          [normalizedAttrName]: option
+                                        }));
+                                      }
+                                    }}
+                                    disabled={isVariable}
+                                    className={`inline-flex items-center px-3 py-1 border rounded-full text-sm transition-colors ${
+                                      isSelected
+                                        ? 'border-[#b8933d] bg-[#b8933d] text-white'
+                                        : 'border-gray-200 bg-white text-gray-700 hover:border-[#b8933d] hover:bg-[#b8933d]/5'
+                                    } ${isVariable ? 'cursor-default' : 'cursor-pointer'}`}
                                   >
                                     {option}
-                                  </span>
+                                  </button>
                                 );
                               })}
                             </div>
@@ -694,8 +733,8 @@ export default function ProductPage({ params }: { params: Promise<{ slug: string
                     </AccordionTrigger>
                     <AccordionContent>
                       <div className="text-gray-600 space-y-2">
-                        <p>Livraison standard: 3-5 jours ouvrés</p>
-                        <p>Retours gratuits sous 30 jours</p>
+                        <p>Livraison standard : 1 à 5 jours ouvrés</p>
+                        <p>Retours sous 14 jours</p>
                       </div>
                     </AccordionContent>
                   </AccordionItem>

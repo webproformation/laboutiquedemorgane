@@ -6,11 +6,13 @@ import { supabase } from '@/lib/supabase-client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Package, Loader2, FileText, Download } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Package, Loader2, FileText, Download, Gem, CheckCircle } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { formatPrice } from '@/lib/utils';
 import { toast } from 'sonner';
+import { GuestbookForm } from '@/components/GuestbookForm';
 
 interface Order {
   id: string;
@@ -21,6 +23,7 @@ interface Order {
   woocommerce_order_id: number | null;
   invoice_url: string | null;
   order_items: OrderItem[];
+  has_guestbook_entry?: boolean;
 }
 
 interface OrderItem {
@@ -37,6 +40,8 @@ export default function OrdersPage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingInvoice, setLoadingInvoice] = useState<string | null>(null);
+  const [showGuestbookDialog, setShowGuestbookDialog] = useState(false);
+  const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
 
   useEffect(() => {
     if (user) {
@@ -61,9 +66,16 @@ export default function OrdersPage() {
             .select('*')
             .eq('order_id', order.id);
 
+          const { data: guestbookEntry } = await supabase
+            .from('guestbook_entries')
+            .select('id')
+            .eq('order_id', order.id)
+            .maybeSingle();
+
           return {
             ...order,
             order_items: items || [],
+            has_guestbook_entry: !!guestbookEntry,
           };
         })
       );
@@ -131,6 +143,18 @@ export default function OrdersPage() {
 
   const downloadInvoice = (invoiceUrl: string) => {
     window.open(invoiceUrl, '_blank');
+  };
+
+  const openGuestbookForm = (order: Order) => {
+    setSelectedOrder(order);
+    setShowGuestbookDialog(true);
+  };
+
+  const handleGuestbookSuccess = async () => {
+    setShowGuestbookDialog(false);
+    setSelectedOrder(null);
+    await loadOrders();
+    toast.success('Merci pour votre mot doux ! Il sera publié après validation.');
   };
 
   const getStatusColor = (status: string) => {
@@ -307,10 +331,56 @@ export default function OrdersPage() {
                   {order.total_amount.toFixed(2)} €
                 </span>
               </div>
+
+              {order.status === 'delivered' && (
+                <div className="pt-4 border-t">
+                  {order.has_guestbook_entry ? (
+                    <Button
+                      variant="outline"
+                      className="w-full gap-2 text-green-600 border-green-600"
+                      disabled
+                    >
+                      <CheckCircle className="h-5 w-5" />
+                      Avis publié ✅
+                    </Button>
+                  ) : (
+                    <Button
+                      onClick={() => openGuestbookForm(order)}
+                      className="w-full gap-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white"
+                    >
+                      <Gem className="h-5 w-5" />
+                      Signer le Livre d&apos;Or - Gagnez 0,20 € !
+                    </Button>
+                  )}
+                  {!order.has_guestbook_entry && (
+                    <p className="text-xs text-center text-muted-foreground mt-2">
+                      ✨ Morgane attend votre mot doux ! Signez le livre d&apos;or et gagnez 0,20 € immédiatement.
+                    </p>
+                  )}
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>
       ))}
+
+      {selectedOrder && (
+        <Dialog open={showGuestbookDialog} onOpenChange={setShowGuestbookDialog}>
+          <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Gem className="h-6 w-6 text-amber-500" />
+                Signer le Livre d&apos;Or
+              </DialogTitle>
+            </DialogHeader>
+            <GuestbookForm
+              orderId={selectedOrder.id}
+              orderNumber={selectedOrder.order_number}
+              onSuccess={handleGuestbookSuccess}
+            />
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 }

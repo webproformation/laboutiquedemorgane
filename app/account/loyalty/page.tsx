@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
+import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase-client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -41,6 +42,7 @@ interface Transaction {
 
 export default function LoyaltyPage() {
   const { user } = useAuth();
+  const router = useRouter();
   const [tierInfo, setTierInfo] = useState<TierInfo | null>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
@@ -233,6 +235,12 @@ export default function LoyaltyPage() {
               className="w-full bg-white text-[#b8933d] hover:bg-gray-50 font-semibold"
               size="lg"
               disabled={!tierInfo || tierInfo.current_balance < 1}
+              onClick={() => {
+                if (tierInfo && tierInfo.current_balance >= 1) {
+                  router.push('/cart');
+                  toast.success('Rendez-vous dans votre panier pour utiliser votre cagnotte !');
+                }
+              }}
             >
               <Gift className="w-5 h-5 mr-2" />
               Je me fais plaisir

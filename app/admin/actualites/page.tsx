@@ -33,7 +33,7 @@ export default function ActualitesAdminPage() {
             Gérer les articles du Carnet de Morgane
           </p>
         </div>
-        <Link href="https://wordpress.laboutiquemorgane.fr/wp-admin/post-new.php" target="_blank">
+        <Link href="/admin/actualites/edit/new">
           <Button className="bg-[#b8933d] hover:bg-[#a07c2f]">
             <Plus className="h-4 w-4 mr-2" />
             Nouvel article
@@ -100,7 +100,7 @@ export default function ActualitesAdminPage() {
                         SEO
                       </Button>
                     </Link>
-                    <Link href={`https://wordpress.laboutiquemorgane.fr/wp-admin/post.php?post=${post.databaseId}&action=edit`} target="_blank">
+                    <Link href={`/admin/actualites/edit/${post.databaseId}`}>
                       <Button variant="outline" size="sm">
                         <Edit2 className="h-4 w-4 mr-2" />
                         Modifier

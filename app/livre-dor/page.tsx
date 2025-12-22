@@ -1,366 +1,305 @@
-'use client';
+"use client";
 
-import { useState, useEffect } from 'react';
-import { Card, CardContent } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-import { Star, Quote, Heart, CheckCircle2, Facebook, ShoppingBag, Package } from 'lucide-react';
-import { supabase } from '@/lib/supabase-client';
-import { toast } from 'sonner';
-import { useAuth } from '@/context/AuthContext';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+import { useEffect, useState } from "react";
+import { createClient } from "@/lib/supabase-client";
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Gem, Heart, ShieldCheck, MessageCircle, ChevronDown, ChevronUp, Facebook } from "lucide-react";
+import { toast } from "sonner";
+import { format } from "date-fns";
+import { fr } from "date-fns/locale";
+import OptimizedImage from "@/components/OptimizedImage";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
-interface Review {
+interface GuestbookEntry {
   id: string;
-  user_id: string | null;
   customer_name: string;
-  customer_email: string | null;
   rating: number;
-  comment: string;
-  source: 'website' | 'facebook' | 'product' | 'order';
-  source_id: string | null;
-  is_approved: boolean;
-  is_featured: boolean;
+  message: string;
+  photo_url: string | null;
+  admin_response: string | null;
+  likes_count: number;
   created_at: string;
+  approved_at: string;
+  source: 'site' | 'facebook';
 }
 
 export default function LivreDorPage() {
-  const [reviews, setReviews] = useState<Review[]>([]);
-  const [filteredReviews, setFilteredReviews] = useState<Review[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
-  const [filterSource, setFilterSource] = useState<string>('all');
-  const { user } = useAuth();
-
-  const [formData, setFormData] = useState({
-    customer_name: '',
-    customer_email: '',
-    rating: 5,
-    comment: '',
-  });
+  const [entries, setEntries] = useState<GuestbookEntry[]>([]);
+  const [likedEntries, setLikedEntries] = useState<Set<string>>(new Set());
+  const [sessionId, setSessionId] = useState<string>("");
+  const [isLoading, setIsLoading] = useState(true);
+  const [showCharter, setShowCharter] = useState(false);
 
   useEffect(() => {
-    loadReviews();
+    let storedSessionId = localStorage.getItem("guestbook_session_id");
+    if (!storedSessionId) {
+      storedSessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      localStorage.setItem("guestbook_session_id", storedSessionId);
+    }
+    setSessionId(storedSessionId);
+
+    const storedLikes = localStorage.getItem("guestbook_likes");
+    if (storedLikes) {
+      setLikedEntries(new Set(JSON.parse(storedLikes)));
+    }
+
+    fetchEntries();
   }, []);
 
-  useEffect(() => {
-    if (filterSource === 'all') {
-      setFilteredReviews(reviews);
-    } else {
-      setFilteredReviews(reviews.filter(r => r.source === filterSource));
-    }
-  }, [filterSource, reviews]);
-
-  useEffect(() => {
-    if (user) {
-      setFormData(prev => ({
-        ...prev,
-        customer_name: user.email?.split('@')[0] || '',
-        customer_email: user.email || '',
-      }));
-    }
-  }, [user]);
-
-  const loadReviews = async () => {
+  const fetchEntries = async () => {
     try {
+      const supabase = createClient();
       const { data, error } = await supabase
-        .from('customer_reviews')
-        .select('*')
-        .eq('is_approved', true)
-        .order('created_at', { ascending: false });
+        .from("guestbook_entries")
+        .select("*")
+        .eq("status", "approved")
+        .order("approved_at", { ascending: false });
 
       if (error) throw error;
-      setReviews(data || []);
-      setFilteredReviews(data || []);
+      setEntries(data || []);
     } catch (error) {
-      console.error('Error loading reviews:', error);
-      toast.error('Erreur lors du chargement des avis');
+      console.error("Error fetching guestbook entries:", error);
     } finally {
-      setLoading(false);
+      setIsLoading(false);
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    if (!formData.customer_name.trim() || !formData.comment.trim()) {
-      toast.error('Veuillez remplir tous les champs obligatoires');
+  const handleLike = async (entryId: string) => {
+    if (likedEntries.has(entryId)) {
+      toast.error("Vous avez déjà aimé cet avis");
       return;
     }
 
-    setSubmitting(true);
     try {
-      const reviewData = {
-        user_id: user?.id || null,
-        customer_name: formData.customer_name,
-        customer_email: formData.customer_email || null,
-        rating: formData.rating,
-        comment: formData.comment,
-        source: 'website' as const,
-        is_approved: false,
-      };
-
-      const { error } = await supabase
-        .from('customer_reviews')
-        .insert([reviewData]);
+      const supabase = createClient();
+      const { error } = await supabase.from("guestbook_likes").insert({
+        entry_id: entryId,
+        session_id: sessionId,
+      });
 
       if (error) throw error;
 
-      toast.success('Merci pour votre avis ! Il sera publié après validation.');
+      const newLikedEntries = new Set(likedEntries);
+      newLikedEntries.add(entryId);
+      setLikedEntries(newLikedEntries);
+      localStorage.setItem("guestbook_likes", JSON.stringify(Array.from(newLikedEntries)));
 
-      setFormData({
-        customer_name: user?.email?.split('@')[0] || '',
-        customer_email: user?.email || '',
-        rating: 5,
-        comment: '',
-      });
-    } catch (error: any) {
-      console.error('Error submitting review:', error);
-      toast.error('Erreur lors de l\'envoi de votre avis');
-    } finally {
-      setSubmitting(false);
+      setEntries((prev) =>
+        prev.map((entry) =>
+          entry.id === entryId ? { ...entry, likes_count: entry.likes_count + 1 } : entry
+        )
+      );
+
+      toast.success("Merci d'avoir aimé cet avis !");
+    } catch (error) {
+      console.error("Error liking entry:", error);
+      toast.error("Une erreur est survenue");
     }
   };
 
-  const getSourceIcon = (source: string) => {
-    switch (source) {
-      case 'facebook':
-        return <Facebook className="w-4 h-4" />;
-      case 'product':
-        return <ShoppingBag className="w-4 h-4" />;
-      case 'order':
-        return <Package className="w-4 h-4" />;
-      default:
-        return <Heart className="w-4 h-4" />;
-    }
-  };
-
-  const getSourceLabel = (source: string) => {
-    switch (source) {
-      case 'facebook':
-        return 'Facebook';
-      case 'product':
-        return 'Produit';
-      case 'order':
-        return 'Commande';
-      default:
-        return 'Site web';
-    }
-  };
+  if (isLoading) {
+    return (
+      <div className="container mx-auto px-4 py-12">
+        <div className="text-center">Chargement des mots doux...</div>
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-white py-12">
-      <div className="container mx-auto px-4">
-        <div className="text-center mb-12">
-          <div className="flex justify-center mb-4">
-            <div className="bg-gradient-to-br from-[#C6A15B] to-[#b8933d] p-4 rounded-2xl">
-              <Quote className="w-12 h-12 text-white" />
-            </div>
-          </div>
-          <h1 className="text-5xl font-bold mb-4 bg-gradient-to-r from-[#C6A15B] to-[#b8933d] bg-clip-text text-transparent">
-            Livre d'Or
-          </h1>
-          <p className="text-xl text-gray-600 max-w-2xl mx-auto">
-            Découvrez ce que nos clientes pensent de La Boutique de Morgane
+    <div className="container mx-auto px-4 py-12">
+      <div className="max-w-4xl mx-auto mb-12 text-center space-y-6">
+        <div className="flex justify-center mb-4">
+          <Gem className="h-12 w-12 text-amber-500" />
+        </div>
+        <h1 className="text-4xl font-bold">Bienvenue dans mon Livre d&apos;Or !</h1>
+        <div className="prose prose-lg mx-auto text-left bg-gradient-to-br from-pink-50 to-purple-50 dark:from-pink-950/20 dark:to-purple-950/20 p-8 rounded-2xl border border-pink-200 dark:border-pink-800">
+          <p className="text-base leading-relaxed">
+            Parce que vos sourires sont notre plus belle récompense, j&apos;ai créé cet espace pour
+            recueillir vos mots doux et vos plus jolis looks. Ici, on ne donne pas des étoiles,
+            on partage des <strong>Pépites</strong> !
           </p>
+          <p className="text-base leading-relaxed">
+            Votre avis est précieux : il aide d&apos;autres clientes à faire leur choix et nous
+            permet d&apos;agrandir la famille chaque jour.
+          </p>
+          <div className="bg-white dark:bg-gray-900 p-4 rounded-lg my-4">
+            <p className="text-base font-semibold mb-2">🎁 Pour vous remercier de votre fidélité :</p>
+            <p className="text-sm">• 0,20 € offerts dans votre cagnotte pour chaque mot doux déposé.</p>
+            <p className="text-sm">• 0,50 € si vous ajoutez une photo de vous avec vos achats !</p>
+          </div>
+          <p className="text-base leading-relaxed">
+            Merci de faire partie de cette aventure avec nous. Nous avons hâte de vous lire !
+          </p>
+          <p className="text-base font-semibold text-right">Morgane & doudou 🌸</p>
         </div>
 
-        <div className="max-w-6xl mx-auto mb-12">
-          <Card className="shadow-xl border-2 border-[#C6A15B]/20">
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-4 mb-6">
-                <div className="flex-1 bg-gradient-to-r from-[#C6A15B] to-[#b8933d] h-1 rounded"></div>
-                <h2 className="text-2xl font-bold text-gray-900">Laissez votre avis</h2>
-                <div className="flex-1 bg-gradient-to-r from-[#b8933d] to-[#C6A15B] h-1 rounded"></div>
+        <Collapsible open={showCharter} onOpenChange={setShowCharter} className="mt-8">
+          <CollapsibleTrigger asChild>
+            <Button
+              variant="outline"
+              className="w-full justify-between text-base font-semibold border-2 border-amber-200 hover:bg-amber-50 dark:border-amber-800 dark:hover:bg-amber-950/20"
+            >
+              Charte de Modération du Livre d&apos;Or
+              {showCharter ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
+            </Button>
+          </CollapsibleTrigger>
+          <CollapsibleContent className="mt-4">
+            <div className="prose prose-sm max-w-none bg-white dark:bg-gray-900 p-8 rounded-2xl border-2 border-amber-200 dark:border-amber-800 space-y-6">
+              <p className="text-base leading-relaxed">
+                Bienvenue dans l&apos;espace d&apos;expression de La Boutique de Morgane. Pour que ce lieu reste un espace d&apos;amour, de bienveillance et d&apos;authenticité, nous avons mis en place quelques règles simples.
+              </p>
+
+              <div>
+                <h3 className="text-lg font-bold mb-3">1. Authenticité avant tout</h3>
+                <p className="text-sm leading-relaxed">
+                  Le Livre d&apos;Or est strictement réservé aux clientes ayant effectué un achat sur notre boutique. Chaque avis est lié à une commande réelle et porte la mention « Achat Vérifié ✅ ». Cela vous garantit que chaque témoignage et chaque photo proviennent d&apos;une expérience vécue.
+                </p>
               </div>
 
-              <form onSubmit={handleSubmit} className="space-y-6">
-                <div className="grid md:grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="customer_name">Votre nom *</Label>
-                    <Input
-                      id="customer_name"
-                      value={formData.customer_name}
-                      onChange={(e) => setFormData({ ...formData, customer_name: e.target.value })}
-                      placeholder="Prénom N."
-                      required
+              <div>
+                <h3 className="text-lg font-bold mb-3">2. Processus de Modération</h3>
+                <p className="text-sm leading-relaxed mb-2">
+                  Afin d&apos;éviter les messages publicitaires indésirables (spams) ou les contenus inappropriés, chaque signature est relue par notre équipe avant publication.
+                </p>
+                <ul className="list-disc list-inside text-sm space-y-1 ml-4">
+                  <li><strong>Délai :</strong> Votre avis apparaîtra sous 48h à 72h après sa validation technique.</li>
+                  <li><strong>Transparence :</strong> Nous ne sélectionnons pas les avis en fonction de leur note. Un avis moins positif sera publié dès lors qu&apos;il respecte les règles de politesse et de respect.</li>
+                </ul>
+              </div>
+
+              <div>
+                <h3 className="text-lg font-bold mb-3">3. Motifs de refus d&apos;un avis</h3>
+                <p className="text-sm leading-relaxed mb-2">
+                  Nous nous réservons le droit de ne pas publier (ou de supprimer) un avis si :
+                </p>
+                <ul className="list-disc list-inside text-sm space-y-1 ml-4">
+                  <li>Il contient des propos injurieux, diffamatoires, racistes ou haineux.</li>
+                  <li>Il comporte des données personnelles (numéro de téléphone, adresse e-mail, etc.).</li>
+                  <li>La photo jointe est de mauvaise qualité, n&apos;appartient pas à l&apos;auteur ou est jugée inappropriée.</li>
+                  <li>Le contenu est purement publicitaire ou comporte des liens vers d&apos;autres sites.</li>
+                </ul>
+              </div>
+
+              <div>
+                <h3 className="text-lg font-bold mb-3">4. Récompenses et Équité</h3>
+                <p className="text-sm leading-relaxed">
+                  La récompense créditée sur votre cagnotte (0,20€ ou 0,50€ avec photo) est offerte en remerciement du temps accordé pour partager votre expérience. Elle n&apos;est en aucun cas conditionnée par l&apos;obtention d&apos;une note positive.
+                </p>
+              </div>
+
+              <div>
+                <h3 className="text-lg font-bold mb-3">5. Élection de l&apos;Ambassadrice</h3>
+                <p className="text-sm leading-relaxed">
+                  L&apos;élection de « L&apos;Ambassadrice de la Semaine » se base sur le nombre de « Cœurs ❤️ » reçus par les autres visiteuses. En cas d&apos;égalité ou de suspicion de fraude (utilisation de robots de vote), l&apos;administrateur de la boutique se réserve le droit de procéder à l&apos;arbitrage final pour désigner la gagnante.
+                </p>
+              </div>
+
+              <div>
+                <h3 className="text-lg font-bold mb-3">6. Vos Droits (RGPD)</h3>
+                <p className="text-sm leading-relaxed">
+                  En signant le Livre d&apos;Or, vous acceptez la publication de votre prénom et de votre photo sur notre site. Vous pouvez à tout moment demander la modification ou la suppression de votre avis en nous contactant via le formulaire de contact.
+                </p>
+              </div>
+
+              <p className="text-sm text-center font-semibold text-amber-700 dark:text-amber-500 mt-6">
+                Merci de contribuer à faire de notre Livre d&apos;Or un lieu bienveillant et authentique ! 💛
+              </p>
+            </div>
+          </CollapsibleContent>
+        </Collapsible>
+      </div>
+
+      {entries.length === 0 ? (
+        <div className="text-center py-12">
+          <p className="text-muted-foreground">
+            Aucun avis pour le moment. Soyez la première à laisser un mot doux !
+          </p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {entries.map((entry) => (
+            <Card
+              key={entry.id}
+              className="group hover:shadow-xl transition-all duration-300 overflow-hidden"
+            >
+              <CardContent className="p-0">
+                {entry.photo_url && (
+                  <div className="relative h-64 w-full overflow-hidden">
+                    <OptimizedImage
+                      src={entry.photo_url}
+                      alt={`Photo de ${entry.customer_name}`}
+                      fill
+                      className="object-cover group-hover:scale-105 transition-transform duration-300"
                     />
                   </div>
-                  <div>
-                    <Label htmlFor="customer_email">Votre email (optionnel)</Label>
-                    <Input
-                      id="customer_email"
-                      type="email"
-                      value={formData.customer_email}
-                      onChange={(e) => setFormData({ ...formData, customer_email: e.target.value })}
-                      placeholder="email@exemple.com"
-                    />
+                )}
+                <div className="p-6 space-y-4">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <h3 className="font-semibold text-lg">{entry.customer_name}</h3>
+                      <p className="text-xs text-muted-foreground flex items-center gap-1">
+                        {entry.source === 'facebook' ? (
+                          <>
+                            <Facebook className="h-3 w-3 text-blue-600" />
+                            <span className="text-blue-600">Avis Facebook</span>
+                          </>
+                        ) : (
+                          <>
+                            <ShieldCheck className="h-3 w-3" />
+                            Achat Vérifié
+                          </>
+                        )}
+                      </p>
+                    </div>
+                    <div className="flex gap-0.5">
+                      {Array.from({ length: entry.rating }).map((_, i) => (
+                        <Gem key={i} className="h-4 w-4 fill-amber-500 text-amber-500" />
+                      ))}
+                    </div>
                   </div>
-                </div>
 
-                <div>
-                  <Label>Votre note *</Label>
-                  <div className="flex gap-2 mt-2">
-                    {[1, 2, 3, 4, 5].map((star) => (
-                      <button
-                        key={star}
-                        type="button"
-                        onClick={() => setFormData({ ...formData, rating: star })}
-                        className="transition-transform hover:scale-110"
-                      >
-                        <Star
-                          className={`w-8 h-8 ${
-                            star <= formData.rating
-                              ? 'fill-yellow-400 text-yellow-400'
-                              : 'text-gray-300'
-                          }`}
-                        />
-                      </button>
-                    ))}
-                  </div>
-                </div>
+                  <p className="text-sm leading-relaxed">{entry.message}</p>
 
-                <div>
-                  <Label htmlFor="comment">Votre avis *</Label>
-                  <Textarea
-                    id="comment"
-                    value={formData.comment}
-                    onChange={(e) => setFormData({ ...formData, comment: e.target.value })}
-                    placeholder="Partagez votre expérience avec La Boutique de Morgane..."
-                    rows={4}
-                    required
-                  />
-                </div>
-
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 flex items-start gap-3">
-                  <CheckCircle2 className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
-                  <p className="text-sm text-blue-900">
-                    Votre avis sera publié après validation par notre équipe. Merci pour votre confiance !
-                  </p>
-                </div>
-
-                <Button
-                  type="submit"
-                  disabled={submitting}
-                  className="w-full bg-gradient-to-r from-[#C6A15B] to-[#b8933d] hover:opacity-90 text-white py-6 text-lg font-semibold"
-                >
-                  {submitting ? 'Envoi en cours...' : 'Publier mon avis'}
-                </Button>
-              </form>
-            </CardContent>
-          </Card>
-        </div>
-
-        <div className="max-w-6xl mx-auto mb-8">
-          <div className="flex items-center justify-between">
-            <h2 className="text-3xl font-bold text-gray-900">
-              Tous les avis ({filteredReviews.length})
-            </h2>
-            <Select value={filterSource} onValueChange={setFilterSource}>
-              <SelectTrigger className="w-48">
-                <SelectValue placeholder="Filtrer par source" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Tous les avis</SelectItem>
-                <SelectItem value="website">Site web</SelectItem>
-                <SelectItem value="facebook">Facebook</SelectItem>
-                <SelectItem value="product">Produits</SelectItem>
-                <SelectItem value="order">Commandes</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-
-        {loading ? (
-          <div className="text-center py-12">
-            <p className="text-gray-600 text-lg">Chargement des avis...</p>
-          </div>
-        ) : filteredReviews.length === 0 ? (
-          <div className="text-center py-12">
-            <Quote className="w-16 h-16 mx-auto mb-4 text-gray-300" />
-            <p className="text-gray-600 text-lg">Aucun avis pour le moment</p>
-          </div>
-        ) : (
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-6xl mx-auto">
-            {filteredReviews.map((review) => (
-              <Card
-                key={review.id}
-                className={`relative hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-1 ${
-                  review.is_featured ? 'border-2 border-[#C6A15B]' : ''
-                }`}
-              >
-                <CardContent className="pt-6">
-                  {review.is_featured && (
-                    <div className="absolute top-3 right-3">
-                      <div className="bg-gradient-to-r from-[#C6A15B] to-[#b8933d] text-white px-3 py-1 rounded-full text-xs font-semibold flex items-center gap-1">
-                        <Star className="w-3 h-3 fill-current" />
-                        Coup de coeur
+                  {entry.admin_response && (
+                    <div className="bg-gradient-to-r from-amber-50 to-yellow-50 dark:from-amber-950/30 dark:to-yellow-950/30 p-4 rounded-lg border-l-4 border-amber-500">
+                      <div className="flex items-start gap-2">
+                        <MessageCircle className="h-4 w-4 text-amber-600 mt-0.5 flex-shrink-0" />
+                        <div>
+                          <p className="text-xs font-semibold text-amber-800 dark:text-amber-400 mb-1">
+                            Réponse de Morgane :
+                          </p>
+                          <p className="text-sm text-amber-900 dark:text-amber-300">
+                            {entry.admin_response}
+                          </p>
+                        </div>
                       </div>
                     </div>
                   )}
 
-                  <div className="absolute top-3 left-3">
-                    <div className="bg-gray-100 text-gray-600 px-2 py-1 rounded-full text-xs flex items-center gap-1">
-                      {getSourceIcon(review.source)}
-                      {getSourceLabel(review.source)}
-                    </div>
-                  </div>
-
-                  <div className="mt-8">
-                    <div className="flex items-center gap-1 mb-3">
-                      {[...Array(review.rating)].map((_, i) => (
-                        <Star
-                          key={i}
-                          className="w-5 h-5 fill-yellow-400 text-yellow-400"
-                        />
-                      ))}
-                    </div>
-
-                    <p className="text-gray-700 mb-4 leading-relaxed italic">
-                      "{review.comment}"
+                  <div className="flex items-center justify-between pt-2 border-t">
+                    <p className="text-xs text-muted-foreground">
+                      {format(new Date(entry.approved_at), "MMMM yyyy", { locale: fr })}
                     </p>
-
-                    <div className="flex items-center justify-between pt-4 border-t border-gray-100">
-                      <div>
-                        <p className="font-bold text-gray-900">{review.customer_name}</p>
-                        <p className="text-sm text-gray-500">
-                          {new Date(review.created_at).toLocaleDateString('fr-FR', {
-                            year: 'numeric',
-                            month: 'long',
-                          })}
-                        </p>
-                      </div>
-                      <div className="w-12 h-12 rounded-full bg-gradient-to-br from-[#C6A15B] to-[#b8933d] flex items-center justify-center text-white font-bold text-lg">
-                        {review.customer_name.charAt(0).toUpperCase()}
-                      </div>
-                    </div>
+                    <Button
+                      variant={likedEntries.has(entry.id) ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => handleLike(entry.id)}
+                      disabled={likedEntries.has(entry.id)}
+                      className="gap-2"
+                    >
+                      <Heart
+                        className={`h-4 w-4 ${likedEntries.has(entry.id) ? "fill-current" : ""}`}
+                      />
+                      {entry.likes_count}
+                    </Button>
                   </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        )}
-
-        <div className="text-center mt-12">
-          <a
-            href="https://www.facebook.com/profile.php?id=100057420760713&sk=reviews"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 bg-gray-900 text-white px-8 py-4 rounded-full font-semibold hover:bg-gray-800 transition-colors shadow-lg"
-          >
-            <Facebook className="w-5 h-5" />
-            Voir plus d'avis sur Facebook
-          </a>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
         </div>
-      </div>
+      )}
     </div>
   );
 }

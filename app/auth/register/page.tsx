@@ -19,6 +19,7 @@ function RegisterForm() {
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [birthDate, setBirthDate] = useState('');
+  const [referralCode, setReferralCode] = useState('');
   const [loading, setLoading] = useState(false);
   const [hasPendingPrize, setHasPendingPrize] = useState(false);
   const [gdprConsent, setGdprConsent] = useState(false);
@@ -173,6 +174,20 @@ function RegisterForm() {
                 required
                 disabled={loading}
               />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="referralCode">Code de parrainage (optionnel)</Label>
+              <Input
+                id="referralCode"
+                type="text"
+                placeholder="Entrez un code de parrainage"
+                value={referralCode}
+                onChange={(e) => setReferralCode(e.target.value)}
+                disabled={loading}
+              />
+              <p className="text-xs text-gray-500">
+                Si vous avez été parrainé(e), entrez le code de votre parrain/marraine
+              </p>
             </div>
             <GDPRConsent
               type="account"

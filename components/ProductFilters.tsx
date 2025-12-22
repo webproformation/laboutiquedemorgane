@@ -7,8 +7,9 @@ import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
 import { Input } from '@/components/ui/input';
-import { Loader2, X } from 'lucide-react';
+import { Loader2, X, Ruler } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
+import { useClientSize } from '@/hooks/use-client-size';
 import { supabase } from '@/lib/supabase-client';
 import { parsePrice } from '@/lib/utils';
 
@@ -49,9 +50,11 @@ interface ProductFiltersProps {
 
 export default function ProductFilters({ onFilterChange, initialFilters = {}, products = [] }: ProductFiltersProps) {
   const { user } = useAuth();
+  const { preferredSize } = useClientSize();
   const [attributes, setAttributes] = useState<Attribute[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedFilters, setSelectedFilters] = useState<Record<string, string[]>>(initialFilters);
+  const [showMySize, setShowMySize] = useState<boolean>(false);
   const isFirstRender = useRef(true);
 
   const prices = products
@@ -146,8 +149,11 @@ export default function ProductFilters({ onFilterChange, initialFilters = {}, pr
       isFirstRender.current = false;
       return;
     }
-    onFilterChange(selectedFilters, { min: minPrice, max: maxPriceFilter });
-  }, [selectedFilters, maxPriceFilter, minPrice, onFilterChange]);
+    const filtersWithMySize = showMySize && preferredSize
+      ? { ...selectedFilters, my_size: [preferredSize] }
+      : selectedFilters;
+    onFilterChange(filtersWithMySize, { min: minPrice, max: maxPriceFilter });
+  }, [selectedFilters, maxPriceFilter, minPrice, showMySize, preferredSize, onFilterChange]);
 
   const handleFilterChange = (attributeSlug: string, termName: string, checked: boolean) => {
     setSelectedFilters((prev) => {
@@ -182,10 +188,12 @@ export default function ProductFilters({ onFilterChange, initialFilters = {}, pr
   const clearAllFilters = () => {
     setSelectedFilters({});
     setMaxPriceFilter(maxPrice);
+    setShowMySize(false);
   };
 
   const hasActiveFilters = Object.keys(selectedFilters).length > 0 ||
-    maxPriceFilter !== maxPrice;
+    maxPriceFilter !== maxPrice ||
+    showMySize;
 
   if (loading) {
     return (
@@ -219,6 +227,28 @@ export default function ProductFilters({ onFilterChange, initialFilters = {}, pr
         </div>
       </CardHeader>
       <CardContent className="space-y-6">
+        {preferredSize && (
+          <div className="space-y-3 pb-6 border-b">
+            <h3 className="font-semibold text-sm flex items-center gap-2">
+              <Ruler className="h-4 w-4 text-[#D4AF37]" />
+              Personnalisation
+            </h3>
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="my-size-filter"
+                checked={showMySize}
+                onCheckedChange={(checked) => setShowMySize(checked as boolean)}
+              />
+              <Label
+                htmlFor="my-size-filter"
+                className="text-sm font-normal cursor-pointer flex-1"
+              >
+                A ma taille ({preferredSize})
+              </Label>
+            </div>
+          </div>
+        )}
+
         {prices.length > 0 && (
           <div className="space-y-4">
             <h3 className="font-semibold text-sm">Prix maximum</h3>
@@ -297,7 +327,7 @@ export default function ProductFilters({ onFilterChange, initialFilters = {}, pr
               <h3 className="font-semibold text-sm capitalize">{attribute.name}</h3>
               <div className="space-y-2">
                 {sortedTerms.map((term) => (
-                  <div key={term.id} className="flex items-center space-x-2">
+                  <div key={`${attribute.slug}-${term.slug}`} className="flex items-center space-x-2">
                     <Checkbox
                       id={`${attribute.slug}-${term.slug}`}
                       checked={selectedFilters[attribute.slug]?.includes(term.name) || false}

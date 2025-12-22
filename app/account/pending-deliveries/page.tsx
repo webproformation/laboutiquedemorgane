@@ -183,7 +183,7 @@ export default function PendingDeliveriesPage() {
         <AlertTitle className="text-blue-900">Comment ça marche ?</AlertTitle>
         <AlertDescription className="text-blue-800">
           Lorsque vous créez un colis ouvert, vous avez 5 jours pour ajouter d&apos;autres produits sans payer de frais de livraison supplémentaires.
-          Vous pouvez valider manuellement le colis à tout moment, ou il sera automatiquement validé au bout de 5 jours.
+          Vous pouvez expédier le colis à tout moment, ou il sera automatiquement expédié au bout de 5 jours.
         </AlertDescription>
       </Alert>
 
@@ -285,7 +285,7 @@ export default function PendingDeliveriesPage() {
                     className="w-full bg-[#b8933d] hover:bg-[#a07c2f] text-white"
                   >
                     <Truck className="mr-2 h-4 w-4" />
-                    {validatingBatch === batch.id ? 'Validation en cours...' : 'Valider le colis maintenant'}
+                    {validatingBatch === batch.id ? 'Expédition en cours...' : 'Expédier le colis maintenant'}
                   </Button>
                   <p className="text-xs text-center text-gray-500">
                     Vous pouvez encore ajouter des produits à ce colis pendant {isExpired ? '0 jour' : timeLeft}

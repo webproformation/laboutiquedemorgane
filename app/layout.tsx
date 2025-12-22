@@ -31,7 +31,8 @@ export const metadata: Metadata = {
   title: 'La Boutique de Morgane - Live Shopping',
   description: 'Boutique en ligne avec live shopping interactif',
   icons: {
-    icon: '/favicon.ico',
+    icon: '/icon.png',
+    apple: '/apple-icon.png',
   },
   viewport: {
     width: 'device-width',

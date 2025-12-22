@@ -12,6 +12,8 @@ const ScratchCardGame = dynamic(() => import('@/components/ScratchCardGame'), { 
 const WheelGame = dynamic(() => import('@/components/WheelGame'), { ssr: false });
 const FeaturedProductsSlider = dynamic(() => import('@/components/FeaturedProductsSlider'), { ssr: false });
 const VideoShowcase = dynamic(() => import('@/components/VideoShowcase'), { ssr: false });
+const GuestbookSlider = dynamic(() => import('@/components/GuestbookSlider'), { ssr: false });
+const GuestbookCounters = dynamic(() => import('@/components/GuestbookCounters'), { ssr: false });
 const LiveStreamsSlider = dynamic(() => import('@/components/LiveStreamsSlider'), { ssr: false });
 const CustomerReviewsSlider = dynamic(() => import('@/components/CustomerReviewsSlider'), { ssr: false });
 
@@ -214,6 +216,8 @@ export default function Home() {
       <HomeCategories />
       <FeaturedProductsSlider key={`featured-${mountKey}`} />
       <VideoShowcase key={`video-${mountKey}`} />
+      <GuestbookSlider key={`guestbook-${mountKey}`} />
+      <GuestbookCounters key={`counters-${mountKey}`} />
       <LiveStreamsSlider key={`live-${mountKey}`} />
       <CustomerReviewsSlider />
     </>

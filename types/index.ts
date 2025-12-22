@@ -61,14 +61,17 @@ export interface Product {
   };
 }
 
-export interface CartItem extends Product {
+export interface CartItem extends Omit<Product, 'image'> {
   quantity: number;
-  variationId?: number;
+  variationId?: number | null;
   selectedAttributes?: Record<string, string>;
   variationImage?: {
     sourceUrl: string;
-  };
-  variationPrice?: string;
+  } | null;
+  variationPrice?: string | null;
+  image?: {
+    sourceUrl: string;
+  } | null;
 }
 
 export interface TimelineItem {

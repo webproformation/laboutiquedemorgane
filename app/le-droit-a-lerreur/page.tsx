@@ -61,26 +61,49 @@ export default function LeDroitALerreurPage() {
 
             <div>
               <h2 className="text-2xl font-semibold text-gray-900 mb-6">
-                La marche à suivre :
+                La marche à suivre (100 % autonome)
               </h2>
-              <ol className="space-y-4 text-gray-700">
+              <ol className="space-y-6 text-gray-700">
                 <li className="flex gap-4">
                   <span className="flex-shrink-0 flex items-center justify-center w-8 h-8 rounded-full bg-[#C6A15B] text-white font-semibold">1</span>
-                  <span className="pt-1">Envoyez un petit mail à <a href="mailto:contact@laboutiquedemorgane.com" className="text-[#C6A15B] hover:underline">contact@laboutiquedemorgane.com</a> avec votre numéro de commande en précisant si vous préférez un Avoir ou un Remboursement.</span>
+                  <div className="pt-1">
+                    <strong className="block mb-2">Déclarez votre retour :</strong>
+                    <span>Dans votre historique de commandes, cliquez sur « Déclarer un retour ». Sélectionnez vos articles et votre mode de dédommagement (avoir ou remboursement).</span>
+                  </div>
                 </li>
                 <li className="flex gap-4">
                   <span className="flex-shrink-0 flex items-center justify-center w-8 h-8 rounded-full bg-[#C6A15B] text-white font-semibold">2</span>
-                  <span className="pt-1">Nous vous validons le retour par email.</span>
+                  <div className="pt-1">
+                    <strong className="block mb-2">Préparez votre colis :</strong>
+                    <span>Glissez les articles (neufs, avec étiquettes) dans leur emballage. Joignez impérativement votre numéro de commande.</span>
+                  </div>
                 </li>
                 <li className="flex gap-4">
                   <span className="flex-shrink-0 flex items-center justify-center w-8 h-8 rounded-full bg-[#C6A15B] text-white font-semibold">3</span>
-                  <span className="pt-1">Glissez les articles (non portés, avec étiquettes) dans leur emballage.</span>
-                </li>
-                <li className="flex gap-4">
-                  <span className="flex-shrink-0 flex items-center justify-center w-8 h-8 rounded-full bg-[#C6A15B] text-white font-semibold">4</span>
-                  <span className="pt-1">Renvoyez-les-nous à l'adresse suivante : <strong>1062 Rue d'Armentières, 59850 Nieppe</strong></span>
+                  <div className="pt-1">
+                    <strong className="block mb-2">Expédiez à l'adresse exacte :</strong>
+                    <p className="mb-3">Renvoyez votre colis avec le transporteur de votre choix (frais à votre charge) à :</p>
+                    <div className="bg-gray-50 border-l-4 border-[#C6A15B] p-4 my-3">
+                      <p className="font-semibold">La Boutique de Morgane</p>
+                      <p>1062, Rue d'Armentières, 59850 Nieppe</p>
+                    </div>
+                    <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mt-4">
+                      <p className="text-sm">
+                        <strong>⚠️ Attention :</strong> Les colis doivent être livrés directement à notre adresse. Nous ne pouvons pas récupérer les colis en points relais ou en consignes. Tout colis non livré à l'adresse exacte sera retourné à l'expéditeur.
+                      </p>
+                    </div>
+                  </div>
                 </li>
               </ol>
+            </div>
+
+            <div className="bg-gradient-to-br from-pink-50 to-purple-50 border-2 border-pink-200 rounded-lg p-6">
+              <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                🎁 Note particulière sur nos cadeaux
+              </h2>
+              <p className="text-gray-700 leading-relaxed">
+                Nous sommes heureux de vous offrir une surprise dès que votre commande atteint 69 €. Si vous effectuez un retour et que le montant total de vos articles conservés devient inférieur à ce palier de 69€, nous vous demandons de bien vouloir glisser le cadeau dans votre colis de retour. Si vous souhaitez le garder, pas de souci ! Sa valeur sera simplement déduite de votre remboursement ou de votre avoir.
+              </p>
             </div>
 
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">

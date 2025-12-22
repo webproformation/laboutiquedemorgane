@@ -4,9 +4,10 @@ import { useState, useEffect, useMemo } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Plus, Search, Edit, Loader2, Upload, Filter, Eye, EyeOff, GripVertical } from 'lucide-react';
+import { Plus, Search, Edit, Loader2, Upload, Filter, Eye, EyeOff, GripVertical, Star, Gem } from 'lucide-react';
 import Link from 'next/link';
 import { toast } from 'sonner';
+import { supabase } from '@/lib/supabase-client';
 import {
   Select,
   SelectContent,
@@ -38,6 +39,12 @@ interface WooProduct {
   }>;
 }
 
+interface ProductFlags {
+  product_id: number;
+  is_active: boolean;
+  is_hidden_diamond: boolean;
+}
+
 export default function AdminProducts() {
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
@@ -45,10 +52,12 @@ export default function AdminProducts() {
   const [loading, setLoading] = useState(true);
   const [statusUpdating, setStatusUpdating] = useState<number | null>(null);
   const [statusFilter, setStatusFilter] = useState<'all' | 'publish' | 'draft'>('all');
+  const [productFlags, setProductFlags] = useState<Map<number, ProductFlags>>(new Map());
   const perPage = 10;
 
   useEffect(() => {
     loadProducts();
+    loadProductFlags();
   }, []);
 
   const loadProducts = async () => {
@@ -63,6 +72,92 @@ export default function AdminProducts() {
       toast.error('Erreur lors du chargement des produits');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadProductFlags = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('featured_products')
+        .select('product_id, is_active, is_hidden_diamond');
+
+      if (error) throw error;
+
+      const flagsMap = new Map<number, ProductFlags>();
+      data?.forEach((flag) => {
+        flagsMap.set(flag.product_id, {
+          product_id: flag.product_id,
+          is_active: flag.is_active,
+          is_hidden_diamond: flag.is_hidden_diamond,
+        });
+      });
+      setProductFlags(flagsMap);
+    } catch (error) {
+      console.error('Error loading product flags:', error);
+    }
+  };
+
+  const toggleFeatured = async (productId: number) => {
+    try {
+      const currentFlags = productFlags.get(productId);
+      const newIsActive = !currentFlags?.is_active;
+
+      if (currentFlags) {
+        const { error } = await supabase
+          .from('featured_products')
+          .update({ is_active: newIsActive })
+          .eq('product_id', productId);
+
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from('featured_products')
+          .insert({
+            product_id: productId,
+            is_active: newIsActive,
+            is_hidden_diamond: false,
+          });
+
+        if (error) throw error;
+      }
+
+      toast.success(newIsActive ? 'Produit ajouté aux vedettes' : 'Produit retiré des vedettes');
+      await loadProductFlags();
+    } catch (error) {
+      console.error('Error toggling featured:', error);
+      toast.error('Erreur lors de la mise à jour');
+    }
+  };
+
+  const toggleHiddenDiamond = async (productId: number) => {
+    try {
+      const currentFlags = productFlags.get(productId);
+      const newIsHiddenDiamond = !currentFlags?.is_hidden_diamond;
+
+      if (currentFlags) {
+        const { error } = await supabase
+          .from('featured_products')
+          .update({ is_hidden_diamond: newIsHiddenDiamond })
+          .eq('product_id', productId);
+
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from('featured_products')
+          .insert({
+            product_id: productId,
+            is_active: false,
+            is_hidden_diamond: newIsHiddenDiamond,
+          });
+
+        if (error) throw error;
+      }
+
+      toast.success(newIsHiddenDiamond ? 'Diamant caché activé' : 'Diamant caché désactivé');
+      await loadProductFlags();
+    } catch (error) {
+      console.error('Error toggling hidden diamond:', error);
+      toast.error('Erreur lors de la mise à jour');
     }
   };
 
@@ -196,12 +291,17 @@ export default function AdminProducts() {
                   <TableHead className="w-32">Prix</TableHead>
                   <TableHead className="w-32">Stock</TableHead>
                   <TableHead className="w-32">Statut Produit</TableHead>
+                  <TableHead className="w-24 text-center">Vedette</TableHead>
+                  <TableHead className="w-24 text-center">Diamant</TableHead>
                   <TableHead className="w-32">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {paginatedProducts.map((product) => {
                   const isDraft = product.status === 'draft';
+                  const flags = productFlags.get(product.id);
+                  const isFeatured = flags?.is_active || false;
+                  const isHiddenDiamond = flags?.is_hidden_diamond || false;
 
                   return (
                     <TableRow key={product.id} className={isDraft ? 'opacity-50' : ''}>
@@ -285,6 +385,40 @@ export default function AdminProducts() {
                             </Button>
                           </div>
                         )}
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => toggleFeatured(product.id)}
+                          className="hover:bg-yellow-50"
+                          title={isFeatured ? 'Retirer des vedettes' : 'Ajouter aux vedettes'}
+                        >
+                          <Star
+                            className={`w-5 h-5 ${
+                              isFeatured
+                                ? 'text-yellow-500 fill-yellow-500'
+                                : 'text-gray-300'
+                            }`}
+                          />
+                        </Button>
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => toggleHiddenDiamond(product.id)}
+                          className="hover:bg-blue-50"
+                          title={isHiddenDiamond ? 'Désactiver le diamant caché' : 'Activer le diamant caché'}
+                        >
+                          <Gem
+                            className={`w-5 h-5 ${
+                              isHiddenDiamond
+                                ? 'text-blue-500 fill-blue-500'
+                                : 'text-gray-300'
+                            }`}
+                          />
+                        </Button>
                       </TableCell>
                       <TableCell>
                         <Link href={`/admin/products/${product.id}`}>

@@ -13,7 +13,7 @@ export async function POST(request: NextRequest) {
   try {
     if (!WORDPRESS_URL || !WORDPRESS_USERNAME || !WORDPRESS_APP_PASSWORD) {
       return NextResponse.json(
-        { error: 'Configuration WordPress manquante' },
+        { success: false, error: 'Configuration WordPress manquante' },
         { status: 500 }
       );
     }
@@ -23,7 +23,7 @@ export async function POST(request: NextRequest) {
 
     if (!file) {
       return NextResponse.json(
-        { error: 'Aucun fichier fourni' },
+        { success: false, error: 'Aucun fichier fourni' },
         { status: 400 }
       );
     }
@@ -45,17 +45,22 @@ export async function POST(request: NextRequest) {
     if (!response.ok) {
       const errorData = await response.json();
       return NextResponse.json(
-        { error: errorData.message || 'Erreur lors de l\'upload' },
+        { success: false, error: errorData.message || 'Erreur lors de l\'upload' },
         { status: response.status }
       );
     }
 
     const uploadedMedia = await response.json();
 
-    return NextResponse.json(uploadedMedia);
+    return NextResponse.json({
+      success: true,
+      url: uploadedMedia.source_url,
+      id: uploadedMedia.id,
+      mediaDetails: uploadedMedia,
+    });
   } catch (error: any) {
     return NextResponse.json(
-      { error: error.message },
+      { success: false, error: error.message },
       { status: 500 }
     );
   }

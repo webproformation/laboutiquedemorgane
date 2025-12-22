@@ -1,6 +1,8 @@
 "use client";
 
+import { useState, useEffect } from 'react';
 import { useCart } from '@/context/CartContext';
+import { useAuth } from '@/context/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Trash2, Plus, Minus, ShoppingBag, ArrowLeft, Info } from 'lucide-react';
@@ -9,11 +11,76 @@ import Link from 'next/link';
 import { Separator } from '@/components/ui/separator';
 import { formatPrice, parsePrice } from '@/lib/utils';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import dynamic from 'next/dynamic';
+import { supabase } from '@/lib/supabase-client';
+
+const WalletSelector = dynamic(() => import('@/components/WalletSelector'), {
+  ssr: false,
+});
 
 const MINIMUM_ORDER_AMOUNT = 10;
 
 export default function CartPage() {
   const { cart, removeFromCart, updateQuantity, cartTotal, clearCart } = useCart();
+  const { user } = useAuth();
+  const [walletAmount, setWalletAmount] = useState(0);
+  const [finalTotal, setFinalTotal] = useState(cartTotal);
+  const [isFirstOrder, setIsFirstOrder] = useState(true);
+  const [isCheckingFirstOrder, setIsCheckingFirstOrder] = useState(true);
+
+  useEffect(() => {
+    const savedWalletAmount = localStorage.getItem('cart_wallet_amount');
+    if (savedWalletAmount) {
+      const amount = parseFloat(savedWalletAmount);
+      if (amount > 0 && amount <= cartTotal) {
+        setWalletAmount(amount);
+      } else {
+        localStorage.removeItem('cart_wallet_amount');
+      }
+    }
+  }, [cartTotal]);
+
+  useEffect(() => {
+    setFinalTotal(Math.max(0, cartTotal - walletAmount));
+  }, [cartTotal, walletAmount]);
+
+  useEffect(() => {
+    const checkIfFirstOrder = async () => {
+      if (!user) {
+        setIsCheckingFirstOrder(false);
+        setIsFirstOrder(true);
+        return;
+      }
+
+      try {
+        const { data, error } = await supabase
+          .from('orders')
+          .select('id', { count: 'exact', head: true })
+          .eq('user_id', user.id)
+          .in('status', ['processing', 'completed', 'shipped']);
+
+        if (!error) {
+          setIsFirstOrder((data?.length || 0) === 0);
+        }
+      } catch (error) {
+        console.error('Error checking first order:', error);
+        setIsFirstOrder(true);
+      } finally {
+        setIsCheckingFirstOrder(false);
+      }
+    };
+
+    checkIfFirstOrder();
+  }, [user]);
+
+  const handleWalletAmountChange = (amount: number) => {
+    setWalletAmount(amount);
+    if (amount > 0) {
+      localStorage.setItem('cart_wallet_amount', amount.toString());
+    } else {
+      localStorage.removeItem('cart_wallet_amount');
+    }
+  };
 
   if (cart.length === 0) {
     return (
@@ -155,8 +222,12 @@ export default function CartPage() {
 
               <div className="space-y-2">
                 <div className="flex justify-between text-sm">
-                  <span className="text-gray-600">Sous-total</span>
-                  <span className="font-medium">{cartTotal.toFixed(2)} €</span>
+                  <span className="text-gray-600">Sous-total HT</span>
+                  <span className="font-medium">{(cartTotal / 1.20).toFixed(2)} €</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-600">TVA (20%)</span>
+                  <span className="font-medium">{(cartTotal - (cartTotal / 1.20)).toFixed(2)} €</span>
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-gray-600">Frais de port</span>
@@ -167,16 +238,36 @@ export default function CartPage() {
               <Separator />
 
               <div className="flex justify-between text-lg font-bold">
-                <span>Total</span>
+                <span>Total TTC</span>
                 <span className="text-[#b8933d]">{cartTotal.toFixed(2)} €</span>
               </div>
 
-              {cartTotal < MINIMUM_ORDER_AMOUNT && (
+              <WalletSelector
+                cartTotal={cartTotal}
+                onWalletAmountChange={handleWalletAmountChange}
+                currentWalletAmount={walletAmount}
+              />
+
+              {walletAmount > 0 && (
+                <div className="bg-green-50 border border-green-200 rounded-md p-3">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-green-800">Cagnotte utilisée</span>
+                    <span className="font-semibold text-green-900">-{walletAmount.toFixed(2)} €</span>
+                  </div>
+                  <Separator className="my-2 bg-green-200" />
+                  <div className="flex justify-between text-base font-bold">
+                    <span className="text-gray-900">Reste à payer</span>
+                    <span className="text-[#b8933d]">{finalTotal.toFixed(2)} €</span>
+                  </div>
+                </div>
+              )}
+
+              {isFirstOrder && finalTotal < MINIMUM_ORDER_AMOUNT && (
                 <Alert className="bg-orange-50 border-orange-200">
                   <Info className="h-4 w-4 text-orange-600" />
                   <AlertDescription className="text-sm text-orange-800">
-                    Montant minimum : {MINIMUM_ORDER_AMOUNT.toFixed(2)} €<br />
-                    Il vous manque {(MINIMUM_ORDER_AMOUNT - cartTotal).toFixed(2)} €
+                    Pour votre première commande, le montant minimum est de {MINIMUM_ORDER_AMOUNT.toFixed(2)} €<br />
+                    Il vous manque {(MINIMUM_ORDER_AMOUNT - finalTotal).toFixed(2)} €
                   </AlertDescription>
                 </Alert>
               )}
@@ -185,7 +276,7 @@ export default function CartPage() {
                 <Button
                   className="w-full bg-[#b8933d] hover:bg-[#a07c2f] text-white"
                   size="lg"
-                  disabled={cartTotal < MINIMUM_ORDER_AMOUNT}
+                  disabled={isFirstOrder && finalTotal < MINIMUM_ORDER_AMOUNT}
                 >
                   Passer la commande
                 </Button>

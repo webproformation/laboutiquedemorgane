@@ -55,7 +55,9 @@ export default function RichTextEditor({
           className="prose prose-sm max-w-none p-4 border rounded-md min-h-[150px] bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
           data-placeholder={placeholder}
           style={{
-            minHeight: `${rows * 24}px`
+            minHeight: `${rows * 24}px`,
+            direction: 'ltr',
+            textAlign: 'left'
           }}
         />
       );
@@ -69,7 +71,9 @@ export default function RichTextEditor({
         onBlur={handlePreviewBlur}
         className="prose prose-sm max-w-none p-4 border rounded-md min-h-[150px] bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
         style={{
-          minHeight: `${rows * 24}px`
+          minHeight: `${rows * 24}px`,
+          direction: 'ltr',
+          textAlign: 'left'
         }}
       />
     );
