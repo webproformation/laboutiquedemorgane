@@ -161,13 +161,25 @@ export default function AdminOrders() {
   const sendInvoiceEmail = async (invoiceId: string) => {
     setSendingInvoice(invoiceId);
     try {
+      console.log('Sending invoice email for:', invoiceId);
       const response = await fetch('/api/invoices/send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ invoiceId, resend: true }),
       });
 
-      const data = await response.json();
+      console.log('Response status:', response.status);
+
+      let data;
+      try {
+        data = await response.json();
+        console.log('Response data:', data);
+      } catch (parseError) {
+        console.error('Failed to parse response:', parseError);
+        const text = await response.text();
+        console.error('Response text:', text);
+        throw new Error('Invalid server response');
+      }
 
       if (response.ok) {
         toast.success('Bon de commande envoyé avec succès');
@@ -183,15 +195,18 @@ export default function AdminOrders() {
           ),
         }));
       } else {
-        const errorMsg = data.details
+        const errorMsg = data?.details
           ? `${data.error}: ${data.details}`
-          : data.error || 'Erreur lors de l\'envoi';
-        toast.error(errorMsg);
-        console.error('Send invoice error:', data);
+          : data?.error || 'Erreur lors de l\'envoi';
+        toast.error(errorMsg, { duration: 10000 });
+        console.error('Send invoice error:', {
+          status: response.status,
+          data
+        });
       }
     } catch (error) {
-      toast.error('Erreur lors de l\'envoi du bon de commande');
       console.error('Send invoice exception:', error);
+      toast.error('Erreur lors de l\'envoi du bon de commande: ' + (error as Error).message);
     } finally {
       setSendingInvoice(null);
     }
