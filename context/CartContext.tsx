@@ -47,20 +47,26 @@ export function CartProvider({ children }: { children: ReactNode }) {
       }
 
       return data.map((item: any) => {
+        if (!item?.product_id || !item?.product_name) {
+          console.error('Invalid cart item from database:', item);
+          return null;
+        }
+
         const variationData = item.variation_data || {};
-        return {
-          id: item.product_id,
-          name: item.product_name,
-          slug: item.product_slug,
-          price: item.product_price,
-          image: item.product_image_url ? { sourceUrl: item.product_image_url } : null,
-          quantity: item.quantity,
-          variationId: variationData.variationId || null,
-          variationPrice: variationData.variationPrice || null,
-          variationImage: variationData.variationImage || null,
+        const cartItem: CartItem = {
+          id: item.product_id || '',
+          name: item.product_name || 'Unknown Product',
+          slug: item.product_slug || '',
+          price: item.product_price || '0',
+          image: item.product_image_url ? { sourceUrl: item.product_image_url } : undefined,
+          quantity: item.quantity || 1,
+          variationId: item.variation_id || variationData.variationId || undefined,
+          variationPrice: variationData.variationPrice || undefined,
+          variationImage: variationData.variationImage || undefined,
           selectedAttributes: variationData.selectedAttributes || {},
         };
-      });
+        return cartItem;
+      }).filter((item): item is CartItem => item !== null);
     } catch (error) {
       console.error('Error loading cart:', error);
       return [];
@@ -68,33 +74,85 @@ export function CartProvider({ children }: { children: ReactNode }) {
   }, [user]);
 
   const syncCartToSupabase = useCallback(async (cartItems: CartItem[]) => {
-    if (!user || isSyncing) return;
+    if (!user?.id || isSyncing) return;
 
     setIsSyncing(true);
     try {
-      await supabase
+      const { data: existingItems } = await supabase
         .from('cart_items')
-        .delete()
+        .select('product_id, variation_id')
         .eq('user_id', user.id);
 
-      if (cartItems.length > 0) {
-        const itemsToInsert = cartItems.map((item) => ({
-          user_id: user.id,
-          product_id: item.id,
-          product_name: item.name,
-          product_slug: item.slug,
-          product_price: item.variationPrice || item.price,
-          product_image_url: item.image?.sourceUrl || null,
-          quantity: item.quantity,
-          variation_data: (item.variationId || item.selectedAttributes) ? {
-            variationId: item.variationId || null,
-            variationPrice: item.variationPrice || null,
-            variationImage: item.variationImage || null,
-            selectedAttributes: item.selectedAttributes || null,
-          } : null,
-        }));
+      const existingKeys = new Set(
+        (existingItems || []).map(item =>
+          `${item.product_id}_${item.variation_id || ''}`
+        )
+      );
 
-        await supabase.from('cart_items').insert(itemsToInsert);
+      const currentKeys = new Set(
+        cartItems.map(item =>
+          `${item.id}_${item.variationId || ''}`
+        )
+      );
+
+      const keysToDelete = Array.from(existingKeys).filter(key => !currentKeys.has(key));
+
+      if (keysToDelete.length > 0) {
+        for (const key of keysToDelete) {
+          const [productId, variationId] = key.split('_');
+          let query = supabase
+            .from('cart_items')
+            .delete()
+            .eq('user_id', user.id)
+            .eq('product_id', productId);
+
+          if (variationId) {
+            query = query.eq('variation_id', variationId);
+          } else {
+            query = query.is('variation_id', null);
+          }
+
+          await query;
+        }
+      }
+
+      if (cartItems.length > 0) {
+        const itemsToUpsert = cartItems.map((item) => {
+          if (!item?.id || !item?.name || !item?.slug || !(item?.price || item?.variationPrice)) {
+            console.error('Invalid cart item:', item);
+            return null;
+          }
+
+          return {
+            user_id: user.id,
+            product_id: item.id,
+            product_name: item.name,
+            product_slug: item.slug,
+            product_price: item.variationPrice || item.price || '0',
+            product_image_url: item.image?.sourceUrl || null,
+            quantity: item.quantity || 1,
+            variation_id: item.variationId || null,
+            variation_data: (item.variationId || item.selectedAttributes) ? {
+              variationId: item.variationId || null,
+              variationPrice: item.variationPrice || null,
+              variationImage: item.variationImage || null,
+              selectedAttributes: item.selectedAttributes || {},
+            } : null,
+          };
+        }).filter(item => item !== null);
+
+        if (itemsToUpsert.length > 0) {
+          const { error } = await supabase
+            .from('cart_items')
+            .upsert(itemsToUpsert, {
+              onConflict: 'user_id,product_id,variation_id',
+              ignoreDuplicates: false,
+            });
+
+          if (error) {
+            console.error('Error upserting cart items:', error);
+          }
+        }
       }
     } catch (error) {
       console.error('Error syncing cart to Supabase:', error);
@@ -162,14 +220,23 @@ export function CartProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!isInitialized) return;
 
-    if (user) {
-      syncCartToSupabase(cart);
-    } else {
-      localStorage.setItem('cart', JSON.stringify(cart));
-    }
+    const syncTimer = setTimeout(() => {
+      if (user) {
+        syncCartToSupabase(cart);
+      } else {
+        localStorage.setItem('cart', JSON.stringify(cart));
+      }
+    }, 500);
+
+    return () => clearTimeout(syncTimer);
   }, [cart, isInitialized, user, syncCartToSupabase]);
 
   const addToCart = (product: Product, quantity: number = 1) => {
+    if (!product?.id || !product?.name || !product?.slug || !product?.price) {
+      console.error('Invalid product data:', product);
+      return;
+    }
+
     setCart((prevCart) => {
       const existingItem = prevCart.find((item) => item.id === product.id);
       if (existingItem) {
@@ -204,11 +271,21 @@ export function CartProvider({ children }: { children: ReactNode }) {
   };
 
   const cartTotal = cart.reduce((total, item) => {
-    const price = parsePrice(item.variationPrice || item.price);
-    return total + price * item.quantity;
+    if (!item) return total;
+    try {
+      const price = parsePrice(item.variationPrice || item.price);
+      const quantity = item.quantity || 0;
+      return total + (price * quantity);
+    } catch (error) {
+      console.error('Error calculating cart item price:', item, error);
+      return total;
+    }
   }, 0);
 
-  const cartItemCount = cart.reduce((count, item) => count + item.quantity, 0);
+  const cartItemCount = cart.reduce((count, item) => {
+    if (!item) return count;
+    return count + (item.quantity || 0);
+  }, 0);
 
   return (
     <CartContext.Provider
