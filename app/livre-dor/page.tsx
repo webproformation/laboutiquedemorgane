@@ -126,7 +126,6 @@ export default function LivreDorPage() {
           <div className="bg-white dark:bg-gray-900 p-4 rounded-lg my-4">
             <p className="text-base font-semibold mb-2">🎁 Pour vous remercier de votre fidélité :</p>
             <p className="text-sm">• 0,20 € offerts dans votre cagnotte pour chaque mot doux déposé.</p>
-            <p className="text-sm">• 0,50 € si vous ajoutez une photo de vous avec vos achats !</p>
           </div>
           <p className="text-base leading-relaxed">
             Merci de faire partie de cette aventure avec nous. Nous avons hâte de vous lire !
@@ -184,7 +183,7 @@ export default function LivreDorPage() {
               <div>
                 <h3 className="text-lg font-bold mb-3">4. Récompenses et Équité</h3>
                 <p className="text-sm leading-relaxed">
-                  La récompense créditée sur votre cagnotte (0,20€ ou 0,50€ avec photo) est offerte en remerciement du temps accordé pour partager votre expérience. Elle n&apos;est en aucun cas conditionnée par l&apos;obtention d&apos;une note positive.
+                  La récompense créditée sur votre cagnotte (0,20€) est offerte en remerciement du temps accordé pour partager votre expérience. Elle n&apos;est en aucun cas conditionnée par l&apos;obtention d&apos;une note positive.
                 </p>
               </div>
 

@@ -114,7 +114,7 @@ export function GuestbookForm({ orderId, orderNumber, onSuccess }: GuestbookForm
         message: message.trim(),
         photo_url: photoUrl,
         rgpd_consent: rgpdConsent,
-        reward_amount: photoUrl ? 0.50 : 0.20,
+        reward_amount: 0.20,
       });
 
       if (error) {
@@ -150,7 +150,7 @@ export function GuestbookForm({ orderId, orderNumber, onSuccess }: GuestbookForm
           Signer le Livre d&apos;Or
         </CardTitle>
         <CardDescription>
-          Partagez votre expérience et gagnez 0,20 € (ou 0,50 € avec photo) dans votre cagnotte !
+          Partagez votre expérience et gagnez 0,20 € dans votre cagnotte !
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -217,7 +217,7 @@ export function GuestbookForm({ orderId, orderNumber, onSuccess }: GuestbookForm
 
           <div>
             <Label className="text-sm font-medium mb-2 block">
-              Ajoutez une photo (optionnel) +0,30 € de bonus
+              Ajoutez une photo (optionnel)
             </Label>
             {!photoPreview ? (
               <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-lg cursor-pointer hover:bg-accent/50 transition-colors">
@@ -273,8 +273,7 @@ export function GuestbookForm({ orderId, orderNumber, onSuccess }: GuestbookForm
           <div className="bg-blue-50 dark:bg-blue-950/30 p-4 rounded-lg border border-blue-200 dark:border-blue-800">
             <p className="text-sm text-blue-800 dark:text-blue-200">
               <strong>À savoir :</strong> Pour garantir l&apos;authenticité du Livre d&apos;Or, votre message
-              sera publié après une vérification anti-spam (48-72h). Votre récompense de{" "}
-              {photoFile ? "0,50 €" : "0,20 €"} sera créditée automatiquement après validation par notre équipe.
+              sera publié après une vérification anti-spam (48-72h). Votre récompense de 0,20 € sera créditée automatiquement après validation par notre équipe.
             </p>
           </div>
 
