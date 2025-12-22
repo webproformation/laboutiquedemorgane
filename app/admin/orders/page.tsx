@@ -167,6 +167,8 @@ export default function AdminOrders() {
         body: JSON.stringify({ invoiceId, resend: true }),
       });
 
+      const data = await response.json();
+
       if (response.ok) {
         toast.success('Bon de commande envoyé avec succès');
         // Update invoice sent_at
@@ -181,12 +183,15 @@ export default function AdminOrders() {
           ),
         }));
       } else {
-        const data = await response.json();
-        toast.error(data.error || 'Erreur lors de l\'envoi');
+        const errorMsg = data.details
+          ? `${data.error}: ${data.details}`
+          : data.error || 'Erreur lors de l\'envoi';
+        toast.error(errorMsg);
+        console.error('Send invoice error:', data);
       }
     } catch (error) {
       toast.error('Erreur lors de l\'envoi du bon de commande');
-      console.error(error);
+      console.error('Send invoice exception:', error);
     } finally {
       setSendingInvoice(null);
     }

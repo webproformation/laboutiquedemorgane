@@ -27,10 +27,21 @@ export async function POST(request: Request) {
     );
 
     if (!response.ok) {
-      const errorText = await response.text();
-      console.error('Send invoice error:', errorText);
+      let errorDetails;
+      try {
+        errorDetails = await response.json();
+      } catch {
+        errorDetails = { error: await response.text() };
+      }
+      console.error('Send invoice error:', {
+        status: response.status,
+        details: errorDetails
+      });
       return NextResponse.json(
-        { error: 'Failed to send invoice' },
+        {
+          error: errorDetails.error || 'Failed to send invoice',
+          details: errorDetails.details
+        },
         { status: response.status }
       );
     }

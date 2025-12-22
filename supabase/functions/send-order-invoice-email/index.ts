@@ -15,6 +15,14 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
+    if (!BREVO_API_KEY) {
+      console.error('BREVO_API_KEY is not configured');
+      return new Response(
+        JSON.stringify({ error: 'Email service not configured' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
@@ -61,14 +69,45 @@ Deno.serve(async (req: Request) => {
       .from('order-documents')
       .download(fileName);
 
-    if (downloadError || !fileData) {
+    if (downloadError) {
+      console.error('Download error:', downloadError);
       return new Response(
-        JSON.stringify({ error: 'Invoice file not found' }),
+        JSON.stringify({
+          error: 'Invoice file not found',
+          details: downloadError.message
+        }),
         { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    const invoiceData = JSON.parse(await fileData.text());
+    if (!fileData) {
+      return new Response(
+        JSON.stringify({ error: 'Invoice file is empty' }),
+        { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    let invoiceData;
+    try {
+      const fileText = await fileData.text();
+      invoiceData = JSON.parse(fileText);
+
+      if (!invoiceData.html) {
+        return new Response(
+          JSON.stringify({ error: 'Invoice HTML content is missing' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+    } catch (parseError: any) {
+      console.error('Parse error:', parseError);
+      return new Response(
+        JSON.stringify({
+          error: 'Failed to parse invoice data',
+          details: parseError.message
+        }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
 
     // Send email via Brevo
     const emailData = {
@@ -145,7 +184,7 @@ Deno.serve(async (req: Request) => {
       method: 'POST',
       headers: {
         'accept': 'application/json',
-        'api-key': BREVO_API_KEY || '',
+        'api-key': BREVO_API_KEY,
         'content-type': 'application/json'
       },
       body: JSON.stringify(emailData)
@@ -153,7 +192,18 @@ Deno.serve(async (req: Request) => {
 
     if (!brevoResponse.ok) {
       const errorData = await brevoResponse.text();
-      throw new Error(`Brevo API error: ${errorData}`);
+      console.error('Brevo API error:', {
+        status: brevoResponse.status,
+        statusText: brevoResponse.statusText,
+        body: errorData
+      });
+      return new Response(
+        JSON.stringify({
+          error: 'Failed to send email',
+          details: `Brevo returned ${brevoResponse.status}: ${errorData}`
+        }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
 
     // Update sent_at timestamp

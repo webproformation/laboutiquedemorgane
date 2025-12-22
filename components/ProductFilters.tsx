@@ -12,6 +12,8 @@ import { useAuth } from '@/context/AuthContext';
 import { useClientSize } from '@/hooks/use-client-size';
 import { supabase } from '@/lib/supabase-client';
 import { parsePrice } from '@/lib/utils';
+import { isColorAttribute } from '@/lib/colors';
+import ColorSwatch from '@/components/ColorSwatch';
 
 interface AttributeTerm {
   id: number;
@@ -307,6 +309,8 @@ export default function ProductFilters({ onFilterChange, initialFilters = {}, pr
                                  attribute.name.toLowerCase().includes('size') ||
                                  attribute.name.toLowerCase().includes('tailles');
 
+          const isColor = isColorAttribute(attribute.name) || isColorAttribute(attribute.slug);
+
           const sortedTerms = isSizeAttribute
             ? [...attribute.terms].sort((a, b) => {
                 const aUpper = a.name.toUpperCase();
@@ -326,28 +330,50 @@ export default function ProductFilters({ onFilterChange, initialFilters = {}, pr
           return (
             <div key={attribute.id} className="space-y-3">
               <h3 className="font-semibold text-sm capitalize">{attribute.name}</h3>
-              <div className="space-y-2">
-                {sortedTerms.map((term) => (
-                  <div key={`${attribute.slug}-${term.slug}`} className="flex items-center space-x-2">
-                    <Checkbox
-                      id={`${attribute.slug}-${term.slug}`}
-                      checked={selectedFilters[attribute.slug]?.includes(term.name) || false}
-                      onCheckedChange={(checked) =>
-                        handleFilterChange(attribute.slug, term.name, checked as boolean)
-                      }
-                    />
-                    <Label
-                      htmlFor={`${attribute.slug}-${term.slug}`}
-                      className="text-sm font-normal cursor-pointer flex-1 capitalize"
-                    >
-                      {term.name}
-                      {term.count > 0 && (
-                        <span className="text-muted-foreground ml-1">({term.count})</span>
-                      )}
-                    </Label>
-                  </div>
-                ))}
-              </div>
+              {isColor ? (
+                <div className="flex flex-wrap gap-3">
+                  {sortedTerms.map((term) => (
+                    <div key={`${attribute.slug}-${term.slug}`} className="flex flex-col items-center gap-1">
+                      <ColorSwatch
+                        color={term.name}
+                        isSelected={selectedFilters[attribute.slug]?.includes(term.name) || false}
+                        onClick={() =>
+                          handleFilterChange(
+                            attribute.slug,
+                            term.name,
+                            !(selectedFilters[attribute.slug]?.includes(term.name) || false)
+                          )
+                        }
+                        size="md"
+                      />
+                      <span className="text-xs text-muted-foreground capitalize">{term.name}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {sortedTerms.map((term) => (
+                    <div key={`${attribute.slug}-${term.slug}`} className="flex items-center space-x-2">
+                      <Checkbox
+                        id={`${attribute.slug}-${term.slug}`}
+                        checked={selectedFilters[attribute.slug]?.includes(term.name) || false}
+                        onCheckedChange={(checked) =>
+                          handleFilterChange(attribute.slug, term.name, checked as boolean)
+                        }
+                      />
+                      <Label
+                        htmlFor={`${attribute.slug}-${term.slug}`}
+                        className="text-sm font-normal cursor-pointer flex-1 capitalize"
+                      >
+                        {term.name}
+                        {term.count > 0 && (
+                          <span className="text-muted-foreground ml-1">({term.count})</span>
+                        )}
+                      </Label>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           );
         })}
