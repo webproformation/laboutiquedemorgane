@@ -195,51 +195,97 @@ export default function AdminOrders() {
   const viewInvoice = async (orderId: number) => {
     try {
       const response = await fetch(`/api/invoices?orderId=${orderId}`);
+      if (!response.ok) {
+        throw new Error('Erreur lors de la récupération de la facture');
+      }
+
       const data = await response.json();
       const invoice = data.invoices?.[0];
 
-      if (invoice?.pdf_url) {
-        // Fetch the invoice JSON
-        const invoiceResponse = await fetch(invoice.pdf_url);
-        const invoiceData = await invoiceResponse.json();
+      if (!invoice) {
+        toast.error('Aucune facture trouvée pour cette commande');
+        return;
+      }
 
-        // Open HTML in new window
-        const printWindow = window.open('', '_blank');
-        if (printWindow) {
-          printWindow.document.write(invoiceData.html);
-          printWindow.document.close();
-        }
+      if (!invoice.pdf_url) {
+        toast.error('URL de la facture manquante');
+        return;
+      }
+
+      // Fetch the invoice JSON
+      const invoiceResponse = await fetch(invoice.pdf_url);
+      if (!invoiceResponse.ok) {
+        throw new Error('Impossible de charger le document');
+      }
+
+      const invoiceData = await invoiceResponse.json();
+
+      if (!invoiceData.html) {
+        toast.error('Le document est invalide');
+        return;
+      }
+
+      // Open HTML in new window
+      const printWindow = window.open('', '_blank');
+      if (printWindow) {
+        printWindow.document.write(invoiceData.html);
+        printWindow.document.close();
+      } else {
+        toast.error('Le popup a été bloqué par votre navigateur');
       }
     } catch (error) {
       toast.error('Erreur lors de l\'ouverture du bon de commande');
-      console.error(error);
+      console.error('View invoice error:', error);
     }
   };
 
   const downloadInvoice = async (orderId: number) => {
     try {
       const response = await fetch(`/api/invoices?orderId=${orderId}`);
+      if (!response.ok) {
+        throw new Error('Erreur lors de la récupération de la facture');
+      }
+
       const data = await response.json();
       const invoice = data.invoices?.[0];
 
-      if (invoice?.pdf_url) {
-        const invoiceResponse = await fetch(invoice.pdf_url);
-        const invoiceData = await invoiceResponse.json();
-
-        // Create a blob and download
-        const blob = new Blob([invoiceData.html], { type: 'text/html' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `bon-commande-${invoice.invoice_number}.html`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
+      if (!invoice) {
+        toast.error('Aucune facture trouvée pour cette commande');
+        return;
       }
+
+      if (!invoice.pdf_url) {
+        toast.error('URL de la facture manquante');
+        return;
+      }
+
+      const invoiceResponse = await fetch(invoice.pdf_url);
+      if (!invoiceResponse.ok) {
+        throw new Error('Impossible de charger le document');
+      }
+
+      const invoiceData = await invoiceResponse.json();
+
+      if (!invoiceData.html) {
+        toast.error('Le document est invalide');
+        return;
+      }
+
+      // Create a blob and download
+      const blob = new Blob([invoiceData.html], { type: 'text/html' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `bon-commande-${invoice.invoice_number}.html`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      toast.success('Téléchargement réussi');
     } catch (error) {
       toast.error('Erreur lors du téléchargement du bon de commande');
-      console.error(error);
+      console.error('Download error:', error);
     }
   };
 
