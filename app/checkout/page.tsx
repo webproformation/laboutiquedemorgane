@@ -489,7 +489,7 @@ export default function CheckoutPage() {
                 'Content-Type': 'application/json',
               },
               body: JSON.stringify({
-                amount: Math.round(paymentAmount * 100),
+                amount: paymentAmount,
                 currency: 'eur',
                 description: 'Mon colis ouvert - Première commande',
               }),
@@ -639,7 +639,7 @@ export default function CheckoutPage() {
                 'Content-Type': 'application/json',
               },
               body: JSON.stringify({
-                amount: Math.round(paymentAmount * 100),
+                amount: paymentAmount,
                 currency: 'eur',
                 description: 'Mon colis ouvert - Produits supplémentaires',
               }),

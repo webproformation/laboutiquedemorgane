@@ -73,6 +73,14 @@ export default function ProductCard({ product }: ProductCardProps) {
     }
   };
 
+  const hasSelectableAttributes = () => {
+    const isVariable = product.__typename === 'VariableProduct';
+    if (isVariable) return true;
+
+    const attributes = product.attributes?.nodes || [];
+    return attributes.some((attr: any) => !attr.variation && attr.options && attr.options.length > 0);
+  };
+
   const handleAddToCart = (e: React.MouseEvent) => {
     e.preventDefault();
     addToCart(product);
@@ -350,6 +358,14 @@ export default function ProductCard({ product }: ProductCardProps) {
               >
                 <Bell className="mr-1 h-4 w-4" />
                 Notifier
+              </Button>
+            ) : hasSelectableAttributes() ? (
+              <Button
+                size="sm"
+                className="bg-[#b8933d] hover:bg-[#a07c2f] text-white pointer-events-none"
+              >
+                <Ruler className="mr-1 h-4 w-4" />
+                Sélectionner
               </Button>
             ) : (
               <Button

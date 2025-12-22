@@ -72,7 +72,7 @@ Deno.serve(async (req: Request) => {
       body: new URLSearchParams({
         amount: Math.round(amount * 100).toString(),
         currency: currency,
-        "metadata[order_id]": orderId,
+        ...(orderId && { "metadata[order_id]": orderId }),
         "metadata[user_id]": user.id,
       }),
     });
@@ -85,12 +85,14 @@ Deno.serve(async (req: Request) => {
 
     const paymentIntent = await stripeResponse.json();
 
-    await supabaseClient
-      .from("orders")
-      .update({ 
-        stripe_payment_intent_id: paymentIntent.id,
-      })
-      .eq("id", orderId);
+    if (orderId) {
+      await supabaseClient
+        .from("orders")
+        .update({
+          stripe_payment_intent_id: paymentIntent.id,
+        })
+        .eq("id", orderId);
+    }
 
     return new Response(
       JSON.stringify({ 

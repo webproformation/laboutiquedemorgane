@@ -549,6 +549,78 @@ export default function ProductPage({ params }: { params: Promise<{ slug: string
                 </div>
               )}
 
+              {!isVariable && (product.attributes?.nodes && product.attributes.nodes.filter((attr: any) => !attr.variation).length > 0) && (
+                <div className="border-t border-gray-200 pt-6">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-3">Sélectionnez vos options</h3>
+                  <div className="grid grid-cols-1 gap-4">
+                    {product.attributes.nodes.filter((attr: any) => !attr.variation).map((attr: any, index: number) => {
+                      const isSizeAttribute = attr.name.toLowerCase().includes('taille');
+                      const isColorAttr = isColorAttribute(attr.name);
+                      const sortedOptions = isSizeAttribute ? sortSizes(attr.options || []) : (attr.options || []);
+                      const normalizedAttrName = attr.name.replace(/^pa_/, '');
+                      const isSelected = selectedCharacteristics[normalizedAttrName];
+
+                      return (
+                        <div key={index} className="space-y-2">
+                          <div className="flex items-center justify-between">
+                            <label className="text-sm font-medium text-gray-700">
+                              {formatAttributeName(attr.name)} <span className="text-red-500">*</span>
+                            </label>
+                            {isSelected && (
+                              <span className="text-xs text-[#b8933d] font-medium">
+                                Sélectionné : {isSelected}
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            {sortedOptions.map((option: string, optIndex: number) => {
+                              const isOptionSelected = selectedCharacteristics[normalizedAttrName] === option;
+
+                              if (isColorAttr) {
+                                return (
+                                  <div key={optIndex} className="relative">
+                                    <ColorSwatch
+                                      color={option}
+                                      isSelected={isOptionSelected}
+                                      onClick={() => {
+                                        setSelectedCharacteristics(prev => ({
+                                          ...prev,
+                                          [normalizedAttrName]: option
+                                        }));
+                                      }}
+                                      size="md"
+                                    />
+                                  </div>
+                                );
+                              }
+
+                              return (
+                                <button
+                                  key={optIndex}
+                                  onClick={() => {
+                                    setSelectedCharacteristics(prev => ({
+                                      ...prev,
+                                      [normalizedAttrName]: option
+                                    }));
+                                  }}
+                                  className={`inline-flex items-center px-4 py-2 border-2 rounded-lg text-sm font-medium transition-all ${
+                                    isOptionSelected
+                                      ? 'border-[#b8933d] bg-[#b8933d] text-white shadow-md'
+                                      : 'border-gray-300 bg-white text-gray-700 hover:border-[#b8933d] hover:bg-[#b8933d]/5'
+                                  }`}
+                                >
+                                  {option}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
               <div className="border-t border-gray-200 pt-6 space-y-4">
                 <div className="flex items-center gap-4">
                   <label htmlFor="quantity" className="text-sm font-medium text-gray-700">
@@ -580,30 +652,58 @@ export default function ProductPage({ params }: { params: Promise<{ slug: string
                   </div>
                 </div>
 
-                {(isVariable && !selectedVariation) ? (
-                  <Button
-                    disabled
-                    className="w-full bg-gray-400 text-white h-12 text-lg font-semibold cursor-not-allowed"
-                  >
-                    Veuillez sélectionner une option
-                  </Button>
-                ) : !isProductInStock ? (
-                  <Button
-                    onClick={handleNotifyAvailability}
-                    className="w-full bg-[#B6914A] hover:bg-[#a07c2f] text-white h-12 text-lg font-semibold"
-                  >
-                    <Bell className="mr-2 h-5 w-5" />
-                    Me notifier quand disponible
-                  </Button>
-                ) : (
-                  <Button
-                    onClick={handleAddToCart}
-                    className="w-full bg-[#b8933d] hover:bg-[#a07c2f] text-white h-12 text-lg font-semibold"
-                  >
-                    <ShoppingCart className="mr-2 h-5 w-5" />
-                    Ajouter au panier
-                  </Button>
-                )}
+                {(() => {
+                  const simpleProductAttributes = !isVariable ? (product.attributes?.nodes?.filter((attr: any) => !attr.variation) || []) : [];
+                  const hasRequiredAttributes = simpleProductAttributes.length > 0;
+                  const allAttributesSelected = simpleProductAttributes.every((attr: any) => {
+                    const normalizedAttrName = attr.name.replace(/^pa_/, '');
+                    return selectedCharacteristics[normalizedAttrName];
+                  });
+
+                  if (isVariable && !selectedVariation) {
+                    return (
+                      <Button
+                        disabled
+                        className="w-full bg-gray-400 text-white h-12 text-lg font-semibold cursor-not-allowed"
+                      >
+                        Veuillez sélectionner une option
+                      </Button>
+                    );
+                  }
+
+                  if (!isVariable && hasRequiredAttributes && !allAttributesSelected) {
+                    return (
+                      <Button
+                        disabled
+                        className="w-full bg-gray-400 text-white h-12 text-lg font-semibold cursor-not-allowed"
+                      >
+                        Veuillez sélectionner toutes les options
+                      </Button>
+                    );
+                  }
+
+                  if (!isProductInStock) {
+                    return (
+                      <Button
+                        onClick={handleNotifyAvailability}
+                        className="w-full bg-[#B6914A] hover:bg-[#a07c2f] text-white h-12 text-lg font-semibold"
+                      >
+                        <Bell className="mr-2 h-5 w-5" />
+                        Me notifier quand disponible
+                      </Button>
+                    );
+                  }
+
+                  return (
+                    <Button
+                      onClick={handleAddToCart}
+                      className="w-full bg-[#b8933d] hover:bg-[#a07c2f] text-white h-12 text-lg font-semibold"
+                    >
+                      <ShoppingCart className="mr-2 h-5 w-5" />
+                      Ajouter au panier
+                    </Button>
+                  );
+                })()}
 
                 <div className="flex gap-3">
                   <Button
@@ -626,80 +726,6 @@ export default function ProductPage({ params }: { params: Promise<{ slug: string
                   />
                 </div>
               </div>
-
-              {(product.attributes?.nodes && product.attributes.nodes.length > 0) && (
-                <div className="border-t pt-6">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Caractéristiques</h3>
-                  <p className="text-sm text-gray-500 mb-3">
-                    {isVariable ? 'Ces caractéristiques sont disponibles dans les variations ci-dessus.' : 'Sélectionnez vos options :'}
-                  </p>
-                  <div className="grid grid-cols-1 gap-3">
-                    {product.attributes.nodes.filter((attr: any) => !attr.variation).map((attr: any, index: number) => {
-                      const isSizeAttribute = attr.name.toLowerCase().includes('taille');
-                      const isColorAttr = isColorAttribute(attr.name);
-                      const sortedOptions = isSizeAttribute ? sortSizes(attr.options || []) : (attr.options || []);
-                      const normalizedAttrName = attr.name.replace(/^pa_/, '');
-
-                      return (
-                        <div key={index} className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
-                          <div className="flex-shrink-0 w-40">
-                            <span className="text-sm font-medium text-gray-700">{formatAttributeName(attr.name)} :</span>
-                          </div>
-                          <div className="flex-1">
-                            <div className="flex flex-wrap gap-2 items-center">
-                              {sortedOptions.map((option: string, optIndex: number) => {
-                                const isSelected = selectedCharacteristics[normalizedAttrName] === option;
-
-                                if (isColorAttr) {
-                                  return (
-                                    <div key={optIndex} className="relative">
-                                      <ColorSwatch
-                                        color={option}
-                                        isSelected={isSelected}
-                                        onClick={() => {
-                                          if (!isVariable) {
-                                            setSelectedCharacteristics(prev => ({
-                                              ...prev,
-                                              [normalizedAttrName]: option
-                                            }));
-                                          }
-                                        }}
-                                        size="sm"
-                                      />
-                                    </div>
-                                  );
-                                }
-
-                                return (
-                                  <button
-                                    key={optIndex}
-                                    onClick={() => {
-                                      if (!isVariable) {
-                                        setSelectedCharacteristics(prev => ({
-                                          ...prev,
-                                          [normalizedAttrName]: option
-                                        }));
-                                      }
-                                    }}
-                                    disabled={isVariable}
-                                    className={`inline-flex items-center px-3 py-1 border rounded-full text-sm transition-colors ${
-                                      isSelected
-                                        ? 'border-[#b8933d] bg-[#b8933d] text-white'
-                                        : 'border-gray-200 bg-white text-gray-700 hover:border-[#b8933d] hover:bg-[#b8933d]/5'
-                                    } ${isVariable ? 'cursor-default' : 'cursor-pointer'}`}
-                                  >
-                                    {option}
-                                  </button>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
 
               {product.description && (
                 <Accordion type="single" collapsible defaultValue="description" className="border-t">

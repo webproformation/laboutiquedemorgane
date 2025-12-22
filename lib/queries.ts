@@ -24,6 +24,18 @@ export const GET_PRODUCTS = gql`
               sourceUrl
             }
           }
+          attributes {
+            nodes {
+              name
+              options
+              ... on GlobalProductAttribute {
+                slug
+              }
+              ... on LocalProductAttribute {
+                id
+              }
+            }
+          }
         }
         ... on VariableProduct {
           id
@@ -43,6 +55,18 @@ export const GET_PRODUCTS = gql`
           galleryImages {
             nodes {
               sourceUrl
+            }
+          }
+          attributes {
+            nodes {
+              name
+              options
+              ... on GlobalProductAttribute {
+                slug
+              }
+              ... on LocalProductAttribute {
+                id
+              }
             }
           }
         }
@@ -78,6 +102,18 @@ export const GET_PRODUCTS_PAGINATED = gql`
               sourceUrl
             }
           }
+          attributes {
+            nodes {
+              name
+              options
+              ... on GlobalProductAttribute {
+                slug
+              }
+              ... on LocalProductAttribute {
+                id
+              }
+            }
+          }
         }
         ... on VariableProduct {
           id
@@ -96,6 +132,18 @@ export const GET_PRODUCTS_PAGINATED = gql`
           galleryImages {
             nodes {
               sourceUrl
+            }
+          }
+          attributes {
+            nodes {
+              name
+              options
+              ... on GlobalProductAttribute {
+                slug
+              }
+              ... on LocalProductAttribute {
+                id
+              }
             }
           }
         }
@@ -278,6 +326,18 @@ export const GET_PRODUCTS_BY_IDS = gql`
               sourceUrl
             }
           }
+          attributes {
+            nodes {
+              name
+              options
+              ... on GlobalProductAttribute {
+                slug
+              }
+              ... on LocalProductAttribute {
+                id
+              }
+            }
+          }
         }
         ... on VariableProduct {
           id
@@ -296,6 +356,18 @@ export const GET_PRODUCTS_BY_IDS = gql`
           galleryImages {
             nodes {
               sourceUrl
+            }
+          }
+          attributes {
+            nodes {
+              name
+              options
+              ... on GlobalProductAttribute {
+                slug
+              }
+              ... on LocalProductAttribute {
+                id
+              }
             }
           }
         }
@@ -564,6 +636,7 @@ export const GET_POSTS = gql`
     posts(first: $first, where: { orderby: { field: DATE, order: DESC } }) {
       nodes {
         id
+        databaseId
         title
         slug
         excerpt
@@ -591,6 +664,7 @@ export const GET_POSTS_BY_CATEGORY = gql`
     posts(first: $first, where: { categoryName: $categorySlug, orderby: { field: DATE, order: DESC } }) {
       nodes {
         id
+        databaseId
         title
         slug
         excerpt
@@ -659,6 +733,18 @@ export const SEARCH_PRODUCTS = gql`
           image {
             sourceUrl
           }
+          attributes {
+            nodes {
+              name
+              options
+              ... on GlobalProductAttribute {
+                slug
+              }
+              ... on LocalProductAttribute {
+                id
+              }
+            }
+          }
         }
         ... on VariableProduct {
           id
@@ -674,6 +760,18 @@ export const SEARCH_PRODUCTS = gql`
           shortDescription
           image {
             sourceUrl
+          }
+          attributes {
+            nodes {
+              name
+              options
+              ... on GlobalProductAttribute {
+                slug
+              }
+              ... on LocalProductAttribute {
+                id
+              }
+            }
           }
         }
       }
@@ -705,6 +803,18 @@ export const GET_FEATURED_PRODUCTS = gql`
               sourceUrl
             }
           }
+          attributes {
+            nodes {
+              name
+              options
+              ... on GlobalProductAttribute {
+                slug
+              }
+              ... on LocalProductAttribute {
+                id
+              }
+            }
+          }
         }
         ... on VariableProduct {
           id
@@ -724,6 +834,18 @@ export const GET_FEATURED_PRODUCTS = gql`
           galleryImages(first: 2) {
             nodes {
               sourceUrl
+            }
+          }
+          attributes {
+            nodes {
+              name
+              options
+              ... on GlobalProductAttribute {
+                slug
+              }
+              ... on LocalProductAttribute {
+                id
+              }
             }
           }
         }

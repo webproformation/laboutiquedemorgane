@@ -50,14 +50,16 @@ export default function RichTextEditor({
         <div
           ref={previewRef}
           contentEditable
+          dir="ltr"
           onInput={handlePreviewInput}
           onBlur={handlePreviewBlur}
-          className="prose prose-sm max-w-none p-4 border rounded-md min-h-[150px] bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="prose prose-sm max-w-none p-4 border rounded-md min-h-[150px] bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 !text-left [&_*]:!text-left"
           data-placeholder={placeholder}
           style={{
             minHeight: `${rows * 24}px`,
             direction: 'ltr',
-            textAlign: 'left'
+            textAlign: 'left',
+            unicodeBidi: 'embed'
           }}
         />
       );
@@ -67,13 +69,15 @@ export default function RichTextEditor({
       <div
         ref={previewRef}
         contentEditable
+        dir="ltr"
         onInput={handlePreviewInput}
         onBlur={handlePreviewBlur}
-        className="prose prose-sm max-w-none p-4 border rounded-md min-h-[150px] bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+        className="prose prose-sm max-w-none p-4 border rounded-md min-h-[150px] bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 !text-left [&_*]:!text-left"
         style={{
           minHeight: `${rows * 24}px`,
           direction: 'ltr',
-          textAlign: 'left'
+          textAlign: 'left',
+          unicodeBidi: 'embed'
         }}
       />
     );
