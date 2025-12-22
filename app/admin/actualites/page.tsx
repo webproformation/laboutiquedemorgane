@@ -4,15 +4,29 @@ import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { BookOpen, Edit2, Plus, Search } from 'lucide-react';
+import { BookOpen, Edit2, Plus, Search, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 import { useQuery } from '@apollo/client/react';
 import { GET_POSTS } from '@/lib/queries';
 import { GetPostsResponse } from '@/types';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import { toast } from 'sonner';
 
 export default function ActualitesAdminPage() {
   const [searchTerm, setSearchTerm] = useState('');
-  const { loading, data } = useQuery<GetPostsResponse>(GET_POSTS);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [postToDelete, setPostToDelete] = useState<{ id: string; title: string } | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const { loading, data, refetch } = useQuery<GetPostsResponse>(GET_POSTS);
 
   const posts = data?.posts?.nodes || [];
 
@@ -20,6 +34,36 @@ export default function ActualitesAdminPage() {
     post.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
     post.slug.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  const handleDeleteClick = (postId: string, postTitle: string) => {
+    setPostToDelete({ id: postId, title: postTitle });
+    setDeleteDialogOpen(true);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!postToDelete) return;
+
+    setIsDeleting(true);
+    try {
+      const response = await fetch(`/api/wordpress/posts?id=${postToDelete.id}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        throw new Error('Erreur lors de la suppression');
+      }
+
+      toast.success('Article supprimé avec succès');
+      setDeleteDialogOpen(false);
+      setPostToDelete(null);
+      refetch();
+    } catch (error) {
+      console.error('Erreur:', error);
+      toast.error('Erreur lors de la suppression de l\'article');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -94,18 +138,21 @@ export default function ActualitesAdminPage() {
                     </div>
                   </div>
                   <div className="flex gap-2">
-                    <Link href={`/admin/actualites/${post.slug}`}>
-                      <Button variant="outline" size="sm">
-                        <Edit2 className="h-4 w-4 mr-2" />
-                        SEO
-                      </Button>
-                    </Link>
                     <Link href={`/admin/actualites/edit/${post.databaseId}`}>
                       <Button variant="outline" size="sm">
                         <Edit2 className="h-4 w-4 mr-2" />
                         Modifier
                       </Button>
                     </Link>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleDeleteClick((post.databaseId || post.id).toString(), post.title)}
+                      className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                    >
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      Supprimer
+                    </Button>
                   </div>
                 </div>
               </CardContent>
@@ -122,6 +169,28 @@ export default function ActualitesAdminPage() {
           )}
         </div>
       )}
+
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirmer la suppression</AlertDialogTitle>
+            <AlertDialogDescription>
+              Êtes-vous sûr de vouloir supprimer l'article "{postToDelete?.title}" ?
+              Cette action est irréversible.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>Annuler</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteConfirm}
+              disabled={isDeleting}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              {isDeleting ? 'Suppression...' : 'Supprimer'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
