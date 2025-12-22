@@ -35,6 +35,13 @@ interface OrderItem {
   quantity: number;
 }
 
+interface OrderInvoice {
+  id: string;
+  invoice_number: string;
+  pdf_url: string;
+  sent_at: string | null;
+}
+
 export default function OrdersPage() {
   const { user } = useAuth();
   const [orders, setOrders] = useState<Order[]>([]);
@@ -42,6 +49,7 @@ export default function OrdersPage() {
   const [loadingInvoice, setLoadingInvoice] = useState<string | null>(null);
   const [showGuestbookDialog, setShowGuestbookDialog] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+  const [invoices, setInvoices] = useState<Record<number, OrderInvoice>>({});
 
   useEffect(() => {
     if (user) {
@@ -81,68 +89,90 @@ export default function OrdersPage() {
       );
 
       setOrders(ordersWithItems);
+
+      // Load invoices for orders with woocommerce_order_id
+      loadInvoices(ordersWithItems);
     }
 
     setLoading(false);
   };
 
-  const fetchInvoice = async (order: Order) => {
-    if (!order.woocommerce_order_id) {
-      toast.error('Facture non disponible pour cette commande');
-      return;
-    }
-
-    setLoadingInvoice(order.id);
-
+  const loadInvoices = async (ordersData: Order[]) => {
     try {
-      const { data: { session } } = await supabase.auth.getSession();
+      const invoicesMap: Record<number, OrderInvoice> = {};
 
-      const response = await fetch(
-        `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/get-invoice-url`,
-        {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${session?.access_token}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            woocommerceOrderId: order.woocommerce_order_id,
-          }),
-        }
+      await Promise.all(
+        ordersData
+          .filter((order) => order.woocommerce_order_id)
+          .map(async (order) => {
+            const response = await fetch(
+              `/api/invoices?orderId=${order.woocommerce_order_id}`
+            );
+            const data = await response.json();
+            if (data.invoices?.[0]) {
+              invoicesMap[order.woocommerce_order_id!] = data.invoices[0];
+            }
+          })
       );
 
-      if (!response.ok) {
-        throw new Error('Erreur lors de la récupération de la facture');
-      }
+      setInvoices(invoicesMap);
+    } catch (error) {
+      console.error('Error loading invoices:', error);
+    }
+  };
 
-      const { invoiceUrl } = await response.json();
+  const viewInvoice = async (orderId: number) => {
+    setLoadingInvoice(orderId.toString());
+    try {
+      const invoice = invoices[orderId];
+      if (invoice?.pdf_url) {
+        const invoiceResponse = await fetch(invoice.pdf_url);
+        const invoiceData = await invoiceResponse.json();
 
-      if (invoiceUrl) {
-        await supabase
-          .from('orders')
-          .update({ invoice_url: invoiceUrl })
-          .eq('id', order.id);
-
-        setOrders(prevOrders =>
-          prevOrders.map(o =>
-            o.id === order.id ? { ...o, invoice_url: invoiceUrl } : o
-          )
-        );
-
-        window.open(invoiceUrl, '_blank');
+        const printWindow = window.open('', '_blank');
+        if (printWindow) {
+          printWindow.document.write(invoiceData.html);
+          printWindow.document.close();
+        }
       } else {
-        toast.error('Facture non disponible pour le moment');
+        toast.error('Bon de commande non disponible');
       }
     } catch (error) {
-      console.error('Error fetching invoice:', error);
-      toast.error('Une erreur est survenue lors de la récupération de la facture');
+      console.error('Error viewing invoice:', error);
+      toast.error('Erreur lors de l\'ouverture du bon de commande');
     } finally {
       setLoadingInvoice(null);
     }
   };
 
-  const downloadInvoice = (invoiceUrl: string) => {
-    window.open(invoiceUrl, '_blank');
+  const downloadInvoice = async (orderId: number) => {
+    setLoadingInvoice(orderId.toString());
+    try {
+      const invoice = invoices[orderId];
+      if (invoice?.pdf_url) {
+        const invoiceResponse = await fetch(invoice.pdf_url);
+        const invoiceData = await invoiceResponse.json();
+
+        const blob = new Blob([invoiceData.html], { type: 'text/html' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `bon-commande-${invoice.invoice_number}.html`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+
+        toast.success('Bon de commande téléchargé avec succès');
+      } else {
+        toast.error('Bon de commande non disponible');
+      }
+    } catch (error) {
+      console.error('Error downloading invoice:', error);
+      toast.error('Erreur lors du téléchargement du bon de commande');
+    } finally {
+      setLoadingInvoice(null);
+    }
   };
 
   const openGuestbookForm = (order: Order) => {
@@ -249,41 +279,6 @@ export default function OrdersPage() {
                 <Badge className={getStatusColor(order.status)}>
                   {getStatusLabel(order.status)}
                 </Badge>
-                {order.woocommerce_order_id && (order.status === 'processing' || order.status === 'delivered' || order.status === 'shipped') && (
-                  <div>
-                    {order.invoice_url ? (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => downloadInvoice(order.invoice_url!)}
-                        className="text-[#b8933d] border-[#b8933d] hover:bg-[#b8933d] hover:text-white"
-                      >
-                        <Download className="h-4 w-4 mr-1" />
-                        Facture
-                      </Button>
-                    ) : (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => fetchInvoice(order)}
-                        disabled={loadingInvoice === order.id}
-                        className="text-[#b8933d] border-[#b8933d] hover:bg-[#b8933d] hover:text-white"
-                      >
-                        {loadingInvoice === order.id ? (
-                          <>
-                            <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-                            Chargement...
-                          </>
-                        ) : (
-                          <>
-                            <FileText className="h-4 w-4 mr-1" />
-                            Obtenir facture
-                          </>
-                        )}
-                      </Button>
-                    )}
-                  </div>
-                )}
               </div>
             </div>
           </CardHeader>
@@ -331,6 +326,43 @@ export default function OrdersPage() {
                   {order.total_amount.toFixed(2)} €
                 </span>
               </div>
+
+              {order.woocommerce_order_id &&
+                order.status === 'processing' &&
+                invoices[order.woocommerce_order_id] && (
+                  <div className="pt-4 border-t">
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => viewInvoice(order.woocommerce_order_id!)}
+                        disabled={loadingInvoice === order.woocommerce_order_id?.toString()}
+                        className="flex-1 sm:flex-none text-[#b8933d] border-[#b8933d] hover:bg-[#b8933d] hover:text-white"
+                      >
+                        {loadingInvoice === order.woocommerce_order_id?.toString() ? (
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        ) : (
+                          <FileText className="h-4 w-4 mr-2" />
+                        )}
+                        Voir le bon de commande
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => downloadInvoice(order.woocommerce_order_id!)}
+                        disabled={loadingInvoice === order.woocommerce_order_id?.toString()}
+                        className="flex-1 sm:flex-none text-[#b8933d] border-[#b8933d] hover:bg-[#b8933d] hover:text-white"
+                      >
+                        {loadingInvoice === order.woocommerce_order_id?.toString() ? (
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        ) : (
+                          <Download className="h-4 w-4 mr-2" />
+                        )}
+                        Télécharger
+                      </Button>
+                    </div>
+                  </div>
+                )}
 
               {order.status === 'delivered' && (
                 <div className="pt-4 border-t">

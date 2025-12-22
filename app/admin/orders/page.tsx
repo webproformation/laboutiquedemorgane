@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Loader2, Package } from 'lucide-react';
+import { Loader2, Package, FileText, Send, Download } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface Order {
@@ -16,8 +16,48 @@ interface Order {
   billing: {
     first_name: string;
     last_name: string;
+    email: string;
+    address_1: string;
+    address_2: string;
+    city: string;
+    postcode: string;
+    country: string;
+    phone: string;
+    company: string;
   };
-  line_items: Array<{ name: string; quantity: number }>;
+  shipping: {
+    first_name: string;
+    last_name: string;
+    address_1: string;
+    address_2: string;
+    city: string;
+    postcode: string;
+    country: string;
+    company: string;
+  };
+  line_items: Array<{
+    name: string;
+    quantity: number;
+    price: number;
+    total: string;
+    subtotal: string;
+    sku: string;
+  }>;
+  shipping_lines: Array<{
+    method_title: string;
+    total: string;
+  }>;
+  total_tax: string;
+  shipping_total: string;
+  discount_total: string;
+  payment_method_title: string;
+}
+
+interface Invoice {
+  id: string;
+  invoice_number: string;
+  pdf_url: string;
+  sent_at: string | null;
 }
 
 const statusLabels: Record<string, string> = {
@@ -36,6 +76,9 @@ export default function AdminOrders() {
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [filterStatus, setFilterStatus] = useState('all');
+  const [invoices, setInvoices] = useState<Record<number, Invoice>>({});
+  const [generatingInvoice, setGeneratingInvoice] = useState<number | null>(null);
+  const [sendingInvoice, setSendingInvoice] = useState<string | null>(null);
 
   const fetchOrders = async () => {
     setLoading(true);
@@ -47,11 +90,156 @@ export default function AdminOrders() {
       const data = await response.json();
       setOrders(data.orders || []);
       setTotalPages(parseInt(data.totalPages || '1'));
+
+      // Fetch invoices for all orders
+      if (data.orders && data.orders.length > 0) {
+        fetchInvoicesForOrders(data.orders);
+      }
     } catch (error) {
       toast.error('Erreur lors du chargement des commandes');
       console.error(error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchInvoicesForOrders = async (ordersData: Order[]) => {
+    try {
+      const invoicePromises = ordersData.map(async (order) => {
+        const response = await fetch(`/api/invoices?orderId=${order.id}`);
+        const data = await response.json();
+        return { orderId: order.id, invoice: data.invoices?.[0] || null };
+      });
+
+      const results = await Promise.all(invoicePromises);
+      const invoicesMap: Record<number, Invoice> = {};
+      results.forEach(({ orderId, invoice }) => {
+        if (invoice) {
+          invoicesMap[orderId] = invoice;
+        }
+      });
+      setInvoices(invoicesMap);
+    } catch (error) {
+      console.error('Error fetching invoices:', error);
+    }
+  };
+
+  const generateInvoice = async (order: Order, autoSend: boolean = false) => {
+    setGeneratingInvoice(order.id);
+    try {
+      const response = await fetch('/api/invoices/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          orderId: order.id,
+          orderData: order,
+          autoSend,
+        }),
+      });
+
+      const data = await response.json();
+      if (response.ok) {
+        toast.success(
+          autoSend
+            ? 'Bon de commande généré et envoyé avec succès'
+            : 'Bon de commande généré avec succès'
+        );
+        if (data.invoice) {
+          setInvoices((prev) => ({ ...prev, [order.id]: data.invoice }));
+        }
+      } else {
+        toast.error(data.error || 'Erreur lors de la génération');
+      }
+    } catch (error) {
+      toast.error('Erreur lors de la génération du bon de commande');
+      console.error(error);
+    } finally {
+      setGeneratingInvoice(null);
+    }
+  };
+
+  const sendInvoiceEmail = async (invoiceId: string) => {
+    setSendingInvoice(invoiceId);
+    try {
+      const response = await fetch('/api/invoices/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ invoiceId, resend: true }),
+      });
+
+      if (response.ok) {
+        toast.success('Bon de commande envoyé avec succès');
+        // Update invoice sent_at
+        setInvoices((prev) => ({
+          ...prev,
+          ...Object.fromEntries(
+            Object.entries(prev).map(([key, invoice]) =>
+              invoice.id === invoiceId
+                ? [key, { ...invoice, sent_at: new Date().toISOString() }]
+                : [key, invoice]
+            )
+          ),
+        }));
+      } else {
+        const data = await response.json();
+        toast.error(data.error || 'Erreur lors de l\'envoi');
+      }
+    } catch (error) {
+      toast.error('Erreur lors de l\'envoi du bon de commande');
+      console.error(error);
+    } finally {
+      setSendingInvoice(null);
+    }
+  };
+
+  const viewInvoice = async (orderId: number) => {
+    try {
+      const response = await fetch(`/api/invoices?orderId=${orderId}`);
+      const data = await response.json();
+      const invoice = data.invoices?.[0];
+
+      if (invoice?.pdf_url) {
+        // Fetch the invoice JSON
+        const invoiceResponse = await fetch(invoice.pdf_url);
+        const invoiceData = await invoiceResponse.json();
+
+        // Open HTML in new window
+        const printWindow = window.open('', '_blank');
+        if (printWindow) {
+          printWindow.document.write(invoiceData.html);
+          printWindow.document.close();
+        }
+      }
+    } catch (error) {
+      toast.error('Erreur lors de l\'ouverture du bon de commande');
+      console.error(error);
+    }
+  };
+
+  const downloadInvoice = async (orderId: number) => {
+    try {
+      const response = await fetch(`/api/invoices?orderId=${orderId}`);
+      const data = await response.json();
+      const invoice = data.invoices?.[0];
+
+      if (invoice?.pdf_url) {
+        const invoiceResponse = await fetch(invoice.pdf_url);
+        const invoiceData = await invoiceResponse.json();
+
+        // Create a blob and download
+        const blob = new Blob([invoiceData.html], { type: 'text/html' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `bon-commande-${invoice.invoice_number}.html`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }
+    } catch (error) {
+      toast.error('Erreur lors du téléchargement du bon de commande');
+      console.error(error);
     }
   };
 
@@ -73,6 +261,16 @@ export default function AdminOrders() {
       });
 
       toast.success('Statut mis à jour');
+
+      // Auto-generate and send invoice when status changes to "processing"
+      if (newStatus === 'processing' && !invoices[orderId]) {
+        const order = orders.find(o => o.id === orderId);
+        if (order) {
+          toast.info('Génération du bon de commande en cours...');
+          await generateInvoice(order, true);
+        }
+      }
+
       fetchOrders();
     } catch (error) {
       toast.error('Erreur lors de la mise à jour');
@@ -157,6 +355,74 @@ export default function AdminOrders() {
                       ))}
                     </ul>
                   </div>
+
+                  {order.status === 'processing' && (
+                    <div className="border-t pt-4 mt-4">
+                      <div className="flex flex-wrap gap-2">
+                        {invoices[order.id] ? (
+                          <>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => viewInvoice(order.id)}
+                              className="flex-1 sm:flex-none"
+                            >
+                              <FileText className="w-4 h-4 mr-2" />
+                              Voir le bon de commande
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => downloadInvoice(order.id)}
+                              className="flex-1 sm:flex-none"
+                            >
+                              <Download className="w-4 h-4 mr-2" />
+                              Télécharger
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => sendInvoiceEmail(invoices[order.id].id)}
+                              disabled={sendingInvoice === invoices[order.id].id}
+                              className="flex-1 sm:flex-none"
+                            >
+                              {sendingInvoice === invoices[order.id].id ? (
+                                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                              ) : (
+                                <Send className="w-4 h-4 mr-2" />
+                              )}
+                              {invoices[order.id].sent_at
+                                ? 'Renvoyer au client'
+                                : 'Envoyer au client'}
+                            </Button>
+                            {invoices[order.id].sent_at && (
+                              <span className="text-xs text-green-600 self-center">
+                                Envoyé le{' '}
+                                {new Date(invoices[order.id].sent_at!).toLocaleDateString(
+                                  'fr-FR'
+                                )}
+                              </span>
+                            )}
+                          </>
+                        ) : (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => generateInvoice(order, false)}
+                            disabled={generatingInvoice === order.id}
+                            className="flex-1 sm:flex-none"
+                          >
+                            {generatingInvoice === order.id ? (
+                              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                            ) : (
+                              <FileText className="w-4 h-4 mr-2" />
+                            )}
+                            Générer le bon de commande
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             ))}

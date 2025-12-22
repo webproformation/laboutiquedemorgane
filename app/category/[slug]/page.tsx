@@ -7,12 +7,20 @@ import ProductCard from '@/components/ProductCard';
 import ProductFilters from '@/components/ProductFilters';
 import { Product, GetProductsByCategoryResponse, GetProductCategoriesResponse } from '@/types';
 import { Skeleton } from '@/components/ui/skeleton';
-import { AlertCircle, ArrowLeft, RefreshCw } from 'lucide-react';
+import { AlertCircle, ArrowLeft, RefreshCw, SlidersHorizontal } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { useParams } from 'next/navigation';
 import { parsePrice } from '@/lib/utils';
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from '@/components/ui/sheet';
 
 export default function CategoryPage() {
   const params = useParams();
@@ -20,6 +28,7 @@ export default function CategoryPage() {
   const slug = decodeURIComponent(rawSlug);
   const [filters, setFilters] = useState<Record<string, string[]>>({});
   const [priceFilter, setPriceFilter] = useState<{ min: number; max: number } | undefined>();
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   const { data: categoriesData } = useQuery<GetProductCategoriesResponse>(GET_PRODUCT_CATEGORIES);
 
@@ -168,8 +177,10 @@ export default function CategoryPage() {
                   const attrName = attr.name.toLowerCase();
                   const attrSlug = attr.slug?.toLowerCase() || '';
                   return attrName === 'taille' ||
+                         attrName === 'tailles' ||
                          attrName === 'size' ||
                          attrSlug === 'pa_taille' ||
+                         attrSlug === 'pa_tailles' ||
                          attrSlug === 'pa_size';
                 }
               );
@@ -300,6 +311,8 @@ export default function CategoryPage() {
     );
   }
 
+  const activeFiltersCount = Object.keys(filters).length;
+
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="container mx-auto px-4 py-8">
@@ -321,7 +334,7 @@ export default function CategoryPage() {
           </Button>
         </div>
 
-        <div className="mb-8">
+        <div className="mb-6">
           <h1 className="text-4xl font-bold text-gray-900 mb-2">
             {currentCategory?.name || 'Catégorie'}
           </h1>
@@ -334,8 +347,50 @@ export default function CategoryPage() {
           </p>
         </div>
 
-        <div className="flex flex-col-reverse lg:flex-row gap-8">
-          <aside className="lg:w-64 flex-shrink-0">
+        {/* Bouton filtres mobile */}
+        <div className="lg:hidden mb-4">
+          <Sheet open={filtersOpen} onOpenChange={setFiltersOpen}>
+            <SheetTrigger asChild>
+              <Button
+                variant="outline"
+                className="w-full justify-center gap-2 bg-white"
+              >
+                <SlidersHorizontal className="h-4 w-4" />
+                Filtres
+                {activeFiltersCount > 0 && (
+                  <span className="ml-1 px-2 py-0.5 bg-[#D4AF37] text-white text-xs rounded-full">
+                    {activeFiltersCount}
+                  </span>
+                )}
+              </Button>
+            </SheetTrigger>
+            <SheetContent side="bottom" className="h-[85vh] overflow-y-auto">
+              <SheetHeader className="mb-4">
+                <SheetTitle>Filtrer les produits</SheetTitle>
+                <SheetDescription>
+                  {filteredProducts.length} produit{filteredProducts.length > 1 ? 's' : ''} trouvé{filteredProducts.length > 1 ? 's' : ''}
+                </SheetDescription>
+              </SheetHeader>
+              <ProductFilters
+                onFilterChange={handleFilterChange}
+                initialFilters={filters}
+                products={products}
+              />
+              <div className="sticky bottom-0 left-0 right-0 bg-white border-t pt-4 mt-6">
+                <Button
+                  onClick={() => setFiltersOpen(false)}
+                  className="w-full bg-[#D4AF37] hover:bg-[#b8933d]"
+                >
+                  Voir {filteredProducts.length} produit{filteredProducts.length > 1 ? 's' : ''}
+                </Button>
+              </div>
+            </SheetContent>
+          </Sheet>
+        </div>
+
+        <div className="flex flex-col lg:flex-row gap-8">
+          {/* Filtres desktop */}
+          <aside className="hidden lg:block lg:w-64 flex-shrink-0">
             <ProductFilters
               onFilterChange={handleFilterChange}
               initialFilters={filters}

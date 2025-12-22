@@ -304,7 +304,8 @@ export default function ProductFilters({ onFilterChange, initialFilters = {}, pr
           const isSizeAttribute = attribute.slug.toLowerCase().includes('taille') ||
                                  attribute.slug.toLowerCase().includes('size') ||
                                  attribute.name.toLowerCase().includes('taille') ||
-                                 attribute.name.toLowerCase().includes('size');
+                                 attribute.name.toLowerCase().includes('size') ||
+                                 attribute.name.toLowerCase().includes('tailles');
 
           const sortedTerms = isSizeAttribute
             ? [...attribute.terms].sort((a, b) => {
