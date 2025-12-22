@@ -225,9 +225,9 @@ export default function ProductCard({ product }: ProductCardProps) {
                 </div>
               )}
               {isInMySize && (
-                <div className="bg-[#D4AF37] text-white px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1">
+                <div className="bg-pink-500 text-white px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1">
                   <Ruler className="h-3 w-3" />
-                  A ma taille
+                  A MA TAILLE
                 </div>
               )}
             </div>
