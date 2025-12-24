@@ -10,7 +10,7 @@ const corsHeaders = {
 // Mondial Relay API credentials
 const MR_SOAP_API_URL = "https://api.mondialrelay.com/Web_Services.asmx";
 const MR_BRAND_ID = "CC20T067";
-const MR_API_KEY = "j!h-GCR,p3S<R9M)d:ew";
+const MR_API_KEY = "NktkiSfFBsESB69-O5CpIekU0a0=";
 
 interface PickupPointSearchParams {
   country: string;

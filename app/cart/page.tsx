@@ -13,6 +13,7 @@ import { formatPrice, parsePrice } from '@/lib/utils';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import dynamic from 'next/dynamic';
 import { supabase } from '@/lib/supabase-client';
+import GiftProgressBar from '@/components/GiftProgressBar';
 
 const WalletSelector = dynamic(() => import('@/components/WalletSelector'), {
   ssr: false,
@@ -27,6 +28,7 @@ export default function CartPage() {
   const [finalTotal, setFinalTotal] = useState(cartTotal);
   const [isFirstOrder, setIsFirstOrder] = useState(true);
   const [isCheckingFirstOrder, setIsCheckingFirstOrder] = useState(true);
+  const [deliveryBatchId, setDeliveryBatchId] = useState<string | null>(null);
 
   useEffect(() => {
     const savedWalletAmount = localStorage.getItem('cart_wallet_amount');
@@ -73,6 +75,29 @@ export default function CartPage() {
     checkIfFirstOrder();
   }, [user]);
 
+  useEffect(() => {
+    const fetchDeliveryBatch = async () => {
+      if (!user) return;
+
+      try {
+        const { data } = await supabase
+          .from('delivery_batches')
+          .select('id')
+          .eq('user_id', user.id)
+          .eq('status', 'open')
+          .single();
+
+        if (data) {
+          setDeliveryBatchId(data.id);
+        }
+      } catch (error) {
+        console.error('Error fetching delivery batch:', error);
+      }
+    };
+
+    fetchDeliveryBatch();
+  }, [user]);
+
   const handleWalletAmountChange = (amount: number) => {
     setWalletAmount(amount);
     if (amount > 0) {
@@ -109,8 +134,15 @@ export default function CartPage() {
 
       <h1 className="mb-8 text-3xl font-bold text-gray-900">Mon Panier</h1>
 
-      <div className="grid gap-8 lg:grid-cols-3">
-        <div className="lg:col-span-2 space-y-4">
+      <div className="mb-8">
+        <GiftProgressBar
+          cartTotal={cartTotal}
+          deliveryBatchId={deliveryBatchId}
+        />
+      </div>
+
+      <div className="flex flex-col lg:grid gap-8 lg:grid-cols-3">
+        <div className="order-2 lg:order-1 lg:col-span-2 space-y-4">
           {cart.map((item) => {
             const displayPrice = item.variationPrice || item.price;
             const displayImage = item.variationImage || item.image;
@@ -214,8 +246,8 @@ export default function CartPage() {
           </Button>
         </div>
 
-        <div className="lg:col-span-1">
-          <Card className="sticky top-24">
+        <div className="order-1 lg:order-2 lg:col-span-1">
+          <Card className="lg:sticky lg:top-24">
             <CardContent className="p-6 space-y-4">
               <h2 className="text-xl font-bold text-gray-900">Récapitulatif</h2>
               <Separator />

@@ -2,14 +2,18 @@
 
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase-client";
+import { useAuth } from "@/context/AuthContext";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Gem, Heart, ShieldCheck, MessageCircle, ChevronDown, ChevronUp, Facebook } from "lucide-react";
+import { Gem, Heart, ShieldCheck, MessageCircle, ChevronDown, ChevronUp, Facebook, Crown } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import OptimizedImage from "@/components/OptimizedImage";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import dynamic from "next/dynamic";
+
+const GeneralReviewForm = dynamic(() => import("@/components/GeneralReviewForm"), { ssr: false });
 
 interface GuestbookEntry {
   id: string;
@@ -18,41 +22,41 @@ interface GuestbookEntry {
   message: string;
   photo_url: string | null;
   admin_response: string | null;
-  likes_count: number;
+  votes_count: number;
   created_at: string;
   approved_at: string;
   source: 'site' | 'facebook';
+  user_id: string | null;
+  profiles?: {
+    ambassador_badge: boolean;
+  };
 }
 
 export default function LivreDorPage() {
+  const { user, profile } = useAuth();
   const [entries, setEntries] = useState<GuestbookEntry[]>([]);
-  const [likedEntries, setLikedEntries] = useState<Set<string>>(new Set());
-  const [sessionId, setSessionId] = useState<string>("");
+  const [votedEntries, setVotedEntries] = useState<Set<string>>(new Set());
   const [isLoading, setIsLoading] = useState(true);
   const [showCharter, setShowCharter] = useState(false);
 
   useEffect(() => {
-    let storedSessionId = localStorage.getItem("guestbook_session_id");
-    if (!storedSessionId) {
-      storedSessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-      localStorage.setItem("guestbook_session_id", storedSessionId);
-    }
-    setSessionId(storedSessionId);
-
-    const storedLikes = localStorage.getItem("guestbook_likes");
-    if (storedLikes) {
-      setLikedEntries(new Set(JSON.parse(storedLikes)));
-    }
-
     fetchEntries();
-  }, []);
+    if (user && profile) {
+      fetchUserVotes();
+    }
+  }, [user, profile]);
 
   const fetchEntries = async () => {
     try {
       const supabase = createClient();
       const { data, error } = await supabase
         .from("guestbook_entries")
-        .select("*")
+        .select(`
+          *,
+          profiles:user_id (
+            ambassador_badge
+          )
+        `)
         .eq("status", "approved")
         .order("approved_at", { ascending: false });
 
@@ -65,35 +69,65 @@ export default function LivreDorPage() {
     }
   };
 
-  const handleLike = async (entryId: string) => {
-    if (likedEntries.has(entryId)) {
-      toast.error("Vous avez déjà aimé cet avis");
+  const fetchUserVotes = async () => {
+    if (!profile) return;
+
+    try {
+      const supabase = createClient();
+      const { data, error } = await supabase
+        .from("guestbook_votes")
+        .select("guestbook_entry_id")
+        .eq("user_id", profile.id);
+
+      if (error) throw error;
+      if (data) {
+        setVotedEntries(new Set(data.map(v => v.guestbook_entry_id)));
+      }
+    } catch (error) {
+      console.error("Error fetching user votes:", error);
+    }
+  };
+
+  const handleVote = async (entryId: string) => {
+    if (!user || !profile) {
+      toast.error("Vous devez être connectée pour voter ❤️");
+      return;
+    }
+
+    if (votedEntries.has(entryId)) {
+      toast.error("Vous avez déjà voté pour cet avis");
       return;
     }
 
     try {
       const supabase = createClient();
-      const { error } = await supabase.from("guestbook_likes").insert({
-        entry_id: entryId,
-        session_id: sessionId,
+      const { error } = await supabase.from("guestbook_votes").insert({
+        guestbook_entry_id: entryId,
+        user_id: profile.id,
       });
 
-      if (error) throw error;
+      if (error) {
+        if (error.code === '23505') {
+          toast.error("Vous avez déjà voté pour cet avis");
+        } else {
+          throw error;
+        }
+        return;
+      }
 
-      const newLikedEntries = new Set(likedEntries);
-      newLikedEntries.add(entryId);
-      setLikedEntries(newLikedEntries);
-      localStorage.setItem("guestbook_likes", JSON.stringify(Array.from(newLikedEntries)));
+      const newVotedEntries = new Set(votedEntries);
+      newVotedEntries.add(entryId);
+      setVotedEntries(newVotedEntries);
 
       setEntries((prev) =>
         prev.map((entry) =>
-          entry.id === entryId ? { ...entry, likes_count: entry.likes_count + 1 } : entry
+          entry.id === entryId ? { ...entry, votes_count: entry.votes_count + 1 } : entry
         )
       );
 
-      toast.success("Merci d'avoir aimé cet avis !");
+      toast.success("Merci pour votre cœur ❤️");
     } catch (error) {
-      console.error("Error liking entry:", error);
+      console.error("Error voting:", error);
       toast.error("Une erreur est survenue");
     }
   };
@@ -110,27 +144,51 @@ export default function LivreDorPage() {
     <div className="container mx-auto px-4 py-12">
       <div className="max-w-4xl mx-auto mb-12 text-center space-y-6">
         <div className="flex justify-center mb-4">
-          <Gem className="h-12 w-12 text-amber-500" />
+          <Crown className="h-12 w-12 text-amber-500" />
         </div>
-        <h1 className="text-4xl font-bold">Bienvenue dans mon Livre d&apos;Or !</h1>
-        <div className="prose prose-lg mx-auto text-left bg-gradient-to-br from-pink-50 to-purple-50 dark:from-pink-950/20 dark:to-purple-950/20 p-8 rounded-2xl border border-pink-200 dark:border-pink-800">
+        <h1 className="text-4xl font-bold">Devenez notre Ambassadrice de la Semaine !</h1>
+        <div className="prose prose-lg mx-auto text-left bg-gradient-to-br from-pink-50 to-purple-50 dark:from-pink-950/20 dark:to-purple-950/20 p-8 rounded-2xl border border-pink-200 dark:border-pink-800 space-y-4">
           <p className="text-base leading-relaxed">
-            Parce que vos sourires sont notre plus belle récompense, j&apos;ai créé cet espace pour
-            recueillir vos mots doux et vos plus jolis looks. Ici, on ne donne pas des étoiles,
-            on partage des <strong>Pépites</strong> !
+            Vous aimez vos pépites ? Vous adorez partager vos looks ? Alors, préparez-vous à briller ! Chaque semaine, nous mettons l&apos;une d&apos;entre vous à l&apos;honneur sur la boutique. Plus qu&apos;un simple titre, c&apos;est notre façon de vous dire merci pour tout l&apos;amour que vous portez à nos collections.
           </p>
-          <p className="text-base leading-relaxed">
-            Votre avis est précieux : il aide d&apos;autres clientes à faire leur choix et nous
-            permet d&apos;agrandir la famille chaque jour.
-          </p>
-          <div className="bg-white dark:bg-gray-900 p-4 rounded-lg my-4">
-            <p className="text-base font-semibold mb-2">🎁 Pour vous remercier de votre fidélité :</p>
-            <p className="text-sm">• 0,20 € offerts dans votre cagnotte pour chaque mot doux déposé.</p>
+
+          <div>
+            <p className="text-lg font-semibold mb-2">Comment participer ? C&apos;est tout simple :</p>
+            <ul className="list-disc list-inside space-y-1 ml-4">
+              <li><strong>Faites pétiller votre look :</strong> Prenez une jolie photo de vous portant vos pépites préférées.</li>
+              <li><strong>Signez le Livre d&apos;Or :</strong> Déposez votre photo et votre petit mot doux sur notre site.</li>
+              <li className="text-green-600 dark:text-green-400"><em>Pssst : En plus, vous gagnez immédiatement 0,20 € dans votre cagnotte (dès la validation de l&apos;avis) !</em></li>
+              <li><strong>Récoltez des cœurs :</strong> C&apos;est ici que la magie opère ! Invitez les autres visiteuses à cliquer sur le « Cœur ❤️ » sous votre avis.</li>
+            </ul>
           </div>
-          <p className="text-base leading-relaxed">
-            Merci de faire partie de cette aventure avec nous. Nous avons hâte de vous lire !
+
+          <div className="bg-gradient-to-r from-pink-100 to-purple-100 dark:from-pink-900/30 dark:to-purple-900/30 p-4 rounded-lg border-l-4 border-pink-500">
+            <p className="text-base font-semibold mb-2">💖 Comment gagner ?</p>
+            <p className="text-sm">
+              Chaque lundi matin, nous regardons quelle photo a fait battre le plus de cœurs sur les 7 derniers jours. La cliente qui a récolté le plus de votes devient officiellement notre Ambassadrice de la Semaine.
+            </p>
+          </div>
+
+          <div className="bg-gradient-to-r from-amber-100 to-yellow-100 dark:from-amber-900/30 dark:to-yellow-900/30 p-4 rounded-lg border-l-4 border-amber-500">
+            <p className="text-base font-semibold mb-2">🎁 Votre couronne de cadeaux :</p>
+            <p className="text-sm mb-2">Si vous êtes élue, voici vos privilèges de Reine :</p>
+            <ul className="list-disc list-inside space-y-1 text-sm ml-4">
+              <li><strong>💰 5,00 € offerts immédiatement</strong> sur votre Cagnotte de la Boutique</li>
+              <li><strong>👑 Votre Badge &quot;Couronne Dorée&quot; :</strong> Il s&apos;affichera fièrement à côté de votre prénom sur tout le site pour montrer à tout le monde que vous êtes notre égérie !</li>
+              <li><strong>🌟 Votre moment de gloire :</strong> Votre photo et votre avis seront affichés en grand sur la page d&apos;accueil de la boutique pendant toute la semaine.</li>
+            </ul>
+          </div>
+
+          <div className="bg-white dark:bg-gray-900 p-4 rounded-lg border border-pink-200 dark:border-pink-800">
+            <p className="text-sm"><strong>🌸 Le petit conseil de Morgane :</strong></p>
+            <p className="text-sm">
+              Pour avoir un maximum de chances, partagez votre avis à vos amies et n&apos;hésitez pas à soigner votre photo (une belle lumière, un joli sourire, et le tour est joué !).
+            </p>
+          </div>
+
+          <p className="text-base font-semibold text-center text-pink-600 dark:text-pink-400">
+            Alors, qui sera notre prochaine Ambassadrice ? À vos pépites, prêtes... brillez !
           </p>
-          <p className="text-base font-semibold text-right">Morgane & doudou 🌸</p>
         </div>
 
         <Collapsible open={showCharter} onOpenChange={setShowCharter} className="mt-8">
@@ -235,21 +293,30 @@ export default function LivreDorPage() {
                 )}
                 <div className="p-6 space-y-4">
                   <div className="flex items-start justify-between">
-                    <div>
-                      <h3 className="font-semibold text-lg">{entry.customer_name}</h3>
-                      <p className="text-xs text-muted-foreground flex items-center gap-1">
-                        {entry.source === 'facebook' ? (
-                          <>
-                            <Facebook className="h-3 w-3 text-blue-600" />
-                            <span className="text-blue-600">Avis Facebook</span>
-                          </>
-                        ) : (
-                          <>
-                            <ShieldCheck className="h-3 w-3" />
-                            Achat Vérifié
-                          </>
-                        )}
-                      </p>
+                    <div className="flex items-center gap-2">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h3 className="font-semibold text-lg">{entry.customer_name}</h3>
+                          {entry.profiles?.ambassador_badge && (
+                            <span title="Ambassadrice de la Boutique">
+                              <Crown className="h-5 w-5 fill-amber-500 text-amber-500" />
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-muted-foreground flex items-center gap-1">
+                          {entry.source === 'facebook' ? (
+                            <>
+                              <Facebook className="h-3 w-3 text-blue-600" />
+                              <span className="text-blue-600">Avis Facebook</span>
+                            </>
+                          ) : (
+                            <>
+                              <ShieldCheck className="h-3 w-3" />
+                              Achat Vérifié
+                            </>
+                          )}
+                        </p>
+                      </div>
                     </div>
                     <div className="flex gap-0.5">
                       {Array.from({ length: entry.rating }).map((_, i) => (
@@ -281,16 +348,20 @@ export default function LivreDorPage() {
                       {format(new Date(entry.approved_at), "MMMM yyyy", { locale: fr })}
                     </p>
                     <Button
-                      variant={likedEntries.has(entry.id) ? "default" : "outline"}
+                      variant={votedEntries.has(entry.id) ? "default" : "outline"}
                       size="sm"
-                      onClick={() => handleLike(entry.id)}
-                      disabled={likedEntries.has(entry.id)}
-                      className="gap-2"
+                      onClick={() => handleVote(entry.id)}
+                      disabled={votedEntries.has(entry.id)}
+                      className={`gap-2 ${
+                        votedEntries.has(entry.id)
+                          ? "bg-pink-500 hover:bg-pink-600"
+                          : "hover:bg-pink-50 hover:border-pink-300"
+                      }`}
                     >
                       <Heart
-                        className={`h-4 w-4 ${likedEntries.has(entry.id) ? "fill-current" : ""}`}
+                        className={`h-4 w-4 ${votedEntries.has(entry.id) ? "fill-current" : ""}`}
                       />
-                      {entry.likes_count}
+                      {entry.votes_count}
                     </Button>
                   </div>
                 </div>
@@ -299,6 +370,8 @@ export default function LivreDorPage() {
           ))}
         </div>
       )}
+
+      <GeneralReviewForm />
     </div>
   );
 }

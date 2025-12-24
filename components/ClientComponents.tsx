@@ -9,4 +9,5 @@ export const AnalyticsTracker = dynamic(() => import('@/components/AnalyticsTrac
 export const ScrollToTop = dynamic(() => import('@/components/ScrollToTop'), { ssr: false });
 export const CookieConsent = dynamic(() => import('@/components/CookieConsent'), { ssr: false });
 export const CookiePreferencesButton = dynamic(() => import('@/components/CookiePreferencesButton'), { ssr: false });
+export const OneSignalProvider = dynamic(() => import('@/components/OneSignalProvider'), { ssr: false });
 export const Toaster = dynamic(() => import('@/components/ui/sonner').then(mod => ({ default: mod.Toaster })), { ssr: false });

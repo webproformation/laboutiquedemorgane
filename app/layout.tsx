@@ -16,6 +16,7 @@ import {
   ScrollToTop,
   CookieConsent,
   CookiePreferencesButton,
+  OneSignalProvider,
   Toaster,
 } from '@/components/ClientComponents';
 
@@ -58,6 +59,7 @@ export default function RootLayout({
                   <DailyConnectionReward />
                   <PageVisitTracker />
                   <AnalyticsTracker />
+                  <OneSignalProvider />
                   <div className="flex flex-col min-h-screen overflow-x-hidden">
                     <Header />
                     <EuroLoyaltyProgressBar />

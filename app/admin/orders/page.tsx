@@ -105,10 +105,27 @@ export default function AdminOrders() {
 
   const fetchInvoicesForOrders = async (ordersData: Order[]) => {
     try {
+      console.log('Fetching invoices for orders:', ordersData.map(o => o.id));
+
       const invoicePromises = ordersData.map(async (order) => {
-        const response = await fetch(`/api/invoices?orderId=${order.id}`);
-        const data = await response.json();
-        return { orderId: order.id, invoice: data.invoices?.[0] || null };
+        try {
+          const response = await fetch(`/api/invoices?orderId=${order.id}`);
+          if (!response.ok) {
+            console.warn(`Failed to fetch invoice for order ${order.id}:`, response.status);
+            return { orderId: order.id, invoice: null };
+          }
+          const data = await response.json();
+          const invoice = data.invoices?.[0] || null;
+          if (invoice) {
+            console.log(`Found invoice for order ${order.id}:`, invoice.invoice_number);
+          } else {
+            console.log(`No invoice found for order ${order.id}`);
+          }
+          return { orderId: order.id, invoice };
+        } catch (err) {
+          console.error(`Error fetching invoice for order ${order.id}:`, err);
+          return { orderId: order.id, invoice: null };
+        }
       });
 
       const results = await Promise.all(invoicePromises);
@@ -118,6 +135,8 @@ export default function AdminOrders() {
           invoicesMap[orderId] = invoice;
         }
       });
+
+      console.log('Invoices map:', Object.keys(invoicesMap).map(k => `${k}: ${invoicesMap[parseInt(k)].invoice_number}`));
       setInvoices(invoicesMap);
     } catch (error) {
       console.error('Error fetching invoices:', error);
@@ -214,38 +233,36 @@ export default function AdminOrders() {
 
   const viewInvoice = async (orderId: number) => {
     try {
-      const response = await fetch(`/api/invoices?orderId=${orderId}`);
-      if (!response.ok) {
-        throw new Error('Erreur lors de la récupération de la facture');
-      }
-
-      const data = await response.json();
-      const invoice = data.invoices?.[0];
+      const invoice = invoices[orderId];
 
       if (!invoice) {
         toast.error('Aucune facture trouvée pour cette commande');
+        console.error('Invoice not found in state for order:', orderId);
         return;
       }
 
       if (!invoice.pdf_url) {
         toast.error('URL de la facture manquante');
+        console.error('Invoice missing pdf_url:', invoice);
         return;
       }
 
-      // Fetch the invoice JSON
+      console.log('Viewing invoice from:', invoice.pdf_url);
+
       const invoiceResponse = await fetch(invoice.pdf_url);
       if (!invoiceResponse.ok) {
+        console.error('Failed to fetch invoice:', invoiceResponse.status, invoiceResponse.statusText);
         throw new Error('Impossible de charger le document');
       }
 
       const invoiceData = await invoiceResponse.json();
 
       if (!invoiceData.html) {
+        console.error('Invoice data missing html:', invoiceData);
         toast.error('Le document est invalide');
         return;
       }
 
-      // Open HTML in new window
       const printWindow = window.open('', '_blank');
       if (printWindow) {
         printWindow.document.write(invoiceData.html);
@@ -261,37 +278,36 @@ export default function AdminOrders() {
 
   const downloadInvoice = async (orderId: number) => {
     try {
-      const response = await fetch(`/api/invoices?orderId=${orderId}`);
-      if (!response.ok) {
-        throw new Error('Erreur lors de la récupération de la facture');
-      }
-
-      const data = await response.json();
-      const invoice = data.invoices?.[0];
+      const invoice = invoices[orderId];
 
       if (!invoice) {
         toast.error('Aucune facture trouvée pour cette commande');
+        console.error('Invoice not found in state for order:', orderId);
         return;
       }
 
       if (!invoice.pdf_url) {
         toast.error('URL de la facture manquante');
+        console.error('Invoice missing pdf_url:', invoice);
         return;
       }
 
+      console.log('Downloading invoice from:', invoice.pdf_url);
+
       const invoiceResponse = await fetch(invoice.pdf_url);
       if (!invoiceResponse.ok) {
+        console.error('Failed to fetch invoice:', invoiceResponse.status, invoiceResponse.statusText);
         throw new Error('Impossible de charger le document');
       }
 
       const invoiceData = await invoiceResponse.json();
 
       if (!invoiceData.html) {
+        console.error('Invoice data missing html:', invoiceData);
         toast.error('Le document est invalide');
         return;
       }
 
-      // Create a blob and download
       const blob = new Blob([invoiceData.html], { type: 'text/html' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -422,10 +438,10 @@ export default function AdminOrders() {
                     </ul>
                   </div>
 
-                  {(order.status === 'processing' || invoices[order.id]) && (
+                  {(order.status === 'processing' || (invoices[order.id]?.pdf_url)) && (
                     <div className="border-t pt-4 mt-4">
                       <div className="flex flex-wrap gap-2">
-                        {invoices[order.id] ? (
+                        {invoices[order.id]?.pdf_url ? (
                           <>
                             <Button
                               size="sm"

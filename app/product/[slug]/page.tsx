@@ -39,6 +39,7 @@ import ColorSwatch from '@/components/ColorSwatch';
 import { isColorAttribute } from '@/lib/colors';
 import ProductReviews from '@/components/ProductReviews';
 import HiddenDiamond from '@/components/HiddenDiamond';
+import RelatedProductsDisplay from '@/components/RelatedProductsDisplay';
 
 export default function ProductPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug: rawSlug } = use(params);
@@ -829,6 +830,8 @@ export default function ProductPage({ params }: { params: Promise<{ slug: string
         <div className="container mx-auto px-4 py-8">
           <ProductReviews productId={product.databaseId?.toString() || product.id} productName={product.name} />
         </div>
+
+        <RelatedProductsDisplay productId={product.databaseId?.toString() || product.id} />
       </div>
     </div>
     </>

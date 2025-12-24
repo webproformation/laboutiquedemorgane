@@ -6,7 +6,7 @@ import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase-client';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { CircleCheck as CheckCircle, Package, MapPin, Loader as Loader2 } from 'lucide-react';
+import { CircleCheck as CheckCircle, Package, MapPin, Loader as Loader2, Star } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { toast } from 'sonner';
@@ -284,6 +284,26 @@ export default function OrderConfirmationPage() {
               Merci pour votre commande. Nous vous enverrons une confirmation par email.
             </p>
           </div>
+
+          <Card className="mb-6 border-2 border-[#b8933d]/30 bg-gradient-to-br from-amber-50 to-yellow-50">
+            <CardContent className="p-6 text-center space-y-3">
+              <div className="flex justify-center">
+                <Star className="w-8 h-8 text-[#b8933d] fill-[#b8933d]" />
+              </div>
+              <h3 className="text-xl font-bold text-gray-900">
+                Une dernière chose avant de partir...
+              </h3>
+              <p className="text-gray-700 leading-relaxed">
+                Votre expérience nous intéresse ! Prenez quelques instants pour partager votre avis sur notre boutique. Votre témoignage aide d'autres clientes à faire le bon choix et nous permet de nous améliorer continuellement.
+              </p>
+              <Link href="/livre-dor">
+                <Button className="bg-[#b8933d] hover:bg-[#a07c2f] text-white">
+                  <Star className="w-4 h-4 mr-2" />
+                  Laisser un avis
+                </Button>
+              </Link>
+            </CardContent>
+          </Card>
 
           <Card className="mb-6">
             <CardContent className="p-6">

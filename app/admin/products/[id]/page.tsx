@@ -18,6 +18,7 @@ import ProductGalleryManager, { GalleryImage } from '@/components/ProductGallery
 import ProductAttributesManager from '@/components/ProductAttributesManager';
 import ProductVariationsManager, { ProductVariation } from '@/components/ProductVariationsManager';
 import SeoMetadataEditor from '@/components/SeoMetadataEditor';
+import RelatedProductsManager from '@/components/RelatedProductsManager';
 
 interface ProductAttribute {
   name: string;
@@ -581,6 +582,8 @@ export default function EditProductPage() {
             autoSave={false}
           />
         )}
+
+        <RelatedProductsManager productId={productId} />
 
         <div className="flex justify-end gap-4">
           <Link href="/admin/products">
