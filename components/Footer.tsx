@@ -236,18 +236,23 @@ export default function Footer() {
                 </Link>
               </li>
               <li>
-                <Link href="/retours-gratuits" className="hover:text-white transition-colors">
-                  Retours gratuits
+                <Link href="/le-droit-a-lerreur" className="hover:text-white transition-colors">
+                  Le droit à l&apos;erreur
                 </Link>
               </li>
               <li>
-                <Link href="/paiements-securises" className="hover:text-white transition-colors">
-                  Paiements sécurisés
+                <Link href="/vite-chez-vous" className="hover:text-white transition-colors">
+                  Vite chez vous
                 </Link>
               </li>
               <li>
-                <Link href="/satisfait-rembourse" className="hover:text-white transition-colors">
-                  Satisfait ou remboursé
+                <Link href="/transactions-protegees" className="hover:text-white transition-colors">
+                  Transactions protégées
+                </Link>
+              </li>
+              <li>
+                <Link href="/allo-morgane" className="hover:text-white transition-colors">
+                  Allô Morgane
                 </Link>
               </li>
               <li>

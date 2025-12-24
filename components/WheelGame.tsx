@@ -85,8 +85,8 @@ export default function WheelGame({ onClose }: WheelGameProps) {
   const buildZones = async (settings: WheelGameSettings) => {
     const allZones: WheelZone[] = [];
     const colors = [
-      '#FF6B6B', '#4ECDC4', '#FFD700', '#FF1493', '#32CD32',
-      '#FF8C00', '#8A2BE2', '#00CED1', '#FF69B4', '#7FFF00'
+      '#b8933d', '#2d2d2d', '#f5f5dc', '#d4af37', '#8b7355',
+      '#c9a961', '#1a1a1a', '#e8d5b7', '#a0826d', '#bfa568'
     ];
 
     for (let i = 0; i < settings.winning_zones.length; i++) {

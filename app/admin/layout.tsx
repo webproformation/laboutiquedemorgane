@@ -293,26 +293,7 @@ export default function AdminLayout({
             <Menu className="w-6 h-6" />
           </Button>
           <h1 className="text-xl font-bold text-gray-900">Administration</h1>
-          <div className="flex items-center gap-2">
-            <Button
-              onClick={handleBackToSite}
-              variant="ghost"
-              size="icon"
-              className="text-gray-700 hover:bg-gray-100"
-              title="Retour au site"
-            >
-              <HomeIcon className="w-5 h-5" />
-            </Button>
-            <Button
-              onClick={signOut}
-              variant="ghost"
-              size="icon"
-              className="text-gray-700 hover:bg-gray-100"
-              title="Déconnexion"
-            >
-              <LogOut className="w-5 h-5" />
-            </Button>
-          </div>
+          <div className="w-10"></div>
         </div>
 
         <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
@@ -320,27 +301,9 @@ export default function AdminLayout({
             <SheetHeader className="p-6 pb-4">
               <SheetTitle className="text-white text-2xl font-bold text-left">Administration</SheetTitle>
             </SheetHeader>
-            <nav className="space-y-1 px-6">
+            <nav className="space-y-1 px-6 pb-6">
               <NavLinks />
             </nav>
-            <div className="absolute bottom-0 left-0 right-0 p-6 space-y-2">
-              <Button
-                onClick={handleBackToSite}
-                variant="outline"
-                className="w-full bg-transparent text-white border-white hover:bg-blue-800 hover:text-white"
-              >
-                <HomeIcon className="w-4 h-4 mr-2" />
-                Retour au site
-              </Button>
-              <Button
-                onClick={signOut}
-                variant="outline"
-                className="w-full bg-transparent text-white border-white hover:bg-blue-800 hover:text-white"
-              >
-                <LogOut className="w-4 h-4 mr-2" />
-                Déconnexion
-              </Button>
-            </div>
           </SheetContent>
         </Sheet>
 

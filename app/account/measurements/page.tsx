@@ -18,7 +18,8 @@ interface Measurements {
   waist?: number;
   hips?: number;
   shoe_size?: number;
-  preferred_size?: string;
+  preferred_size_bottom?: string;
+  preferred_size_top?: string;
   body_type?: string;
 }
 
@@ -54,7 +55,8 @@ export default function MeasurementsPage() {
           waist: data.waist,
           hips: data.hips,
           shoe_size: data.shoe_size,
-          preferred_size: data.preferred_size,
+          preferred_size_bottom: data.preferred_size_bottom,
+          preferred_size_top: data.preferred_size_top,
           body_type: data.body_type,
         });
       }
@@ -186,21 +188,33 @@ export default function MeasurementsPage() {
             </div>
 
             <div>
-              <Label htmlFor="preferred_size">Taille préférée</Label>
+              <Label htmlFor="preferred_size_bottom">Taille préférée bas</Label>
               <Select
-                value={measurements.preferred_size || ''}
-                onValueChange={(value) => setMeasurements({ ...measurements, preferred_size: value })}
+                value={measurements.preferred_size_bottom || ''}
+                onValueChange={(value) => setMeasurements({ ...measurements, preferred_size_bottom: value })}
               >
-                <SelectTrigger id="preferred_size">
+                <SelectTrigger id="preferred_size_bottom">
                   <SelectValue placeholder="Sélectionnez" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="XS">XS</SelectItem>
-                  <SelectItem value="S">S</SelectItem>
-                  <SelectItem value="M">M</SelectItem>
-                  <SelectItem value="L">L</SelectItem>
-                  <SelectItem value="XL">XL</SelectItem>
-                  <SelectItem value="XXL">XXL</SelectItem>
+                  <SelectItem value="PETITES TAILLES (36 au 44)">PETITES TAILLES (36 au 44)</SelectItem>
+                  <SelectItem value="GRANDES TAILLES (46 – 54)">GRANDES TAILLES (46 – 54)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <Label htmlFor="preferred_size_top">Taille préférée hauts</Label>
+              <Select
+                value={measurements.preferred_size_top || ''}
+                onValueChange={(value) => setMeasurements({ ...measurements, preferred_size_top: value })}
+              >
+                <SelectTrigger id="preferred_size_top">
+                  <SelectValue placeholder="Sélectionnez" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="PETITES TAILLES (36 au 44)">PETITES TAILLES (36 au 44)</SelectItem>
+                  <SelectItem value="GRANDES TAILLES (46 – 54)">GRANDES TAILLES (46 – 54)</SelectItem>
                 </SelectContent>
               </Select>
             </div>

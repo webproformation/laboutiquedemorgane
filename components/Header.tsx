@@ -129,7 +129,7 @@ export default function Header() {
               <img
                 src="/image copy.png"
                 alt="La Boutique De Morgane"
-                className="h-16 w-auto md:h-20 object-contain"
+                className="h-12 w-auto md:h-16 object-contain"
               />
             </Link>
 

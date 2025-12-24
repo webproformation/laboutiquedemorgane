@@ -73,7 +73,7 @@ export default function ProfilePictureUpload({
     <div className="flex flex-col items-center gap-4">
       <div className="relative group">
         <Avatar className="h-32 w-32 border-4 border-[#b8933d]">
-          <AvatarImage src={currentAvatarUrl} alt={`${firstName} ${lastName}`} />
+          <AvatarImage src={currentAvatarUrl} alt={`${firstName} ${lastName}`} className="object-cover" />
           <AvatarFallback className="text-3xl bg-[#b8933d] text-white">
             {getInitials()}
           </AvatarFallback>

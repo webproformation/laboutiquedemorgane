@@ -62,7 +62,7 @@ export default function ScratchCardGame({
         particleCount: 200,
         spread: 160,
         origin: { y: 0.5 },
-        colors: ['#FFD700', '#FFA500', '#FF6347', '#FF1493', '#9370DB']
+        colors: ['#b8933d', '#d4af37', '#c9a961', '#8b7355', '#bfa568']
       });
 
       const interval = setInterval(() => {

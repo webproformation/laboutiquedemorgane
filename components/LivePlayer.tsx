@@ -439,7 +439,7 @@ export default function LivePlayer({
                       >
                         <div className="flex gap-2">
                           <Avatar className="h-8 w-8 flex-shrink-0">
-                            <AvatarImage src={msg.avatar_url || ''} alt={msg.username} />
+                            <AvatarImage src={msg.avatar_url || ''} alt={msg.username} className="object-cover" />
                             <AvatarFallback className="bg-[#b8933d] text-white text-xs">
                               {msg.username.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) || <UserIcon className="h-4 w-4" />}
                             </AvatarFallback>

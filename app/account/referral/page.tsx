@@ -259,7 +259,7 @@ export default function ReferralPage() {
                       ? 'bg-green-100 text-green-800'
                       : 'bg-yellow-100 text-yellow-800'
                   }`}>
-                    {referral.status === 'completed' ? '+8€' : 'En attente'}
+                    {referral.status === 'completed' ? '+5€' : 'En attente'}
                   </div>
                 </div>
               ))}

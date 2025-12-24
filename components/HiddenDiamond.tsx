@@ -11,9 +11,10 @@ import { useAuth } from '@/context/AuthContext';
 interface HiddenDiamondProps {
   diamondId: string;
   pageUrl?: string;
+  inline?: boolean;
 }
 
-export default function HiddenDiamond({ diamondId, pageUrl }: HiddenDiamondProps) {
+export default function HiddenDiamond({ diamondId, pageUrl, inline = false }: HiddenDiamondProps) {
   const { user } = useAuth();
   const [isFound, setIsFound] = useState(false);
   const [showDialog, setShowDialog] = useState(false);
@@ -132,7 +133,7 @@ export default function HiddenDiamond({ diamondId, pageUrl }: HiddenDiamondProps
     <>
       <button
         onClick={handleClick}
-        className={`absolute top-2 right-2 z-30 cursor-pointer hover:scale-125 transition-all duration-300 ${
+        className={`${inline ? 'relative inline-flex items-center justify-center' : 'absolute top-2 right-2'} z-30 cursor-pointer hover:scale-125 transition-all duration-300 ${
           isAnimating ? 'scale-150 opacity-0' : 'animate-pulse'
         }`}
         aria-label="Diamant caché"

@@ -8,8 +8,6 @@ import { MapPin, Loader as Loader2, CircleCheck as CheckCircle2, Clock, Navigati
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-
 interface RelayPoint {
   Id: string;
   Name: string;
@@ -44,6 +42,7 @@ interface MondialRelaySelectorProps {
   country?: string;
   onRelaySelected: (relay: RelayPoint) => void;
   selectedRelay?: RelayPoint | null;
+  deliveryMode: '24R' | '24L';
 }
 
 const formatOpeningHours = (hours?: string): string => {
@@ -107,13 +106,13 @@ export default function MondialRelaySelector({
   country = 'FR',
   onRelaySelected,
   selectedRelay,
+  deliveryMode,
 }: MondialRelaySelectorProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [relayPoints, setRelayPoints] = useState<RelayPoint[]>([]);
   const [searchPostalCode, setSearchPostalCode] = useState(initialPostalCode);
   const [expandedRelay, setExpandedRelay] = useState<string | null>(null);
-  const [deliveryMode, setDeliveryMode] = useState<'24R' | '24L'>('24R');
   const [mapLoaded, setMapLoaded] = useState(false);
   const mapRef = useRef<HTMLDivElement>(null);
   const googleMapRef = useRef<any>(null);
@@ -385,26 +384,23 @@ export default function MondialRelaySelector({
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          <MapPin className="h-5 w-5 text-[#b8933d]" />
-          Sélectionner un point {deliveryMode === '24R' ? 'relais' : 'locker'} Mondial Relay
+          {deliveryMode === '24R' ? (
+            <>
+              <MapPin className="h-5 w-5 text-[#b8933d]" />
+              Points Relais Mondial Relay
+            </>
+          ) : (
+            <>
+              <Package className="h-5 w-5 text-blue-600" />
+              Lockers 24/7 Mondial Relay
+            </>
+          )}
         </CardTitle>
         <CardDescription>
           Recherchez et choisissez le point le plus proche de chez vous
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        <Tabs value={deliveryMode} onValueChange={(value) => setDeliveryMode(value as '24R' | '24L')}>
-          <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="24R" className="flex items-center gap-2">
-              <MapPin className="h-4 w-4" />
-              Points Relais
-            </TabsTrigger>
-            <TabsTrigger value="24L" className="flex items-center gap-2">
-              <Package className="h-4 w-4" />
-              Lockers 24/7
-            </TabsTrigger>
-          </TabsList>
-        </Tabs>
 
         <div className="flex gap-2">
           <Input

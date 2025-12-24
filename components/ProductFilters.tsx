@@ -52,7 +52,7 @@ interface ProductFiltersProps {
 
 export default function ProductFilters({ onFilterChange, initialFilters = {}, products = [] }: ProductFiltersProps) {
   const { user } = useAuth();
-  const { preferredSize } = useClientSize();
+  const { preferredSizeBottom, preferredSizeTop } = useClientSize();
   const [attributes, setAttributes] = useState<Attribute[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedFilters, setSelectedFilters] = useState<Record<string, string[]>>(initialFilters);
@@ -151,11 +151,11 @@ export default function ProductFilters({ onFilterChange, initialFilters = {}, pr
       isFirstRender.current = false;
       return;
     }
-    const filtersWithMySize = showMySize && preferredSize
-      ? { ...selectedFilters, my_size: [preferredSize] }
+    const filtersWithMySize = showMySize && (preferredSizeBottom || preferredSizeTop)
+      ? { ...selectedFilters, my_size: ['enabled'] }
       : selectedFilters;
     onFilterChange(filtersWithMySize, { min: minPrice, max: maxPriceFilter });
-  }, [selectedFilters, maxPriceFilter, minPrice, showMySize, preferredSize, onFilterChange]);
+  }, [selectedFilters, maxPriceFilter, minPrice, showMySize, preferredSizeBottom, preferredSizeTop, onFilterChange]);
 
   const handleFilterChange = (attributeSlug: string, termName: string, checked: boolean) => {
     setSelectedFilters((prev) => {
@@ -229,7 +229,7 @@ export default function ProductFilters({ onFilterChange, initialFilters = {}, pr
         </div>
       </CardHeader>
       <CardContent className="space-y-6">
-        {preferredSize && (
+        {(preferredSizeBottom || preferredSizeTop) && (
           <div className="space-y-3 pb-6 border-b">
             <h3 className="font-semibold text-sm flex items-center gap-2">
               <Ruler className="h-4 w-4 text-[#D4AF37]" />
@@ -245,9 +245,15 @@ export default function ProductFilters({ onFilterChange, initialFilters = {}, pr
                 htmlFor="my-size-filter"
                 className="text-sm font-normal cursor-pointer flex-1"
               >
-                A ma taille ({preferredSize})
+                A ma taille
               </Label>
             </div>
+            {showMySize && (
+              <div className="ml-6 text-xs text-muted-foreground space-y-1">
+                {preferredSizeBottom && <p>• Bas : {preferredSizeBottom}</p>}
+                {preferredSizeTop && <p>• Hauts : {preferredSizeTop}</p>}
+              </div>
+            )}
           </div>
         )}
 
@@ -302,7 +308,7 @@ export default function ProductFilters({ onFilterChange, initialFilters = {}, pr
             return null;
           }
 
-          const sizeOrder = ['XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL'];
+          const sizeOrder = ['36', '38', '40', '42', '44', '46', '48', '50', '52', '54', 'XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL'];
           const isSizeAttribute = attribute.slug.toLowerCase().includes('taille') ||
                                  attribute.slug.toLowerCase().includes('size') ||
                                  attribute.name.toLowerCase().includes('taille') ||
@@ -313,16 +319,23 @@ export default function ProductFilters({ onFilterChange, initialFilters = {}, pr
 
           const sortedTerms = isSizeAttribute
             ? [...attribute.terms].sort((a, b) => {
-                const aUpper = a.name.toUpperCase();
-                const bUpper = b.name.toUpperCase();
-                const aIndex = sizeOrder.indexOf(aUpper);
-                const bIndex = sizeOrder.indexOf(bUpper);
+                const aValue = a.name.trim();
+                const bValue = b.name.trim();
+                const aIndex = sizeOrder.indexOf(aValue);
+                const bIndex = sizeOrder.indexOf(bValue);
 
                 if (aIndex !== -1 && bIndex !== -1) {
                   return aIndex - bIndex;
                 }
                 if (aIndex !== -1) return -1;
                 if (bIndex !== -1) return 1;
+
+                const aNum = parseInt(aValue);
+                const bNum = parseInt(bValue);
+                if (!isNaN(aNum) && !isNaN(bNum)) {
+                  return aNum - bNum;
+                }
+
                 return a.name.localeCompare(b.name);
               })
             : attribute.terms;

@@ -425,20 +425,22 @@ export default function CheckoutPage() {
       return;
     }
 
-    if (!selectedShippingMethod) {
-      toast.error('Veuillez sélectionner un mode de livraison');
-      return;
-    }
+    if (!activeBatch) {
+      if (!selectedShippingMethod) {
+        toast.error('Veuillez sélectionner un mode de livraison');
+        return;
+      }
 
-    const method = shippingMethods.find(m => m.id === selectedShippingMethod);
-    const isRelayDelivery = method?.title?.toLowerCase().includes('relais') ||
-                           method?.title?.toLowerCase().includes('locker') ||
-                           method?.description?.toLowerCase().includes('relais') ||
-                           method?.description?.toLowerCase().includes('locker');
+      const method = shippingMethods.find(m => m.id === selectedShippingMethod);
+      const isRelayDelivery = method?.title?.toLowerCase().includes('relais') ||
+                             method?.title?.toLowerCase().includes('locker') ||
+                             method?.description?.toLowerCase().includes('relais') ||
+                             method?.description?.toLowerCase().includes('locker');
 
-    if (isRelayDelivery && !selectedRelayPoint) {
-      toast.error('Veuillez sélectionner un point relais');
-      return;
+      if (isRelayDelivery && !selectedRelayPoint) {
+        toast.error('Veuillez sélectionner un point relais');
+        return;
+      }
     }
 
     if (!selectedPaymentMethod) {
@@ -1323,8 +1325,8 @@ export default function CheckoutPage() {
           Validation de la commande
         </h1>
 
-        <div className="grid gap-8 lg:grid-cols-3">
-            <div className="lg:col-span-2 space-y-6">
+        <div className="max-w-4xl mx-auto">
+            <div className="space-y-6">
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
@@ -1400,7 +1402,7 @@ export default function CheckoutPage() {
                 </CardContent>
               </Card>
 
-              {shippingMethods.length > 0 && (
+              {(!useDeliveryBatch || (useDeliveryBatch && !activeBatch)) && shippingMethods.length > 0 && (
                 <Card>
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
@@ -1451,7 +1453,7 @@ export default function CheckoutPage() {
                 </Card>
               )}
 
-              {selectedShippingMethod &&
+              {(!useDeliveryBatch || (useDeliveryBatch && !activeBatch)) && selectedShippingMethod &&
                selectedAddressId &&
                (() => {
                  const method = shippingMethods.find(m => m.id === selectedShippingMethod);
@@ -1461,60 +1463,74 @@ export default function CheckoutPage() {
                                         method?.description?.toLowerCase().includes('locker');
                  const selectedAddress = addresses.find(addr => addr.id === selectedAddressId);
 
-                 return isRelayDelivery && selectedAddress ? (
-                   <MondialRelaySelector
-                     postalCode={selectedAddress.postal_code}
-                     country={selectedAddress.country}
-                     onRelaySelected={setSelectedRelayPoint}
-                     selectedRelay={selectedRelayPoint}
-                   />
-                 ) : null;
+                 if (!isRelayDelivery || !selectedAddress) return null;
+
+                 return (
+                   <div className="space-y-6">
+                     <MondialRelaySelector
+                       postalCode={selectedAddress.postal_code}
+                       country={selectedAddress.country}
+                       onRelaySelected={setSelectedRelayPoint}
+                       selectedRelay={selectedRelayPoint}
+                       deliveryMode="24R"
+                     />
+                     <MondialRelaySelector
+                       postalCode={selectedAddress.postal_code}
+                       country={selectedAddress.country}
+                       onRelaySelected={setSelectedRelayPoint}
+                       selectedRelay={selectedRelayPoint}
+                       deliveryMode="24L"
+                     />
+                   </div>
+                 );
                })()
               }
 
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Shield className="h-5 w-5 text-[#b8933d]" />
-                    Assurance facultative
-                  </CardTitle>
-                  <CardDescription>
-                    Protégez votre commande contre la casse et la perte
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <RadioGroup value={selectedInsurance} onValueChange={setSelectedInsurance}>
-                    <div className="space-y-4">
-                      {insuranceOptions.map((option) => (
-                        <div
-                          key={option.id}
-                          className={`flex items-start space-x-3 p-4 rounded-lg border-2 transition-colors cursor-pointer ${
-                            selectedInsurance === option.id
-                              ? 'border-[#b8933d] bg-[#b8933d]/5'
-                              : 'border-gray-200 hover:border-gray-300'
-                          }`}
-                          onClick={() => setSelectedInsurance(option.id)}
-                        >
-                          <RadioGroupItem value={option.id} id={option.id} className="mt-1" />
-                          <div className="flex-1">
-                            <Label htmlFor={option.id} className="cursor-pointer">
-                              <div className="flex items-center justify-between">
-                                <div>
-                                  <p className="font-semibold text-gray-900">{option.label}</p>
-                                  <p className="text-sm text-gray-600">{option.description}</p>
+              {(!useDeliveryBatch || (useDeliveryBatch && !activeBatch)) && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Shield className="h-5 w-5 text-[#b8933d]" />
+                      Assurance facultative
+                    </CardTitle>
+                    <CardDescription>
+                      Protégez votre commande contre la casse et la perte
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <RadioGroup value={selectedInsurance} onValueChange={setSelectedInsurance}>
+                      <div className="space-y-4">
+                        {insuranceOptions.map((option) => (
+                          <div
+                            key={option.id}
+                            className={`flex items-start space-x-3 p-4 rounded-lg border-2 transition-colors cursor-pointer ${
+                              selectedInsurance === option.id
+                                ? 'border-[#b8933d] bg-[#b8933d]/5'
+                                : 'border-gray-200 hover:border-gray-300'
+                            }`}
+                            onClick={() => setSelectedInsurance(option.id)}
+                          >
+                            <RadioGroupItem value={option.id} id={option.id} className="mt-1" />
+                            <div className="flex-1">
+                              <Label htmlFor={option.id} className="cursor-pointer">
+                                <div className="flex items-center justify-between">
+                                  <div>
+                                    <p className="font-semibold text-gray-900">{option.label}</p>
+                                    <p className="text-sm text-gray-600">{option.description}</p>
+                                  </div>
+                                  <p className="font-bold text-[#b8933d]">
+                                    {option.price === 0 ? 'Gratuit' : `+${option.price.toFixed(2)} €`}
+                                  </p>
                                 </div>
-                                <p className="font-bold text-[#b8933d]">
-                                  {option.price === 0 ? 'Gratuit' : `+${option.price.toFixed(2)} €`}
-                                </p>
-                              </div>
-                            </Label>
+                              </Label>
+                            </div>
                           </div>
-                        </div>
-                      ))}
-                    </div>
-                  </RadioGroup>
-                </CardContent>
-              </Card>
+                        ))}
+                      </div>
+                    </RadioGroup>
+                  </CardContent>
+                </Card>
+              )}
 
               <Card>
                 <CardHeader>
@@ -1814,10 +1830,8 @@ export default function CheckoutPage() {
                   </div>
                 </CardContent>
               </Card>
-            </div>
 
-            <div className="lg:col-span-1">
-              <Card className="sticky top-24">
+              <Card>
                 <CardContent className="p-6 space-y-4">
                   <h2 className="text-xl font-bold text-gray-900">Total</h2>
                   <Separator />
@@ -1962,7 +1976,8 @@ export default function CheckoutPage() {
                       processing ||
                       addresses.length === 0 ||
                       !selectedAddressId ||
-                      !selectedShippingMethod ||
+                      (!useDeliveryBatch && !selectedShippingMethod) ||
+                      (useDeliveryBatch && !activeBatch && !selectedShippingMethod) ||
                       !selectedPaymentMethod ||
                       (isFirstOrder && calculateTotal() < MINIMUM_ORDER_AMOUNT)
                     }

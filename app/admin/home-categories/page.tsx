@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
-import { Loader2, Plus, Trash2, ChevronUp, ChevronDown, Image as ImageIcon } from 'lucide-react';
+import { Loader2, Plus, Trash2, ChevronUp, ChevronDown, Image as ImageIcon, Edit } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAdmin } from '@/hooks/use-admin';
 
@@ -210,12 +210,21 @@ export default function HomeCategoriesPage() {
 
   return (
     <div className="container mx-auto px-4 py-8">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold mb-2">Gestion des catégories en page d'accueil</h1>
-        <p className="text-gray-600">
-          Sélectionnez les catégories à afficher sur la page d'accueil et définissez leur ordre d'affichage.
-          Si le nombre de catégories est impair, la dernière prendra toute la largeur.
-        </p>
+      <div className="mb-8 flex items-start justify-between">
+        <div>
+          <h1 className="text-3xl font-bold mb-2">Gestion des catégories en page d'accueil</h1>
+          <p className="text-gray-600">
+            Sélectionnez les catégories à afficher sur la page d'accueil et définissez leur ordre d'affichage.
+            Si le nombre de catégories est impair, la dernière prendra toute la largeur.
+          </p>
+        </div>
+        <Button
+          onClick={() => router.push('/admin/home-categories/new')}
+          className="bg-[#C6A15B] hover:bg-[#B7933F]"
+        >
+          <Plus className="h-4 w-4 mr-2" />
+          Créer une catégorie
+        </Button>
       </div>
 
       <div className="grid lg:grid-cols-2 gap-6">
@@ -315,6 +324,16 @@ export default function HomeCategoriesPage() {
                         <ChevronDown className="h-4 w-4" />
                       </Button>
                     </div>
+
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => router.push(`/admin/home-categories/${category.id}`)}
+                      disabled={saving}
+                      className="text-blue-600 hover:text-blue-700"
+                    >
+                      <Edit className="h-4 w-4" />
+                    </Button>
 
                     <Button
                       variant="destructive"

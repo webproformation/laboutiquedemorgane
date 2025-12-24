@@ -8,7 +8,7 @@ import { useCart } from '@/context/CartContext';
 import { useWishlist } from '@/context/WishlistContext';
 import { useAuth } from '@/context/AuthContext';
 import { useClientSize } from '@/hooks/use-client-size';
-import { ShoppingCart, Heart, ChevronLeft, ChevronRight, Bell, Gem, Ruler } from 'lucide-react';
+import { ShoppingCart, Heart, ChevronLeft, ChevronRight, Bell, Ruler } from 'lucide-react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { toast } from 'sonner';
@@ -24,7 +24,6 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { formatPrice } from '@/lib/utils';
 import { supabase } from '@/lib/supabase-client';
-import HiddenDiamond from '@/components/HiddenDiamond';
 
 interface ProductCardProps {
   product: Product;
@@ -42,7 +41,6 @@ export default function ProductCard({ product }: ProductCardProps) {
   const [isSubmittingNotification, setIsSubmittingNotification] = useState(false);
   const [touchStart, setTouchStart] = useState<number | null>(null);
   const [touchEnd, setTouchEnd] = useState<number | null>(null);
-  const [hasHiddenDiamond, setHasHiddenDiamond] = useState(false);
 
   const isInMySize = isProductInMySize(product);
 
@@ -50,28 +48,6 @@ export default function ProductCard({ product }: ProductCardProps) {
     product.image?.sourceUrl,
     ...(product.galleryImages?.nodes?.map(img => img.sourceUrl) || [])
   ].filter(Boolean) as string[];
-
-  useEffect(() => {
-    checkHiddenDiamondStatus();
-  }, [product.databaseId]);
-
-  const checkHiddenDiamondStatus = async () => {
-    if (!product.databaseId) return;
-
-    try {
-      const { data, error } = await supabase
-        .from('featured_products')
-        .select('is_hidden_diamond')
-        .eq('product_id', product.databaseId)
-        .eq('is_hidden_diamond', true)
-        .maybeSingle();
-
-      if (error) throw error;
-      setHasHiddenDiamond(!!data);
-    } catch (error) {
-      console.error('Error checking hidden diamond status:', error);
-    }
-  };
 
   const hasSelectableAttributes = () => {
     const isVariable = product.__typename === 'VariableProduct';
@@ -240,13 +216,6 @@ export default function ProductCard({ product }: ProductCardProps) {
               )}
             </div>
 
-            {hasHiddenDiamond && product.databaseId && (
-              <HiddenDiamond
-                diamondId={`product-${product.databaseId}`}
-                pageUrl={`/product/${product.slug}`}
-              />
-            )}
-
             {images.length > 0 ? (
               <Image
                 src={images[currentImageIndex]}
@@ -297,14 +266,6 @@ export default function ProductCard({ product }: ProductCardProps) {
               </>
             )}
             <div className="absolute top-2 right-2 flex gap-2 z-10">
-              {hasHiddenDiamond && (
-                <div
-                  className="p-2 rounded-full bg-white/90 backdrop-blur-sm shadow-md"
-                  title="Ce produit contient un diamant caché à découvrir !"
-                >
-                  <Gem className="h-5 w-5 text-blue-500 fill-blue-500 animate-pulse" />
-                </div>
-              )}
               <button
                 onClick={handleToggleWishlist}
                 className="p-2 rounded-full bg-white/90 backdrop-blur-sm hover:bg-white transition-all shadow-md hover:shadow-lg"

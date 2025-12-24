@@ -38,6 +38,7 @@ import ProductVariationSelector from '@/components/ProductVariationSelector';
 import ColorSwatch from '@/components/ColorSwatch';
 import { isColorAttribute } from '@/lib/colors';
 import ProductReviews from '@/components/ProductReviews';
+import HiddenDiamond from '@/components/HiddenDiamond';
 
 export default function ProductPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug: rawSlug } = use(params);
@@ -57,6 +58,8 @@ export default function ProductPage({ params }: { params: Promise<{ slug: string
   const [currentImages, setCurrentImages] = useState<any[]>([]);
   const [selectedCharacteristics, setSelectedCharacteristics] = useState<Record<string, string>>({});
   const [redirectCountdown, setRedirectCountdown] = useState(5);
+  const [hasHiddenDiamond, setHasHiddenDiamond] = useState(false);
+  const [diamondPosition, setDiamondPosition] = useState<'title' | 'image' | 'description'>('title');
 
   useEffect(() => {
     if ((error || !data?.product) && !loading) {
@@ -74,6 +77,34 @@ export default function ProductPage({ params }: { params: Promise<{ slug: string
       return () => clearInterval(timer);
     }
   }, [error, data, loading, router]);
+
+  useEffect(() => {
+    if (data?.product?.databaseId) {
+      checkHiddenDiamondStatus(data.product.databaseId);
+    }
+  }, [data?.product?.databaseId]);
+
+  const checkHiddenDiamondStatus = async (productId: number) => {
+    try {
+      const { data: diamondData, error } = await supabase
+        .from('featured_products')
+        .select('is_hidden_diamond')
+        .eq('product_id', productId)
+        .eq('is_hidden_diamond', true)
+        .maybeSingle();
+
+      if (error) throw error;
+
+      if (diamondData) {
+        setHasHiddenDiamond(true);
+        const positions: ('title' | 'image' | 'description')[] = ['title', 'image', 'description'];
+        const randomPosition = positions[Math.floor(Math.random() * positions.length)];
+        setDiamondPosition(randomPosition);
+      }
+    } catch (error) {
+      console.error('Error checking hidden diamond status:', error);
+    }
+  };
 
   const handleVariationChange = useCallback((variation: any, defaultImages: any[]) => {
     setSelectedVariation(variation);
@@ -482,12 +513,28 @@ export default function ProductPage({ params }: { params: Promise<{ slug: string
 
         <div className="bg-white rounded-lg overflow-hidden shadow-sm">
           <div className="grid lg:grid-cols-2 gap-8 p-6 lg:p-10">
-            <div>
+            <div className="relative">
+              {hasHiddenDiamond && diamondPosition === 'image' && product.databaseId && (
+                <HiddenDiamond
+                  diamondId={`product-${product.databaseId}`}
+                  pageUrl={`/product/${product.slug}`}
+                  inline={false}
+                />
+              )}
               <ProductGallery images={allImages} productName={product.name} />
             </div>
 
             <div className="space-y-6">
               <div>
+                {hasHiddenDiamond && diamondPosition === 'title' && product.databaseId && (
+                  <div className="mb-4">
+                    <HiddenDiamond
+                      diamondId={`product-${product.databaseId}`}
+                      pageUrl={`/product/${product.slug}`}
+                      inline={true}
+                    />
+                  </div>
+                )}
                 <h1 className="text-3xl lg:text-4xl font-bold text-gray-900 mb-4">
                   {product.name}
                 </h1>
@@ -729,6 +776,15 @@ export default function ProductPage({ params }: { params: Promise<{ slug: string
 
               {product.description && (
                 <Accordion type="single" collapsible defaultValue="description" className="border-t">
+                  {hasHiddenDiamond && diamondPosition === 'description' && product.databaseId && (
+                    <div className="pt-4 pb-2">
+                      <HiddenDiamond
+                        diamondId={`product-${product.databaseId}`}
+                        pageUrl={`/product/${product.slug}`}
+                        inline={true}
+                      />
+                    </div>
+                  )}
                   <AccordionItem value="description">
                     <AccordionTrigger className="text-lg font-semibold hover:text-[#b8933d]">
                       Description

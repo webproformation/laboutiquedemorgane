@@ -260,9 +260,13 @@ export default function ContactPage() {
                   <Clock className="h-5 w-5 text-[#C6A15B] flex-shrink-0 mt-0.5" />
                   <div>
                     <p className="font-semibold text-gray-900">Horaires</p>
-                    <p className="text-gray-600 text-sm">Lundi - Vendredi : 9h - 18h</p>
-                    <p className="text-gray-600 text-sm">Samedi : 10h - 16h</p>
-                    <p className="text-gray-600 text-sm">Dimanche : Fermé</p>
+                    <p className="text-gray-600 text-sm font-medium mt-1">En boutique sur rendez-vous</p>
+                    <p className="text-gray-600 text-sm">Le mercredi de 9h à 19h</p>
+                    <p className="text-gray-600 text-sm font-medium mt-2">Par téléphone</p>
+                    <p className="text-gray-600 text-sm">Du lundi au vendredi de 9h à 18h</p>
+                    <p className="text-gray-600 text-sm font-medium mt-2">En dehors de ces horaires</p>
+                    <p className="text-gray-600 text-sm">Laissez-nous un SMS ou un e-mail,</p>
+                    <p className="text-gray-600 text-sm">réponse garantie le plus rapidement possible</p>
                   </div>
                 </div>
               </CardContent>

@@ -159,7 +159,7 @@ export function DeliveryBatchBanner() {
             size="sm"
             className="bg-white text-[rgb(184,147,61)] hover:bg-white/90 font-medium"
           >
-            {finalizing ? 'Validation...' : 'Finaliser et commander'}
+            {finalizing ? 'Validation...' : 'J\'envoie mon colis en cours'}
           </Button>
         </div>
       </div>
