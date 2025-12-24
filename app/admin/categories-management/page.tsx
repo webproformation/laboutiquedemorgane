@@ -70,6 +70,13 @@ export default function CategoriesManagementPage() {
     parent: 0,
   });
 
+  const decodeHtmlEntities = (text: string): string => {
+    if (typeof window === 'undefined') return text;
+    const textarea = document.createElement('textarea');
+    textarea.innerHTML = text;
+    return textarea.value;
+  };
+
   useEffect(() => {
     loadCategories();
   }, []);
@@ -202,7 +209,7 @@ export default function CategoriesManagementPage() {
   const getParentCategoryName = (parentId: number): string => {
     if (parentId === 0) return 'Aucune (Catégorie principale)';
     const parent = categories.find(cat => cat.id === parentId);
-    return parent ? parent.name : 'Inconnue';
+    return parent ? decodeHtmlEntities(parent.name) : 'Inconnue';
   };
 
   const handleOpenSeo = (category: WooCategory) => {
@@ -266,7 +273,7 @@ export default function CategoriesManagementPage() {
                   <TableRow key={category.id}>
                     <TableCell className="font-medium">
                       {category.parent !== 0 && '└─ '}
-                      {category.name}
+                      {decodeHtmlEntities(category.name)}
                     </TableCell>
                     <TableCell className="text-gray-500 font-mono text-sm">
                       {category.slug}
@@ -391,7 +398,7 @@ export default function CategoriesManagementPage() {
                     .filter(cat => cat.parent === 0 && cat.id !== editingCategory?.id)
                     .map((category) => (
                       <SelectItem key={category.id} value={category.id.toString()}>
-                        {category.name}
+                        {decodeHtmlEntities(category.name)}
                       </SelectItem>
                     ))}
                 </SelectContent>
@@ -425,7 +432,7 @@ export default function CategoriesManagementPage() {
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
-              Optimisation SEO - {selectedCategoryForSeo?.name}
+              Optimisation SEO - {selectedCategoryForSeo ? decodeHtmlEntities(selectedCategoryForSeo.name) : ''}
             </DialogTitle>
             <DialogDescription>
               Slug: <span className="font-mono text-sm">{selectedCategoryForSeo?.slug}</span>
@@ -442,7 +449,7 @@ export default function CategoriesManagementPage() {
                   <div className="space-y-2">
                     <div>
                       <span className="text-sm font-semibold text-gray-700">Nom :</span>
-                      <p className="text-gray-900">{selectedCategoryForSeo.name}</p>
+                      <p className="text-gray-900">{decodeHtmlEntities(selectedCategoryForSeo.name)}</p>
                     </div>
                     <div>
                       <span className="text-sm font-semibold text-gray-700">Description :</span>

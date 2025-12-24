@@ -193,10 +193,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         console.error('Error creating WordPress user:', wpError);
       }
 
-      await supabase.from('profiles').update({
-        birth_date: birthDate || null,
-        wordpress_user_id: wordpressUserId,
-      }).eq('id', data.user.id);
+      // Only update wordpress_user_id if we successfully created a WordPress user
+      if (wordpressUserId) {
+        try {
+          await supabase.from('profiles').update({
+            wordpress_user_id: wordpressUserId,
+          }).eq('id', data.user.id);
+        } catch (updateError) {
+          console.error('Error updating WordPress user ID:', updateError);
+        }
+      }
 
       await claimPendingPrize(data.user.id);
 

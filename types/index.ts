@@ -163,6 +163,7 @@ export interface GetHomeSlidersResponse {
 
 export interface PostCategory {
   id: string;
+  databaseId?: string;
   name: string;
   slug: string;
   description?: string;

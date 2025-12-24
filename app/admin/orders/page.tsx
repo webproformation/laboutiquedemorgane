@@ -278,45 +278,54 @@ export default function AdminOrders() {
   };
 
   const downloadInvoice = async (orderId: number) => {
+    let tempContainer: HTMLElement | null = null;
+    const loadingToastId = toast.loading('Génération du PDF en cours...');
+
     try {
       const invoice = invoices[orderId];
 
       if (!invoice) {
+        toast.dismiss(loadingToastId);
         toast.error('Aucune facture trouvée pour cette commande');
         console.error('Invoice not found in state for order:', orderId);
         return;
       }
 
       if (!invoice.pdf_url) {
+        toast.dismiss(loadingToastId);
         toast.error('URL de la facture manquante');
         console.error('Invoice missing pdf_url:', invoice);
         return;
       }
 
       console.log('Downloading invoice from:', invoice.pdf_url);
-      toast.loading('Génération du PDF en cours...');
 
       const invoiceResponse = await fetch(invoice.pdf_url);
       if (!invoiceResponse.ok) {
         console.error('Failed to fetch invoice:', invoiceResponse.status, invoiceResponse.statusText);
-        throw new Error('Impossible de charger le document');
+        throw new Error(`Impossible de charger le document (${invoiceResponse.status})`);
       }
 
       const invoiceData = await invoiceResponse.json();
 
       if (!invoiceData.html) {
         console.error('Invoice data missing html:', invoiceData);
-        toast.error('Le document est invalide');
-        return;
+        throw new Error('Le document est invalide (HTML manquant)');
       }
 
+      console.log('Invoice HTML loaded, creating PDF...');
+
       // Create a temporary container for the HTML
-      const tempContainer = document.createElement('div');
+      tempContainer = document.createElement('div');
       tempContainer.innerHTML = invoiceData.html;
       tempContainer.style.position = 'absolute';
       tempContainer.style.left = '-9999px';
       tempContainer.style.top = '0';
+      tempContainer.style.width = '800px';
       document.body.appendChild(tempContainer);
+
+      // Wait a bit for images to load
+      await new Promise(resolve => setTimeout(resolve, 500));
 
       // Configure PDF options
       const opt = {
@@ -326,33 +335,53 @@ export default function AdminOrders() {
         html2canvas: {
           scale: 2,
           useCORS: true,
-          logging: false,
-          letterRendering: true
+          logging: true,
+          letterRendering: true,
+          allowTaint: true,
+          backgroundColor: '#ffffff'
         },
         jsPDF: {
           unit: 'mm' as const,
           format: 'a4' as const,
           orientation: 'portrait' as const
-        }
+        },
+        pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
       };
 
       // Convert HTML to PDF and download
-      const htmlElement = tempContainer.firstElementChild as HTMLElement;
+      const htmlElement = tempContainer.querySelector('.container') as HTMLElement;
       if (!htmlElement) {
-        throw new Error('Erreur lors de la conversion du HTML');
+        console.error('Container not found in HTML, using full tempContainer');
+        throw new Error('Structure du document invalide');
       }
 
+      console.log('Starting PDF generation...');
       await html2pdf().set(opt).from(htmlElement).save();
+      console.log('PDF generation completed');
 
       // Clean up
-      document.body.removeChild(tempContainer);
+      if (tempContainer && document.body.contains(tempContainer)) {
+        document.body.removeChild(tempContainer);
+      }
 
-      toast.dismiss();
+      toast.dismiss(loadingToastId);
       toast.success('PDF téléchargé avec succès');
     } catch (error) {
-      toast.dismiss();
-      toast.error('Erreur lors de la génération du PDF');
       console.error('Download error:', error);
+
+      // Clean up on error
+      if (tempContainer && document.body.contains(tempContainer)) {
+        try {
+          document.body.removeChild(tempContainer);
+        } catch (cleanupError) {
+          console.error('Cleanup error:', cleanupError);
+        }
+      }
+
+      toast.dismiss(loadingToastId);
+      toast.error(`Erreur lors de la génération du PDF: ${(error as Error).message}`, {
+        duration: 5000
+      });
     }
   };
 
