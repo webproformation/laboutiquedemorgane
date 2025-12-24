@@ -27,7 +27,12 @@ import {
   Store,
   Settings,
   ChevronDown,
-  ChevronRight
+  ChevronRight,
+  Award,
+  Bell,
+  ShoppingBag,
+  Gift,
+  FileText
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
@@ -137,6 +142,7 @@ export default function AdminLayout({
       children: [
         { href: '/admin/home-categories', icon: FolderTree, label: 'Catégories Accueil', badge: 0 },
         { href: '/admin/slides', icon: Image, label: 'Slides Accueil', badge: 0 },
+        { href: '/admin/featured-products', icon: Star, label: 'Produits en vedette', badge: 0 },
       ]
     },
     { href: '/admin/live-streams', icon: Video, label: 'Live Streams', badge: 0 },
@@ -147,7 +153,11 @@ export default function AdminLayout({
       mainHref: '/admin/boutique',
       children: [
         { href: '/admin/products', icon: Package, label: 'Produits', badge: 0 },
+        { href: '/admin/categories-management', icon: FolderTree, label: 'Catégories', badge: 0 },
         { href: '/admin/orders', icon: ShoppingCart, label: 'Commandes', badge: 0 },
+        { href: '/admin/factures', icon: FileText, label: 'Factures', badge: 0 },
+        { href: '/admin/looks', icon: ShoppingBag, label: 'Acheter le Look', badge: 0 },
+        { href: '/admin/gift-thresholds', icon: Gift, label: 'Progression Cadeau', badge: 0 },
         { href: '/admin/games', icon: Gamepad2, label: 'Gestion des Jeux', badge: 0 },
         { href: '/admin/coupons', icon: Ticket, label: 'Coupons', badge: 0 },
         { href: '/admin/reviews', icon: Star, label: 'Avis clients', badge: pendingReviewsCount },
@@ -162,6 +172,8 @@ export default function AdminLayout({
       mainHref: '/admin/site',
       children: [
         { href: '/admin/customers', icon: Users, label: 'Clients', badge: 0 },
+        { href: '/admin/ambassadrice', icon: Award, label: 'Ambassadrice Semaine', badge: 0 },
+        { href: '/admin/notifications-push', icon: Bell, label: 'Notifications Push', badge: 0 },
         { href: '/admin/backups', icon: Database, label: 'Sauvegardes', badge: 0 },
         { href: '/admin/analytics', icon: BarChart, label: 'Analytics', badge: 0 },
       ]

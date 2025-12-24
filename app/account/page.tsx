@@ -8,8 +8,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
-import { User, Mail, Phone, Loader2, Calendar, PiggyBank, TrendingDown, Package } from 'lucide-react';
+import { User, Mail, Phone, Loader2, Calendar, PiggyBank, TrendingDown, Package, FileText } from 'lucide-react';
 import ProfilePictureUpload from '@/components/ProfilePictureUpload';
+import { useAdmin } from '@/hooks/use-admin';
+import Link from 'next/link';
 
 interface SavingsData {
   totalSavings: number;
@@ -19,6 +21,7 @@ interface SavingsData {
 
 export default function AccountPage() {
   const { profile, updateProfile, user } = useAuth();
+  const { isAdmin } = useAdmin();
   const [loading, setLoading] = useState(false);
   const [savingsData, setSavingsData] = useState<SavingsData>({
     totalSavings: 0,
@@ -159,16 +162,25 @@ export default function AccountPage() {
 
       <Card>
         <CardHeader>
-          <div className="flex items-center gap-3">
-            <div className="p-3 bg-[#b8933d] rounded-full">
-              <User className="h-6 w-6 text-white" />
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="p-3 bg-[#b8933d] rounded-full">
+                <User className="h-6 w-6 text-white" />
+              </div>
+              <div>
+                <CardTitle>Photo de profil</CardTitle>
+                <CardDescription>
+                  Ta photo sera visible lors des lives pour une expérience plus conviviale
+                </CardDescription>
+              </div>
             </div>
-            <div>
-              <CardTitle>Photo de profil</CardTitle>
-              <CardDescription>
-                Ta photo sera visible lors des lives pour une expérience plus conviviale
-              </CardDescription>
-            </div>
+            {isAdmin && (
+              <Link href="/account/invoices-management">
+                <Button variant="outline" size="icon" title="Gestion des factures (Admin)">
+                  <FileText className="h-5 w-5" />
+                </Button>
+              </Link>
+            )}
           </div>
         </CardHeader>
         <CardContent className="flex justify-center py-6">

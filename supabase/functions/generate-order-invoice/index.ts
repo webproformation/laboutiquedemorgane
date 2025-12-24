@@ -56,7 +56,7 @@ interface OrderData {
 function generateInvoiceHTML(order: OrderData, invoiceNumber: string): string {
   const today = new Date().toLocaleDateString('fr-FR');
   const orderDate = new Date(order.date_created).toLocaleDateString('fr-FR');
-  
+
   const lineItemsHTML = order.line_items.map(item => `
     <tr>
       <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">
@@ -78,29 +78,38 @@ function generateInvoiceHTML(order: OrderData, invoiceNumber: string): string {
   <title>Bon de commande ${invoiceNumber}</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #1f2937; line-height: 1.6; }
+    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #1f2937; line-height: 1.6; background: white; }
     .container { max-width: 800px; margin: 0 auto; padding: 40px 20px; }
+    .logo-header { text-align: center; margin-bottom: 30px; }
+    .logo-header img { max-width: 400px; height: auto; }
     .header { background: linear-gradient(135deg, #b8933d 0%, #a07c2f 100%); color: white; padding: 30px; border-radius: 8px; margin-bottom: 30px; }
-    .header h1 { font-size: 28px; margin-bottom: 10px; }
+    .header h1 { font-size: 28px; margin-bottom: 10px; text-align: center; }
     .header-info { display: flex; justify-content: space-between; margin-top: 20px; }
-    .company-info { background: white; padding: 25px; border-radius: 8px; margin-bottom: 30px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
-    .company-info h2 { color: #b8933d; font-size: 22px; margin-bottom: 15px; }
+    .company-info { background: white; padding: 25px; border-radius: 8px; margin-bottom: 30px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); border: 1px solid #e5e7eb; }
+    .company-info h2 { color: #b8933d; font-size: 20px; margin-bottom: 15px; text-align: center; }
+    .company-details { font-size: 13px; line-height: 1.8; }
+    .company-details p { margin-bottom: 4px; }
     .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 30px; margin-bottom: 30px; }
-    .info-section { background: white; padding: 25px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+    .info-section { background: white; padding: 25px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); border: 1px solid #e5e7eb; }
     .info-section h3 { color: #b8933d; font-size: 18px; margin-bottom: 15px; border-bottom: 2px solid #b8933d; padding-bottom: 8px; }
-    table { width: 100%; border-collapse: collapse; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 30px; }
+    table { width: 100%; border-collapse: collapse; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 30px; border: 1px solid #e5e7eb; }
     thead { background: #f9fafb; }
     th { padding: 15px 12px; text-align: left; font-weight: 600; color: #374151; border-bottom: 2px solid #e5e7eb; }
-    .totals { background: white; padding: 25px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 30px; max-width: 400px; margin-left: auto; }
+    .totals { background: white; padding: 25px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 30px; max-width: 400px; margin-left: auto; border: 1px solid #e5e7eb; }
     .totals-row { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #e5e7eb; }
     .totals-row.total { font-size: 20px; font-weight: 700; color: #b8933d; border-bottom: none; padding-top: 15px; border-top: 2px solid #b8933d; }
-    .legal { background: #f9fafb; padding: 25px; border-radius: 8px; font-size: 12px; color: #6b7280; margin-top: 30px; }
+    .legal { background: #f9fafb; padding: 25px; border-radius: 8px; font-size: 12px; color: #6b7280; margin-top: 30px; border: 1px solid #e5e7eb; }
     .legal h3 { color: #374151; font-size: 14px; margin-bottom: 10px; }
     .footer { text-align: center; margin-top: 40px; padding-top: 20px; border-top: 2px solid #e5e7eb; color: #6b7280; font-size: 13px; }
+    @media print { body { background: white; } .container { padding: 20px; } }
   </style>
 </head>
 <body>
   <div class="container">
+    <div class="logo-header">
+      <img src="https://laboutiquedemorgane.com/logo_bdc.png" alt="La Boutique de Morgane" />
+    </div>
+
     <div class="header">
       <h1>BON DE COMMANDE</h1>
       <div class="header-info">
@@ -116,14 +125,20 @@ function generateInvoiceHTML(order: OrderData, invoiceNumber: string): string {
     </div>
 
     <div class="company-info">
-      <h2>La Boutique de Morgane</h2>
-      <p>
-        <strong>Adresse:</strong> [Adresse de l'entreprise]<br>
-        <strong>SIRET:</strong> [Numéro SIRET]<br>
-        <strong>TVA Intracommunautaire:</strong> [Numéro TVA]<br>
-        <strong>Email:</strong> contact@laboutiquedemorgane.com<br>
-        <strong>Téléphone:</strong> [Numéro de téléphone]
-      </p>
+      <h2>MORGANE DEWANIN</h2>
+      <div class="company-details">
+        <p><strong>Raison sociale:</strong> MORGANE DEWANIN</p>
+        <p><strong>Forme juridique:</strong> Société par actions simplifiée</p>
+        <p><strong>Adresse:</strong> 1062 rue d'Armentières, 59850 Nieppe</p>
+        <p><strong>Téléphone Morgane:</strong> +33 6 41 45 66 71</p>
+        <p><strong>Téléphone André:</strong> +33 6 03 48 96 62</p>
+        <p><strong>Email:</strong> contact@laboutiquedemorgane.com</p>
+        <p><strong>SIREN:</strong> 907 889 802</p>
+        <p><strong>SIRET:</strong> 907 889 802 00027</p>
+        <p><strong>Numéro de TVA:</strong> FR16907889802</p>
+        <p><strong>Date de création:</strong> 06 décembre 2021</p>
+        <p><strong>Activité (NAF/APE):</strong> Commerce de gros (commerce interentreprises) de textiles - 4641Z</p>
+      </div>
     </div>
 
     <div class="info-grid">
@@ -214,9 +229,11 @@ function generateInvoiceHTML(order: OrderData, invoiceNumber: string): string {
     </div>
 
     <div class="footer">
-      <p><strong>La Boutique de Morgane</strong> - Votre partenaire mode et beauté</p>
+      <p><strong>MORGANE DEWANIN</strong> - Votre partenaire mode et beauté</p>
       <p>www.laboutiquedemorgane.com | contact@laboutiquedemorgane.com</p>
-      <p>SIRET: [Numéro] | TVA: [Numéro] | Capital social: [Montant]</p>
+      <p>+33 6 41 45 66 71 | +33 6 03 48 96 62</p>
+      <p>SIRET: 907 889 802 00027 | TVA: FR16907889802 | SIREN: 907 889 802</p>
+      <p>1062 rue d'Armentières, 59850 Nieppe</p>
     </div>
   </div>
 </body>

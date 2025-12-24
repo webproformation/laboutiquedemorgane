@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Package, ShoppingCart, Gamepad2, Ticket, Star, MessageSquare } from 'lucide-react';
+import { Package, ShoppingCart, Gamepad2, Ticket, Star, MessageSquare, FolderTree, FileText } from 'lucide-react';
 
 export default function BoutiqueAdminPage() {
   const sections = [
@@ -15,12 +15,28 @@ export default function BoutiqueAdminPage() {
       bgColor: 'bg-blue-50',
     },
     {
+      title: 'Catégories',
+      description: 'Gérer les catégories de produits',
+      icon: FolderTree,
+      href: '/admin/categories-management',
+      color: 'text-indigo-600',
+      bgColor: 'bg-indigo-50',
+    },
+    {
       title: 'Commandes',
       description: 'Suivre et gérer les commandes clients',
       icon: ShoppingCart,
       href: '/admin/orders',
       color: 'text-green-600',
       bgColor: 'bg-green-50',
+    },
+    {
+      title: 'Factures',
+      description: 'Consulter et gérer les factures',
+      icon: FileText,
+      href: '/admin/factures',
+      color: 'text-teal-600',
+      bgColor: 'bg-teal-50',
     },
     {
       title: 'Gestion des Jeux',

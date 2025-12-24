@@ -45,6 +45,12 @@ interface ProductFlags {
   is_hidden_diamond: boolean;
 }
 
+function decodeHtmlEntities(text: string): string {
+  const textarea = document.createElement('textarea');
+  textarea.innerHTML = text;
+  return textarea.value;
+}
+
 export default function AdminProducts() {
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
@@ -223,24 +229,26 @@ export default function AdminProducts() {
 
   return (
     <div>
-      <div className="flex justify-between items-center mb-8">
-        <h1 className="text-3xl font-bold">Gestion des Produits</h1>
-        <div className="flex items-center gap-4">
-          <div className="text-sm text-gray-500">
-            {filteredProducts.length} produits au total
+      <div className="mb-8">
+        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
+          <h1 className="text-2xl sm:text-3xl font-bold">Gestion des Produits</h1>
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+            <div className="text-sm text-gray-500 whitespace-nowrap">
+              {filteredProducts.length} produits
+            </div>
+            <Link href="/admin/products/create" className="w-full sm:w-auto">
+              <Button className="w-full sm:w-auto">
+                <Plus className="w-4 h-4 mr-2" />
+                Ajouter un produit
+              </Button>
+            </Link>
           </div>
-          <Link href="/admin/products/create">
-            <Button>
-              <Plus className="w-4 h-4 mr-2" />
-              Ajouter un produit
-            </Button>
-          </Link>
         </div>
       </div>
 
       <Card className="mb-6">
         <CardContent className="pt-6">
-          <div className="flex gap-4">
+          <div className="flex flex-col sm:flex-row gap-4">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
               <Input
@@ -250,7 +258,7 @@ export default function AdminProducts() {
                 className="pl-10"
               />
             </div>
-            <div className="w-48">
+            <div className="w-full sm:w-48">
               <Select value={statusFilter} onValueChange={(value: any) => setStatusFilter(value)}>
                 <SelectTrigger>
                   <Filter className="w-4 h-4 mr-2" />
@@ -281,158 +289,285 @@ export default function AdminProducts() {
         </Card>
       ) : (
         <>
-          <Card>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-16"></TableHead>
-                  <TableHead className="w-20">Image</TableHead>
-                  <TableHead>Produit</TableHead>
-                  <TableHead className="w-32">Prix</TableHead>
-                  <TableHead className="w-32">Stock</TableHead>
-                  <TableHead className="w-32">Statut Produit</TableHead>
-                  <TableHead className="w-24 text-center">Vedette</TableHead>
-                  <TableHead className="w-24 text-center">Diamant</TableHead>
-                  <TableHead className="w-32">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {paginatedProducts.map((product) => {
-                  const isDraft = product.status === 'draft';
-                  const flags = productFlags.get(product.id);
-                  const isFeatured = flags?.is_active || false;
-                  const isHiddenDiamond = flags?.is_hidden_diamond || false;
+          {/* Desktop Table View */}
+          <div className="hidden lg:block">
+            <Card>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-16"></TableHead>
+                    <TableHead className="w-20">Image</TableHead>
+                    <TableHead>Produit</TableHead>
+                    <TableHead className="w-32">Prix</TableHead>
+                    <TableHead className="w-32">Stock</TableHead>
+                    <TableHead className="w-32">Statut Produit</TableHead>
+                    <TableHead className="w-24 text-center">Vedette</TableHead>
+                    <TableHead className="w-24 text-center">Diamant</TableHead>
+                    <TableHead className="w-32">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {paginatedProducts.map((product) => {
+                    const isDraft = product.status === 'draft';
+                    const flags = productFlags.get(product.id);
+                    const isFeatured = flags?.is_active || false;
+                    const isHiddenDiamond = flags?.is_hidden_diamond || false;
 
-                  return (
-                    <TableRow key={product.id} className={isDraft ? 'opacity-50' : ''}>
-                      <TableCell>
-                        <GripVertical className="w-5 h-5 text-gray-400" />
-                      </TableCell>
-                      <TableCell>
+                    return (
+                      <TableRow key={product.id} className={isDraft ? 'opacity-50' : ''}>
+                        <TableCell>
+                          <GripVertical className="w-5 h-5 text-gray-400" />
+                        </TableCell>
+                        <TableCell>
+                          {product.images && product.images.length > 0 && product.images[0]?.src ? (
+                            <img
+                              src={product.images[0].src}
+                              alt={product.name}
+                              className={`w-12 h-12 object-cover rounded ${isDraft ? 'grayscale' : ''}`}
+                            />
+                          ) : (
+                            <div className="w-12 h-12 bg-gray-200 rounded flex items-center justify-center">
+                              <span className="text-xs text-gray-400">N/A</span>
+                            </div>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <div className={`font-medium ${isDraft ? 'text-gray-400' : ''}`}>
+                            {decodeHtmlEntities(product.name)}
+                          </div>
+                          <div className="text-sm text-gray-500">{product.slug}</div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="font-medium">{product.price}€</div>
+                          {product.regular_price && product.price !== product.regular_price && (
+                            <div className="text-sm text-gray-400 line-through">
+                              {product.regular_price}€
+                            </div>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <span className={`text-xs font-medium px-2 py-1 rounded ${
+                            product.stock_status === 'instock'
+                              ? 'bg-green-50 text-green-600'
+                              : 'bg-red-50 text-red-600'
+                          }`}>
+                            {product.stock_status === 'instock' ? 'En stock' : 'Rupture'}
+                            {product.stock_quantity && product.stock_quantity > 0 && ` (${product.stock_quantity})`}
+                          </span>
+                        </TableCell>
+                        <TableCell>
+                          {isDraft ? (
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-medium text-orange-600 bg-orange-50 px-2 py-1 rounded">
+                                Brouillon
+                              </span>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleStatusChange(product.id, 'publish')}
+                                disabled={statusUpdating === product.id}
+                                title="Publier ce produit"
+                              >
+                                {statusUpdating === product.id ? (
+                                  <Loader2 className="w-4 h-4 animate-spin" />
+                                ) : (
+                                  <Upload className="w-4 h-4 text-green-600" />
+                                )}
+                              </Button>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-medium text-green-600 bg-green-50 px-2 py-1 rounded">
+                                Publié
+                              </span>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleStatusChange(product.id, 'draft')}
+                                disabled={statusUpdating === product.id}
+                                title="Mettre en brouillon"
+                              >
+                                {statusUpdating === product.id ? (
+                                  <Loader2 className="w-4 h-4 animate-spin" />
+                                ) : (
+                                  <EyeOff className="w-4 h-4 text-gray-400" />
+                                )}
+                              </Button>
+                            </div>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => toggleFeatured(product.id)}
+                            className="hover:bg-yellow-50"
+                            title={isFeatured ? 'Retirer des vedettes' : 'Ajouter aux vedettes'}
+                          >
+                            <Star
+                              className={`w-5 h-5 ${
+                                isFeatured
+                                  ? 'text-yellow-500 fill-yellow-500'
+                                  : 'text-gray-300'
+                              }`}
+                            />
+                          </Button>
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => toggleHiddenDiamond(product.id)}
+                            className="hover:bg-blue-50"
+                            title={isHiddenDiamond ? 'Désactiver le diamant caché' : 'Activer le diamant caché'}
+                          >
+                            <Gem
+                              className={`w-5 h-5 ${
+                                isHiddenDiamond
+                                  ? 'text-blue-500 fill-blue-500'
+                                  : 'text-gray-300'
+                              }`}
+                            />
+                          </Button>
+                        </TableCell>
+                        <TableCell>
+                          <Link href={`/admin/products/${product.id}`}>
+                            <Button variant="ghost" size="sm">
+                              <Edit className="w-4 h-4" />
+                            </Button>
+                          </Link>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </Card>
+          </div>
+
+          {/* Mobile Card View */}
+          <div className="lg:hidden space-y-4">
+            {paginatedProducts.map((product) => {
+              const isDraft = product.status === 'draft';
+              const flags = productFlags.get(product.id);
+              const isFeatured = flags?.is_active || false;
+              const isHiddenDiamond = flags?.is_hidden_diamond || false;
+
+              return (
+                <Card key={product.id} className={isDraft ? 'opacity-50' : ''}>
+                  <CardContent className="p-4">
+                    <div className="flex gap-4">
+                      <div className="flex-shrink-0">
                         {product.images && product.images.length > 0 && product.images[0]?.src ? (
                           <img
                             src={product.images[0].src}
                             alt={product.name}
-                            className={`w-12 h-12 object-cover rounded ${isDraft ? 'grayscale' : ''}`}
+                            className={`w-20 h-20 object-cover rounded ${isDraft ? 'grayscale' : ''}`}
                           />
                         ) : (
-                          <div className="w-12 h-12 bg-gray-200 rounded flex items-center justify-center">
+                          <div className="w-20 h-20 bg-gray-200 rounded flex items-center justify-center">
                             <span className="text-xs text-gray-400">N/A</span>
                           </div>
                         )}
-                      </TableCell>
-                      <TableCell>
-                        <div className={`font-medium ${isDraft ? 'text-gray-400' : ''}`}>
-                          {product.name}
+                      </div>
+
+                      <div className="flex-1 min-w-0">
+                        <h3 className={`font-medium text-sm mb-1 line-clamp-2 ${isDraft ? 'text-gray-400' : ''}`}>
+                          {decodeHtmlEntities(product.name)}
+                        </h3>
+
+                        <div className="flex flex-wrap items-center gap-2 mb-2">
+                          <div className="font-bold text-lg">{product.price}€</div>
+                          {product.regular_price && product.price !== product.regular_price && (
+                            <div className="text-sm text-gray-400 line-through">
+                              {product.regular_price}€
+                            </div>
+                          )}
                         </div>
-                        <div className="text-sm text-gray-500">{product.slug}</div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="font-medium">{product.price}€</div>
-                        {product.regular_price && product.price !== product.regular_price && (
-                          <div className="text-sm text-gray-400 line-through">
-                            {product.regular_price}€
-                          </div>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <span className={`text-xs font-medium px-2 py-1 rounded ${
-                          product.stock_status === 'instock'
-                            ? 'bg-green-50 text-green-600'
-                            : 'bg-red-50 text-red-600'
-                        }`}>
-                          {product.stock_status === 'instock' ? 'En stock' : 'Rupture'}
-                          {product.stock_quantity && product.stock_quantity > 0 && ` (${product.stock_quantity})`}
-                        </span>
-                      </TableCell>
-                      <TableCell>
-                        {isDraft ? (
-                          <div className="flex items-center gap-2">
+
+                        <div className="flex flex-wrap items-center gap-2 mb-3">
+                          <span className={`text-xs font-medium px-2 py-1 rounded ${
+                            product.stock_status === 'instock'
+                              ? 'bg-green-50 text-green-600'
+                              : 'bg-red-50 text-red-600'
+                          }`}>
+                            {product.stock_status === 'instock' ? 'En stock' : 'Rupture'}
+                          </span>
+
+                          {isDraft ? (
                             <span className="text-xs font-medium text-orange-600 bg-orange-50 px-2 py-1 rounded">
                               Brouillon
                             </span>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleStatusChange(product.id, 'publish')}
-                              disabled={statusUpdating === product.id}
-                              title="Publier ce produit"
-                            >
-                              {statusUpdating === product.id ? (
-                                <Loader2 className="w-4 h-4 animate-spin" />
-                              ) : (
-                                <Upload className="w-4 h-4 text-green-600" />
-                              )}
-                            </Button>
-                          </div>
-                        ) : (
-                          <div className="flex items-center gap-2">
+                          ) : (
                             <span className="text-xs font-medium text-green-600 bg-green-50 px-2 py-1 rounded">
                               Publié
                             </span>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleStatusChange(product.id, 'draft')}
-                              disabled={statusUpdating === product.id}
-                              title="Mettre en brouillon"
-                            >
-                              {statusUpdating === product.id ? (
-                                <Loader2 className="w-4 h-4 animate-spin" />
-                              ) : (
-                                <EyeOff className="w-4 h-4 text-gray-400" />
-                              )}
+                          )}
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <Link href={`/admin/products/${product.id}`} className="flex-1">
+                            <Button size="sm" variant="outline" className="w-full">
+                              <Edit className="w-4 h-4 mr-2" />
+                              Modifier
                             </Button>
-                          </div>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => toggleFeatured(product.id)}
-                          className="hover:bg-yellow-50"
-                          title={isFeatured ? 'Retirer des vedettes' : 'Ajouter aux vedettes'}
-                        >
-                          <Star
-                            className={`w-5 h-5 ${
-                              isFeatured
-                                ? 'text-yellow-500 fill-yellow-500'
-                                : 'text-gray-300'
-                            }`}
-                          />
-                        </Button>
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => toggleHiddenDiamond(product.id)}
-                          className="hover:bg-blue-50"
-                          title={isHiddenDiamond ? 'Désactiver le diamant caché' : 'Activer le diamant caché'}
-                        >
-                          <Gem
-                            className={`w-5 h-5 ${
-                              isHiddenDiamond
-                                ? 'text-blue-500 fill-blue-500'
-                                : 'text-gray-300'
-                            }`}
-                          />
-                        </Button>
-                      </TableCell>
-                      <TableCell>
-                        <Link href={`/admin/products/${product.id}`}>
-                          <Button variant="ghost" size="sm">
-                            <Edit className="w-4 h-4" />
+                          </Link>
+
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => toggleFeatured(product.id)}
+                            className="hover:bg-yellow-50"
+                            title={isFeatured ? 'Retirer des vedettes' : 'Ajouter aux vedettes'}
+                          >
+                            <Star
+                              className={`w-5 h-5 ${
+                                isFeatured
+                                  ? 'text-yellow-500 fill-yellow-500'
+                                  : 'text-gray-300'
+                              }`}
+                            />
                           </Button>
-                        </Link>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          </Card>
+
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => toggleHiddenDiamond(product.id)}
+                            className="hover:bg-blue-50"
+                            title={isHiddenDiamond ? 'Désactiver le diamant caché' : 'Activer le diamant caché'}
+                          >
+                            <Gem
+                              className={`w-5 h-5 ${
+                                isHiddenDiamond
+                                  ? 'text-blue-500 fill-blue-500'
+                                  : 'text-gray-300'
+                              }`}
+                            />
+                          </Button>
+
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleStatusChange(product.id, isDraft ? 'publish' : 'draft')}
+                            disabled={statusUpdating === product.id}
+                            title={isDraft ? 'Publier ce produit' : 'Mettre en brouillon'}
+                          >
+                            {statusUpdating === product.id ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : isDraft ? (
+                              <Upload className="w-4 h-4 text-green-600" />
+                            ) : (
+                              <EyeOff className="w-4 h-4 text-gray-400" />
+                            )}
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
 
           {totalPages > 1 && (
             <div className="flex justify-center gap-2 mt-6">

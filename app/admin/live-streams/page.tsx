@@ -22,6 +22,7 @@ import {
   Plus,
   Users,
   Eye,
+  EyeOff,
   Clock,
   TrendingUp,
   Package,
@@ -83,6 +84,9 @@ export default function LiveStreamsAdminPage() {
     description: '',
     scheduled_start: '',
   });
+  const [showMuxApiKey, setShowMuxApiKey] = useState(false);
+  const [showMuxSecretKey, setShowMuxSecretKey] = useState(false);
+  const [showRestreamKey, setShowRestreamKey] = useState(false);
 
   const supabase = createClient();
 
@@ -462,23 +466,43 @@ export default function LiveStreamsAdminPage() {
                 <>
                   <div>
                     <Label htmlFor="mux_api_key">Mux API Key</Label>
-                    <Input
-                      id="mux_api_key"
-                      type="password"
-                      value={settings?.mux_api_key || ''}
-                      onChange={(e) => setSettings({ ...settings, mux_api_key: e.target.value })}
-                      placeholder="Entrez votre clé API Mux"
-                    />
+                    <div className="relative">
+                      <Input
+                        id="mux_api_key"
+                        type={showMuxApiKey ? "text" : "password"}
+                        value={settings?.mux_api_key || ''}
+                        onChange={(e) => setSettings({ ...settings, mux_api_key: e.target.value })}
+                        placeholder="Entrez votre clé API Mux"
+                        className="pr-10"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowMuxApiKey(!showMuxApiKey)}
+                        className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                      >
+                        {showMuxApiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
+                    </div>
                   </div>
                   <div>
                     <Label htmlFor="mux_secret_key">Mux Secret Key</Label>
-                    <Input
-                      id="mux_secret_key"
-                      type="password"
-                      value={settings?.mux_secret_key || ''}
-                      onChange={(e) => setSettings({ ...settings, mux_secret_key: e.target.value })}
-                      placeholder="Entrez votre clé secrète Mux"
-                    />
+                    <div className="relative">
+                      <Input
+                        id="mux_secret_key"
+                        type={showMuxSecretKey ? "text" : "password"}
+                        value={settings?.mux_secret_key || ''}
+                        onChange={(e) => setSettings({ ...settings, mux_secret_key: e.target.value })}
+                        placeholder="Entrez votre clé secrète Mux"
+                        className="pr-10"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowMuxSecretKey(!showMuxSecretKey)}
+                        className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                      >
+                        {showMuxSecretKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
+                    </div>
                   </div>
                 </>
               )}
@@ -486,15 +510,25 @@ export default function LiveStreamsAdminPage() {
               {settings?.streaming_provider === 'restream' && (
                 <div>
                   <Label htmlFor="restream_stream_key">Restream Key</Label>
-                  <Input
-                    id="restream_stream_key"
-                    type="password"
-                    value={settings?.restream_stream_key || ''}
-                    onChange={(e) =>
-                      setSettings({ ...settings, restream_stream_key: e.target.value })
-                    }
-                    placeholder="Entrez votre clé Restream"
-                  />
+                  <div className="relative">
+                    <Input
+                      id="restream_stream_key"
+                      type={showRestreamKey ? "text" : "password"}
+                      value={settings?.restream_stream_key || ''}
+                      onChange={(e) =>
+                        setSettings({ ...settings, restream_stream_key: e.target.value })
+                      }
+                      placeholder="Entrez votre clé Restream"
+                      className="pr-10"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowRestreamKey(!showRestreamKey)}
+                      className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                    >
+                      {showRestreamKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
                 </div>
               )}
 

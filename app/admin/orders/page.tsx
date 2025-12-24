@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Loader2, Package, FileText, Send, Download } from 'lucide-react';
 import { toast } from 'sonner';
+import html2pdf from 'html2pdf.js';
 
 interface Order {
   id: number;
@@ -293,6 +294,7 @@ export default function AdminOrders() {
       }
 
       console.log('Downloading invoice from:', invoice.pdf_url);
+      toast.loading('Génération du PDF en cours...');
 
       const invoiceResponse = await fetch(invoice.pdf_url);
       if (!invoiceResponse.ok) {
@@ -308,19 +310,48 @@ export default function AdminOrders() {
         return;
       }
 
-      const blob = new Blob([invoiceData.html], { type: 'text/html' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `bon-commande-${invoice.invoice_number}.html`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      // Create a temporary container for the HTML
+      const tempContainer = document.createElement('div');
+      tempContainer.innerHTML = invoiceData.html;
+      tempContainer.style.position = 'absolute';
+      tempContainer.style.left = '-9999px';
+      tempContainer.style.top = '0';
+      document.body.appendChild(tempContainer);
 
-      toast.success('Téléchargement réussi');
+      // Configure PDF options
+      const opt = {
+        margin: [10, 10, 10, 10] as [number, number, number, number],
+        filename: `bon-commande-${invoice.invoice_number}.pdf`,
+        image: { type: 'jpeg' as const, quality: 0.98 },
+        html2canvas: {
+          scale: 2,
+          useCORS: true,
+          logging: false,
+          letterRendering: true
+        },
+        jsPDF: {
+          unit: 'mm' as const,
+          format: 'a4' as const,
+          orientation: 'portrait' as const
+        }
+      };
+
+      // Convert HTML to PDF and download
+      const htmlElement = tempContainer.firstElementChild as HTMLElement;
+      if (!htmlElement) {
+        throw new Error('Erreur lors de la conversion du HTML');
+      }
+
+      await html2pdf().set(opt).from(htmlElement).save();
+
+      // Clean up
+      document.body.removeChild(tempContainer);
+
+      toast.dismiss();
+      toast.success('PDF téléchargé avec succès');
     } catch (error) {
-      toast.error('Erreur lors du téléchargement du bon de commande');
+      toast.dismiss();
+      toast.error('Erreur lors de la génération du PDF');
       console.error('Download error:', error);
     }
   };
@@ -438,7 +469,8 @@ export default function AdminOrders() {
                     </ul>
                   </div>
 
-                  {(order.status === 'processing' || (invoices[order.id]?.pdf_url)) && (
+                  {/* Show invoice buttons if invoice exists, or show generate button if processing */}
+                  {(invoices[order.id]?.pdf_url || order.status === 'processing') && (
                     <div className="border-t pt-4 mt-4">
                       <div className="flex flex-wrap gap-2">
                         {invoices[order.id]?.pdf_url ? (

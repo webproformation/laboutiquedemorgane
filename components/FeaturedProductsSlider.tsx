@@ -1,7 +1,9 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import { useQuery } from '@apollo/client/react';
-import { GET_FEATURED_PRODUCTS } from '@/lib/queries';
+import { GET_PRODUCTS_BY_IDS } from '@/lib/queries';
+import { supabase } from '@/lib/supabase-client';
 import ProductCard from './ProductCard';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
@@ -13,16 +15,46 @@ import {
 } from '@/components/ui/carousel';
 import Autoplay from 'embla-carousel-autoplay';
 
-interface GetFeaturedProductsResponse {
+interface GetProductsByIdsResponse {
   products: {
     nodes: any[];
   };
 }
 
 export default function FeaturedProductsSlider() {
-  const { data: productsData, loading } = useQuery<GetFeaturedProductsResponse>(GET_FEATURED_PRODUCTS);
+  const [featuredProductIds, setFeaturedProductIds] = useState<number[]>([]);
+  const [loadingIds, setLoadingIds] = useState(true);
 
-  if (loading) {
+  useEffect(() => {
+    const fetchFeaturedProducts = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('featured_products')
+          .select('product_id')
+          .eq('is_active', true)
+          .order('display_order', { ascending: true })
+          .order('created_at', { ascending: false });
+
+        if (error) throw error;
+
+        const ids = data?.map((item: any) => item.product_id) || [];
+        setFeaturedProductIds(ids);
+      } catch (error) {
+        console.error('Error fetching featured products:', error);
+      } finally {
+        setLoadingIds(false);
+      }
+    };
+
+    fetchFeaturedProducts();
+  }, []);
+
+  const { data: productsData, loading } = useQuery<GetProductsByIdsResponse>(GET_PRODUCTS_BY_IDS, {
+    variables: { ids: featuredProductIds },
+    skip: loadingIds || featuredProductIds.length === 0,
+  });
+
+  if (loadingIds || loading) {
     return (
       <div className="py-12 bg-gray-50">
         <div className="container mx-auto px-4">
@@ -42,7 +74,7 @@ export default function FeaturedProductsSlider() {
     );
   }
 
-  if (!productsData?.products?.nodes || productsData.products.nodes.length === 0) {
+  if (featuredProductIds.length === 0 || !productsData?.products?.nodes || productsData.products.nodes.length === 0) {
     return null;
   }
 

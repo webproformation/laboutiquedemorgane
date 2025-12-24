@@ -27,7 +27,7 @@ interface SeoMetadata {
 }
 
 interface SeoMetadataEditorProps {
-  entityType: 'page' | 'category' | 'post';
+  entityType: 'page' | 'category' | 'post' | 'product_cat';
   entityIdentifier: string;
   onSave?: (metadata: SeoMetadata) => void;
   autoSave?: boolean;
