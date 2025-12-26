@@ -49,7 +49,22 @@ export default function ProductAttributesManager({ attributes, onChange }: Produ
       const response = await fetch('/api/woocommerce/attributes');
       if (response.ok) {
         const data = await response.json();
-        setWooAttributes(data.attributes || []);
+        console.log('WooCommerce attributes loaded:', data);
+
+        if (data.message) {
+          console.warn('WooCommerce message:', data.message);
+        }
+
+        const attrs = data.attributes || [];
+        setWooAttributes(attrs);
+
+        if (attrs.length === 0) {
+          toast.info('Aucun attribut WooCommerce trouvé. Créez-en dans WooCommerce ou utilisez un attribut personnalisé.');
+        }
+      } else {
+        const errorData = await response.json();
+        console.error('Error response:', errorData);
+        toast.error(`Erreur: ${errorData.error || 'Erreur lors du chargement des attributs'}`);
       }
     } catch (error) {
       console.error('Error loading WooCommerce attributes:', error);
@@ -246,21 +261,30 @@ export default function ProductAttributesManager({ attributes, onChange }: Produ
         <CardContent className="space-y-4">
           <div>
             <Label htmlFor="woo-attr-select">Sélectionner un attribut</Label>
-            <Select value={selectedWooAttr} onValueChange={(value) => {
-              setSelectedWooAttr(value);
-              setSelectedOptions([]);
-            }}>
-              <SelectTrigger id="woo-attr-select">
-                <SelectValue placeholder="Choisir un attribut..." />
-              </SelectTrigger>
-              <SelectContent>
-                {wooAttributes.map((attr) => (
-                  <SelectItem key={attr.id} value={attr.slug}>
-                    {attr.name} ({attr.terms.length} options)
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            {wooAttributes.length === 0 ? (
+              <div className="p-3 border rounded-md bg-yellow-50 border-yellow-200">
+                <p className="text-sm text-yellow-800">
+                  Aucun attribut WooCommerce disponible. Créez des attributs dans votre administration WooCommerce
+                  (Produits → Attributs) ou utilisez un attribut personnalisé ci-dessous.
+                </p>
+              </div>
+            ) : (
+              <Select value={selectedWooAttr} onValueChange={(value) => {
+                setSelectedWooAttr(value);
+                setSelectedOptions([]);
+              }}>
+                <SelectTrigger id="woo-attr-select">
+                  <SelectValue placeholder="Choisir un attribut..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {wooAttributes.map((attr) => (
+                    <SelectItem key={attr.id} value={attr.slug}>
+                      {attr.name} ({attr.terms.length} options)
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
           </div>
 
           {selectedWooAttr && (
