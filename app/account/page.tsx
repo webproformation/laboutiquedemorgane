@@ -163,36 +163,24 @@ export default function AccountPage() {
 
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3">
+            {isAdmin ? (
+              <Link href="/account/invoices-management" title="Gestion des factures (Admin)">
+                <div className="p-3 bg-[#b8933d] rounded-full hover:bg-[#a07c2f] transition-colors cursor-pointer">
+                  <User className="h-6 w-6 text-white" />
+                </div>
+              </Link>
+            ) : (
               <div className="p-3 bg-[#b8933d] rounded-full">
                 <User className="h-6 w-6 text-white" />
               </div>
-              <div>
-                <CardTitle>Photo de profil</CardTitle>
-                <CardDescription>
-                  Ta photo sera visible lors des lives pour une expérience plus conviviale
-                </CardDescription>
-              </div>
-            </div>
-            {isAdmin && (
-              <Link href="/account/invoices-management">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="rounded-full hover:bg-gray-100 p-0 w-12 h-12"
-                  title="Gestion des factures (Admin)"
-                >
-                  <Image
-                    src="/image copy copy copy copy.png"
-                    alt="Gestion des factures"
-                    width={48}
-                    height={48}
-                    className="rounded-full"
-                  />
-                </Button>
-              </Link>
             )}
+            <div>
+              <CardTitle>Photo de profil</CardTitle>
+              <CardDescription>
+                Ta photo sera visible lors des lives pour une expérience plus conviviale
+              </CardDescription>
+            </div>
           </div>
         </CardHeader>
         <CardContent className="flex justify-center py-6">

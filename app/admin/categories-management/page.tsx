@@ -222,9 +222,24 @@ export default function CategoriesManagementPage() {
     setSelectedCategoryForSeo(null);
   };
 
+  const getCategoryLevel = (category: WooCategory): number => {
+    let level = 0;
+    let currentParent = category.parent;
+    while (currentParent !== 0) {
+      level++;
+      const parent = categories.find(cat => cat.id === currentParent);
+      if (!parent) break;
+      currentParent = parent.parent;
+    }
+    return level;
+  };
+
   const sortedCategories = [...categories].sort((a, b) => {
-    if (a.parent === 0 && b.parent !== 0) return -1;
-    if (a.parent !== 0 && b.parent === 0) return 1;
+    const levelA = getCategoryLevel(a);
+    const levelB = getCategoryLevel(b);
+
+    if (levelA === 0 && levelB !== 0) return -1;
+    if (levelA !== 0 && levelB === 0) return 1;
     if (a.parent !== b.parent) return a.parent - b.parent;
     return a.name.localeCompare(b.name);
   });
@@ -269,59 +284,66 @@ export default function CategoriesManagementPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {sortedCategories.map((category) => (
-                  <TableRow key={category.id}>
-                    <TableCell className="font-medium">
-                      {category.parent !== 0 && '└─ '}
-                      {decodeHtmlEntities(category.name)}
-                    </TableCell>
-                    <TableCell className="text-gray-500 font-mono text-sm">
-                      {category.slug}
-                    </TableCell>
-                    <TableCell className="max-w-md truncate text-sm">
-                      {category.description || '—'}
-                    </TableCell>
-                    <TableCell className="text-sm">
-                      {getParentCategoryName(category.parent)}
-                    </TableCell>
-                    <TableCell className="text-center">
-                      <span className="text-sm text-gray-600">{category.count}</span>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleOpenSeo(category)}
-                          title="Optimisation SEO"
-                        >
-                          <Tags className="w-4 h-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleEdit(category)}
-                          title="Modifier"
-                        >
-                          <Edit className="w-4 h-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleDelete(category.id)}
-                          disabled={deleting === category.id}
-                          title="Supprimer"
-                        >
-                          {deleting === category.id ? (
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                          ) : (
-                            <Trash2 className="w-4 h-4 text-red-600" />
-                          )}
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                {sortedCategories.map((category) => {
+                  const level = getCategoryLevel(category);
+                  const indentation = '  '.repeat(level);
+                  const prefix = level > 0 ? '└─ ' : '';
+
+                  return (
+                    <TableRow key={category.id} className={level > 0 ? 'bg-gray-50' : ''}>
+                      <TableCell className="font-medium">
+                        <span style={{ marginLeft: `${level * 20}px` }}>
+                          {prefix}{decodeHtmlEntities(category.name)}
+                        </span>
+                      </TableCell>
+                      <TableCell className="text-gray-500 font-mono text-sm">
+                        {category.slug}
+                      </TableCell>
+                      <TableCell className="max-w-md truncate text-sm">
+                        {category.description || '—'}
+                      </TableCell>
+                      <TableCell className="text-sm">
+                        {getParentCategoryName(category.parent)}
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <span className="text-sm text-gray-600">{category.count}</span>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleOpenSeo(category)}
+                            title="Optimisation SEO"
+                          >
+                            <Tags className="w-4 h-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleEdit(category)}
+                            title="Modifier"
+                          >
+                            <Edit className="w-4 h-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleDelete(category.id)}
+                            disabled={deleting === category.id}
+                            title="Supprimer"
+                          >
+                            {deleting === category.id ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                              <Trash2 className="w-4 h-4 text-red-600" />
+                            )}
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           </CardContent>
@@ -395,10 +417,15 @@ export default function CategoriesManagementPage() {
                 <SelectContent>
                   <SelectItem value="0">Aucune (Catégorie principale)</SelectItem>
                   {categories
-                    .filter(cat => cat.parent === 0 && cat.id !== editingCategory?.id)
+                    .filter(cat => cat.id !== editingCategory?.id)
+                    .sort((a, b) => {
+                      if (a.parent === 0 && b.parent !== 0) return -1;
+                      if (a.parent !== 0 && b.parent === 0) return 1;
+                      return a.name.localeCompare(b.name);
+                    })
                     .map((category) => (
                       <SelectItem key={category.id} value={category.id.toString()}>
-                        {decodeHtmlEntities(category.name)}
+                        {category.parent !== 0 ? '└─ ' : ''}{decodeHtmlEntities(category.name)}
                       </SelectItem>
                     ))}
                 </SelectContent>

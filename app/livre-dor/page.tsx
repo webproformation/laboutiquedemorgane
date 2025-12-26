@@ -25,7 +25,7 @@ interface GuestbookEntry {
   votes_count: number;
   created_at: string;
   approved_at: string;
-  source: 'site' | 'facebook';
+  source: 'site' | 'facebook' | 'website';
   user_id: string | null;
   profiles?: {
     ambassador_badge: boolean;
@@ -49,7 +49,8 @@ export default function LivreDorPage() {
   const fetchEntries = async () => {
     try {
       const supabase = createClient();
-      const { data, error } = await supabase
+
+      const { data: guestbookData, error: guestbookError } = await supabase
         .from("guestbook_entries")
         .select(`
           *,
@@ -60,8 +61,40 @@ export default function LivreDorPage() {
         .eq("status", "approved")
         .order("approved_at", { ascending: false });
 
-      if (error) throw error;
-      setEntries(data || []);
+      if (guestbookError) throw guestbookError;
+
+      const { data: customerReviewsData, error: reviewsError } = await supabase
+        .from("customer_reviews")
+        .select(`
+          *,
+          profiles:user_id (
+            ambassador_badge
+          )
+        `)
+        .eq("is_approved", true)
+        .order("created_at", { ascending: false });
+
+      if (reviewsError) throw reviewsError;
+
+      const transformedReviews = (customerReviewsData || []).map(review => ({
+        id: review.id,
+        customer_name: review.customer_name,
+        rating: review.rating,
+        message: review.comment,
+        photo_url: null,
+        admin_response: null,
+        votes_count: 0,
+        created_at: review.created_at,
+        approved_at: review.created_at,
+        source: review.source as 'site' | 'facebook' | 'website',
+        user_id: review.user_id,
+        profiles: review.profiles,
+      }));
+
+      const allEntries = [...(guestbookData || []), ...transformedReviews];
+      allEntries.sort((a, b) => new Date(b.approved_at).getTime() - new Date(a.approved_at).getTime());
+
+      setEntries(allEntries);
     } catch (error) {
       console.error("Error fetching guestbook entries:", error);
     } finally {
@@ -312,7 +345,7 @@ export default function LivreDorPage() {
                           ) : (
                             <>
                               <ShieldCheck className="h-3 w-3" />
-                              Achat Vérifié
+                              {entry.source === 'website' ? 'Avis Certifié' : 'Achat Vérifié'}
                             </>
                           )}
                         </p>
