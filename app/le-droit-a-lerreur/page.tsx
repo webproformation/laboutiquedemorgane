@@ -12,7 +12,7 @@ export default function LeDroitALerreurPage() {
         <div className="max-w-4xl mx-auto">
           <div className="text-center mb-12">
             <img
-              src="https://laboutiquedemorgane.webprocreation.fr/wp-content/uploads/2025/12/La-boutique-de-Morgane-Le-droit-a-lerreur.png"
+              src="https://wp.laboutiquedemorgane.com/wp-content/uploads/2025/12/La-boutique-de-Morgane-Le-droit-a-lerreur.png"
               alt="Le Droit à l'Erreur"
               className="w-20 h-20 mx-auto mb-6 object-contain"
             />

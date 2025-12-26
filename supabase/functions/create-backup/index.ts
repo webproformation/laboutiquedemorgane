@@ -118,7 +118,7 @@ Deno.serve(async (req: Request) => {
       // Export database tables
       if (backupType === "database" || backupType === "full") {
         const tables = [
-          "user_profiles",
+          "profiles",
           "addresses",
           "orders",
           "order_items",
@@ -149,78 +149,51 @@ Deno.serve(async (req: Request) => {
         }
       }
 
-      // Export WordPress media list
-      if ((backupType === "media" || backupType === "full") && wpUrl && wpUsername && wpPassword) {
-        const authString = `${wpUsername}:${wpPassword}`;
-        const encodedAuth = btoa(authString);
-
-        const mediaResponse = await fetch(
-          `${wpUrl}/wp-json/wp/v2/media?per_page=100`,
-          {
-            headers: {
-              "Authorization": `Basic ${encodedAuth}`,
-            },
-          }
-        );
-
-        if (mediaResponse.ok) {
-          const mediaData = await mediaResponse.json();
-          backupData.wordpress_media = mediaData;
-          metadata.media_count = mediaData.length;
+      // Export WordPress media if requested
+      if (backupType === "media" || backupType === "full") {
+        if (!wpUrl || !wpUsername || !wpPassword) {
+          throw new Error("Identifiants WordPress requis pour la sauvegarde des médias");
         }
-      }
 
-      // Add backup metadata
-      backupData.backup_info = {
-        backup_id: backup.id,
-        backup_type: backupType,
-        created_at: backup.created_at,
-        created_by: user.id,
-        description: description,
-      };
-
-      // Convert to JSON string
-      const jsonString = JSON.stringify(backupData, null, 2);
-      const fileSize = new Blob([jsonString]).size;
-
-      // Upload to storage
-      const fileName = `backup_${backupType}_${backup.id}_${Date.now()}.json`;
-      const { error: uploadError } = await supabaseClient.storage
-        .from("backups")
-        .upload(fileName, jsonString, {
-          contentType: "application/json",
+        const wpAuthString = btoa(`${wpUsername}:${wpPassword}`);
+        const mediaResponse = await fetch(`${wpUrl}/wp-json/wp/v2/media?per_page=100`, {
+          headers: {
+            'Authorization': `Basic ${wpAuthString}`,
+          },
         });
 
-      if (uploadError) {
-        throw new Error(`Erreur d'upload: ${uploadError.message}`);
+        if (!mediaResponse.ok) {
+          throw new Error("Erreur lors de la récupération des médias WordPress");
+        }
+
+        const mediaData = await mediaResponse.json();
+        backupData['wordpress_media'] = mediaData;
+        metadata['media_count'] = mediaData.length;
       }
 
-      // Update backup record
-      const { error: updateError } = await supabaseClient
+      // Store backup data as JSON
+      const backupJson = JSON.stringify(backupData);
+      const backupSize = new Blob([backupJson]).size;
+
+      metadata.backup_size = backupSize;
+      metadata.created_at = new Date().toISOString();
+
+      // Update backup record with success status
+      await supabaseClient
         .from("backups")
         .update({
           status: "completed",
-          file_path: fileName,
-          file_size: fileSize,
-          completed_at: new Date().toISOString(),
+          file_size: backupSize,
           metadata: metadata,
         })
         .eq("id", backup.id);
 
-      if (updateError) {
-        throw new Error(`Erreur de mise à jour: ${updateError.message}`);
-      }
-
       return new Response(
         JSON.stringify({
           success: true,
-          backup: {
-            ...backup,
-            status: "completed",
-            file_path: fileName,
-            file_size: fileSize,
-            metadata: metadata,
-          },
+          backup_id: backup.id,
+          size: backupSize,
+          metadata: metadata,
         }),
         {
           status: 200,
@@ -230,26 +203,36 @@ Deno.serve(async (req: Request) => {
           },
         }
       );
-    } catch (error) {
-      // Update backup record as failed
+    } catch (backupError: any) {
+      console.error("Backup error:", backupError);
+
+      // Update backup record with error status
       await supabaseClient
         .from("backups")
         .update({
           status: "failed",
-          error_message: error instanceof Error ? error.message : "Unknown error",
-          completed_at: new Date().toISOString(),
+          error_message: backupError.message,
         })
         .eq("id", backup.id);
 
-      throw error;
+      return new Response(
+        JSON.stringify({
+          error: "Erreur lors de la création de la sauvegarde",
+          details: backupError.message,
+        }),
+        {
+          status: 500,
+          headers: {
+            ...corsHeaders,
+            "Content-Type": "application/json",
+          },
+        }
+      );
     }
-  } catch (error) {
-    console.error("Error creating backup:", error);
+  } catch (error: any) {
+    console.error("Error:", error);
     return new Response(
-      JSON.stringify({
-        error: "Erreur lors de la création de la sauvegarde",
-        details: error instanceof Error ? error.message : "Unknown error",
-      }),
+      JSON.stringify({ error: error.message }),
       {
         status: 500,
         headers: {

@@ -8,7 +8,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
-import { User, Mail, Phone, Loader2, Calendar, PiggyBank, TrendingDown, Package, FileText } from 'lucide-react';
+import { User, Mail, Phone, Loader2, Calendar, PiggyBank, TrendingDown, Package } from 'lucide-react';
+import Image from 'next/image';
 import ProfilePictureUpload from '@/components/ProfilePictureUpload';
 import { useAdmin } from '@/hooks/use-admin';
 import Link from 'next/link';
@@ -176,8 +177,19 @@ export default function AccountPage() {
             </div>
             {isAdmin && (
               <Link href="/account/invoices-management">
-                <Button variant="outline" size="icon" title="Gestion des factures (Admin)">
-                  <FileText className="h-5 w-5" />
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="rounded-full hover:bg-gray-100 p-0 w-12 h-12"
+                  title="Gestion des factures (Admin)"
+                >
+                  <Image
+                    src="/image copy copy copy copy.png"
+                    alt="Gestion des factures"
+                    width={48}
+                    height={48}
+                    className="rounded-full"
+                  />
                 </Button>
               </Link>
             )}

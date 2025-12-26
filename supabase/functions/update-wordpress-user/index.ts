@@ -22,14 +22,14 @@ Deno.serve(async (req: Request) => {
     }
 
     const wpUrl = Deno.env.get('WORDPRESS_URL');
-    const wpUser = Deno.env.get('WORDPRESS_USER');
+    const wpUsername = Deno.env.get('WORDPRESS_USERNAME');
     const wpAppPassword = Deno.env.get('WORDPRESS_APP_PASSWORD');
 
-    if (!wpUrl || !wpUser || !wpAppPassword) {
+    if (!wpUrl || !wpUsername || !wpAppPassword) {
       throw new Error('WordPress credentials not configured');
     }
 
-    const authString = btoa(`${wpUser}:${wpAppPassword}`);
+    const authString = btoa(`${wpUsername}:${wpAppPassword}`);
 
     const userData: any = {};
     if (firstName) userData.first_name = firstName;

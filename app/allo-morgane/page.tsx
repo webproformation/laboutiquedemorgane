@@ -13,7 +13,7 @@ export default function AlloMorganePage() {
         <div className="max-w-4xl mx-auto">
           <div className="text-center mb-12">
             <img
-              src="https://laboutiquedemorgane.webprocreation.fr/wp-content/uploads/2025/12/La-boutique-de-Morgane-Allo-Morgane.png"
+              src="https://wp.laboutiquedemorgane.com/wp-content/uploads/2025/12/La-boutique-de-Morgane-Allo-Morgane.png"
               alt="Allô Morgane ?"
               className="w-20 h-20 mx-auto mb-6 object-contain"
             />

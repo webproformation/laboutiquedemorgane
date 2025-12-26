@@ -415,7 +415,7 @@ export default function DiagnosticPage() {
                         <li>Project Settings → Edge Functions → Secrets</li>
                         <li>Ajoutez ces 3 variables :
                           <ul className="list-disc list-inside ml-4 mt-1">
-                            <li><code>WORDPRESS_URL</code> = https://laboutiquedemorgane.webprocreation.fr</li>
+                            <li><code>WORDPRESS_URL</code> = https://wp.laboutiquedemorgane.com</li>
                             <li><code>WC_CONSUMER_KEY</code> = Votre clé API WooCommerce</li>
                             <li><code>WC_CONSUMER_SECRET</code> = Votre secret API WooCommerce</li>
                           </ul>

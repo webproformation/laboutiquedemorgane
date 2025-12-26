@@ -91,7 +91,7 @@ export default function Footer() {
               className="flex flex-col items-center text-center gap-3 hover:scale-105 transition-all duration-300 group"
             >
               <img
-                src="https://laboutiquedemorgane.webprocreation.fr/wp-content/uploads/2025/12/La-boutique-de-Morgane-Le-droit-a-lerreur.png"
+                src="https://wp.laboutiquedemorgane.com/wp-content/uploads/2025/12/La-boutique-de-Morgane-Le-droit-a-lerreur.png"
                 alt="Le Droit à l'Erreur"
                 className="w-20 h-20 object-contain transition-transform duration-300 group-hover:scale-110"
               />
@@ -106,7 +106,7 @@ export default function Footer() {
               className="flex flex-col items-center text-center gap-3 hover:scale-105 transition-all duration-300 group"
             >
               <img
-                src="https://laboutiquedemorgane.webprocreation.fr/wp-content/uploads/2025/12/La-boutique-de-Morgane-Vite-chez-vous.png"
+                src="https://wp.laboutiquedemorgane.com/wp-content/uploads/2025/12/La-boutique-de-Morgane-Vite-chez-vous.png"
                 alt="Vite chez vous"
                 className="w-20 h-20 object-contain transition-transform duration-300 group-hover:scale-110"
               />
@@ -121,7 +121,7 @@ export default function Footer() {
               className="flex flex-col items-center text-center gap-3 hover:scale-105 transition-all duration-300 group"
             >
               <img
-                src="https://laboutiquedemorgane.webprocreation.fr/wp-content/uploads/2025/12/La-boutique-de-Morgane-Transaction-protegees.png"
+                src="https://wp.laboutiquedemorgane.com/wp-content/uploads/2025/12/La-boutique-de-Morgane-Transaction-protegees.png"
                 alt="Transactions Protégées"
                 className="w-20 h-20 object-contain transition-transform duration-300 group-hover:scale-110"
               />
@@ -136,7 +136,7 @@ export default function Footer() {
               className="flex flex-col items-center text-center gap-3 hover:scale-105 transition-all duration-300 group"
             >
               <img
-                src="https://laboutiquedemorgane.webprocreation.fr/wp-content/uploads/2025/12/La-boutique-de-Morgane-Allo-Morgane.png"
+                src="https://wp.laboutiquedemorgane.com/wp-content/uploads/2025/12/La-boutique-de-Morgane-Allo-Morgane.png"
                 alt="Allô Morgane ?"
                 className="w-20 h-20 object-contain transition-transform duration-300 group-hover:scale-110"
               />

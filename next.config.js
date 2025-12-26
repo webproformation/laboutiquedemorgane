@@ -4,7 +4,7 @@ const nextConfig = {
     remotePatterns: [
       {
         protocol: 'https',
-        hostname: 'laboutiquedemorgane.webprocreation.fr',
+        hostname: 'wp.laboutiquedemorgane.com',
         pathname: '/**',
       },
       {
@@ -14,7 +14,7 @@ const nextConfig = {
       },
       {
         protocol: 'https',
-        hostname: 'hondlefoprhtrpxnumyj.supabase.co',
+        hostname: 'xaldjtbabtlmdroshzux.supabase.co',
         pathname: '/**',
       },
       {

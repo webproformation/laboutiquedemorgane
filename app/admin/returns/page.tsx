@@ -30,7 +30,7 @@ interface Return {
   declared_at: string;
   received_at: string | null;
   finalized_at: string | null;
-  user_profiles?: {
+  profiles?: {
     first_name: string;
     last_name: string;
   };
@@ -78,7 +78,7 @@ export default function AdminReturnsPage() {
         .from('returns')
         .select(`
           *,
-          user_profiles:user_id (
+          profiles:user_id (
             first_name,
             last_name
           )
@@ -406,7 +406,7 @@ export default function AdminReturnsPage() {
                 <TableRow key={returnItem.id}>
                   <TableCell className="font-medium">{returnItem.return_number}</TableCell>
                   <TableCell>
-                    {returnItem.user_profiles?.first_name} {returnItem.user_profiles?.last_name}
+                    {returnItem.profiles?.first_name} {returnItem.profiles?.last_name}
                   </TableCell>
                   <TableCell>#{returnItem.woocommerce_order_id}</TableCell>
                   <TableCell>
@@ -440,7 +440,7 @@ export default function AdminReturnsPage() {
           <DialogHeader>
             <DialogTitle>Gérer le retour {selectedReturn?.return_number}</DialogTitle>
             <DialogDescription>
-              Client: {selectedReturn?.user_profiles?.first_name} {selectedReturn?.user_profiles?.last_name}
+              Client: {selectedReturn?.profiles?.first_name} {selectedReturn?.profiles?.last_name}
             </DialogDescription>
           </DialogHeader>
 

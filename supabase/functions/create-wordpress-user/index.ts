@@ -18,14 +18,14 @@ Deno.serve(async (req: Request) => {
     const { email, firstName, lastName, password } = await req.json();
 
     const wpUrl = Deno.env.get('WORDPRESS_URL');
-    const wpUser = Deno.env.get('WORDPRESS_USER');
+    const wpUsername = Deno.env.get('WORDPRESS_USERNAME');
     const wpAppPassword = Deno.env.get('WORDPRESS_APP_PASSWORD');
 
-    if (!wpUrl || !wpUser || !wpAppPassword) {
+    if (!wpUrl || !wpUsername || !wpAppPassword) {
       throw new Error('WordPress credentials not configured');
     }
 
-    const authString = btoa(`${wpUser}:${wpAppPassword}`);
+    const authString = btoa(`${wpUsername}:${wpAppPassword}`);
 
     const userData = {
       username: email.split('@')[0] + '_' + Date.now(),
@@ -84,12 +84,12 @@ Deno.serve(async (req: Request) => {
       throw new Error(`Failed to create WordPress user: ${response.status} ${errorText}`);
     }
 
-    const wpUser_created = await response.json();
+    const wpUserCreated = await response.json();
 
     return new Response(
       JSON.stringify({
         success: true,
-        userId: wpUser_created.id,
+        userId: wpUserCreated.id,
         message: 'WordPress user created successfully',
       }),
       {

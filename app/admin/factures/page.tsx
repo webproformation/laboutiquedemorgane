@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Loader2, FileText, Download, Send, Search, Eye } from 'lucide-react';
+import { Loader2, FileText, Download, Send, Search, Eye, Archive } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   Select,
@@ -40,6 +40,7 @@ export default function AdminFacturesPage() {
   const [selectedYear, setSelectedYear] = useState<string>('all');
   const [monthlyInvoices, setMonthlyInvoices] = useState<MonthlyInvoices[]>([]);
   const [sendingInvoice, setSendingInvoice] = useState<string | null>(null);
+  const [downloadingZip, setDownloadingZip] = useState<string | null>(null);
 
   useEffect(() => {
     loadInvoices();
@@ -217,6 +218,84 @@ export default function AdminFacturesPage() {
     }
   };
 
+  const downloadMonthlyZip = async (monthData: MonthlyInvoices) => {
+    const zipKey = `${monthData.year}-${monthData.month}`;
+    setDownloadingZip(zipKey);
+
+    try {
+      toast.loading(`Préparation du ZIP pour ${monthData.month} ${monthData.year}...`);
+
+      const JSZip = (await import('jszip')).default;
+      const zip = new JSZip();
+
+      for (const invoice of monthData.invoices) {
+        try {
+          const invoiceResponse = await fetch(invoice.pdf_url);
+          if (!invoiceResponse.ok) continue;
+
+          const invoiceData = await invoiceResponse.json();
+          if (!invoiceData.html) continue;
+
+          const tempContainer = document.createElement('div');
+          tempContainer.innerHTML = invoiceData.html;
+          tempContainer.style.position = 'absolute';
+          tempContainer.style.left = '-9999px';
+          document.body.appendChild(tempContainer);
+
+          const html2pdf = (await import('html2pdf.js')).default;
+
+          const opt = {
+            margin: [10, 10, 10, 10] as [number, number, number, number],
+            image: { type: 'jpeg' as const, quality: 0.98 },
+            html2canvas: {
+              scale: 2,
+              useCORS: true,
+              logging: false,
+              letterRendering: true
+            },
+            jsPDF: {
+              unit: 'mm' as const,
+              format: 'a4' as const,
+              orientation: 'portrait' as const
+            }
+          };
+
+          const htmlElement = tempContainer.firstElementChild as HTMLElement;
+          if (htmlElement) {
+            const pdfBlob = await html2pdf().set(opt).from(htmlElement).outputPdf('blob');
+            zip.file(`${invoice.invoice_number}.pdf`, pdfBlob);
+          }
+
+          document.body.removeChild(tempContainer);
+        } catch (error) {
+          console.error(`Error processing invoice ${invoice.invoice_number}:`, error);
+        }
+      }
+
+      toast.dismiss();
+      toast.loading('Génération du fichier ZIP...');
+
+      const content = await zip.generateAsync({ type: 'blob' });
+      const url = window.URL.createObjectURL(content);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `factures-${monthData.month}-${monthData.year}.zip`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
+      toast.dismiss();
+      toast.success('ZIP téléchargé avec succès');
+    } catch (error) {
+      toast.dismiss();
+      toast.error('Erreur lors de la création du ZIP');
+      console.error('ZIP download error:', error);
+    } finally {
+      setDownloadingZip(null);
+    }
+  };
+
   const sendInvoiceEmail = async (invoiceId: string) => {
     setSendingInvoice(invoiceId);
     try {
@@ -256,7 +335,7 @@ export default function AdminFacturesPage() {
           Gestion des Factures
         </h1>
         <p className="text-gray-600 mt-2">
-          Consulter et gérer toutes les factures générées
+          Consulter, télécharger et envoyer les factures générées
         </p>
       </div>
 
@@ -325,6 +404,9 @@ export default function AdminFacturesPage() {
                         key={invoice.id}
                         className="flex items-center gap-3 p-3 border rounded-lg hover:bg-gray-50 transition-colors"
                       >
+                        <div className="flex-shrink-0">
+                          <FileText className="w-10 h-10 text-red-600" />
+                        </div>
                         <div className="flex-1 min-w-0">
                           <div className="font-medium">{invoice.invoice_number}</div>
                           <div className="text-sm text-gray-600">
@@ -352,7 +434,8 @@ export default function AdminFacturesPage() {
                             variant="ghost"
                             size="sm"
                             onClick={() => downloadInvoice(invoice)}
-                            title="Télécharger"
+                            title="Télécharger PDF"
+                            className="text-red-600 hover:text-red-700"
                           >
                             <Download className="w-4 h-4" />
                           </Button>
@@ -361,7 +444,7 @@ export default function AdminFacturesPage() {
                             size="sm"
                             onClick={() => sendInvoiceEmail(invoice.id)}
                             disabled={sendingInvoice === invoice.id}
-                            title={invoice.sent_at ? 'Renvoyer' : 'Envoyer'}
+                            title={invoice.sent_at ? 'Renvoyer par email' : 'Envoyer par email'}
                           >
                             {sendingInvoice === invoice.id ? (
                               <Loader2 className="w-4 h-4 animate-spin" />
@@ -378,12 +461,33 @@ export default function AdminFacturesPage() {
             </Card>
           ) : (
             <>
-              {monthlyInvoices.map((monthData, index) => (
+              {monthlyInvoices.map((monthData) => (
                 <Card key={`${monthData.year}-${monthData.month}`}>
                   <CardHeader>
-                    <CardTitle>
-                      {monthData.month} {monthData.year} ({monthData.invoices.length})
-                    </CardTitle>
+                    <div className="flex items-center justify-between">
+                      <CardTitle>
+                        {monthData.month} {monthData.year} ({monthData.invoices.length} facture{monthData.invoices.length > 1 ? 's' : ''})
+                      </CardTitle>
+                      <Button
+                        onClick={() => downloadMonthlyZip(monthData)}
+                        disabled={downloadingZip === `${monthData.year}-${monthData.month}`}
+                        variant="outline"
+                        size="sm"
+                        className="gap-2"
+                      >
+                        {downloadingZip === `${monthData.year}-${monthData.month}` ? (
+                          <>
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                            Génération...
+                          </>
+                        ) : (
+                          <>
+                            <Archive className="w-4 h-4" />
+                            Télécharger le mois en ZIP
+                          </>
+                        )}
+                      </Button>
+                    </div>
                   </CardHeader>
                   <CardContent>
                     <div className="space-y-2">
@@ -392,6 +496,9 @@ export default function AdminFacturesPage() {
                           key={invoice.id}
                           className="flex items-center gap-3 p-3 border rounded-lg hover:bg-gray-50 transition-colors"
                         >
+                          <div className="flex-shrink-0">
+                            <FileText className="w-10 h-10 text-red-600" />
+                          </div>
                           <div className="flex-1 min-w-0">
                             <div className="font-medium">{invoice.invoice_number}</div>
                             <div className="text-sm text-gray-600">
@@ -419,7 +526,8 @@ export default function AdminFacturesPage() {
                               variant="ghost"
                               size="sm"
                               onClick={() => downloadInvoice(invoice)}
-                              title="Télécharger"
+                              title="Télécharger PDF"
+                              className="text-red-600 hover:text-red-700"
                             >
                               <Download className="w-4 h-4" />
                             </Button>
@@ -428,7 +536,7 @@ export default function AdminFacturesPage() {
                               size="sm"
                               onClick={() => sendInvoiceEmail(invoice.id)}
                               disabled={sendingInvoice === invoice.id}
-                              title={invoice.sent_at ? 'Renvoyer' : 'Envoyer'}
+                              title={invoice.sent_at ? 'Renvoyer par email' : 'Envoyer par email'}
                             >
                               {sendingInvoice === invoice.id ? (
                                 <Loader2 className="w-4 h-4 animate-spin" />
@@ -447,6 +555,7 @@ export default function AdminFacturesPage() {
               {monthlyInvoices.length === 0 && (
                 <Card>
                   <CardContent className="p-12 text-center">
+                    <FileText className="w-16 h-16 mx-auto mb-4 text-gray-300" />
                     <p className="text-gray-600">Aucune facture générée pour le moment</p>
                   </CardContent>
                 </Card>

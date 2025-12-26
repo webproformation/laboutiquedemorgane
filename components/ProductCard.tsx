@@ -224,6 +224,11 @@ export default function ProductCard({ product }: ProductCardProps) {
                 sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, (max-width: 1024px) 25vw, 20vw"
                 className="object-cover transition-transform group-hover:scale-105"
                 quality={75}
+                unoptimized={true}
+                onError={(e) => {
+                  const target = e.target as HTMLImageElement;
+                  target.style.display = 'none';
+                }}
               />
             ) : (
               <div className="flex h-full items-center justify-center">

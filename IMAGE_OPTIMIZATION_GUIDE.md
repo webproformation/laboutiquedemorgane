@@ -8,9 +8,9 @@
 **Cause** : La configuration utilisait un wildcard `hostname: '**'` qui ne fonctionne pas de manière fiable en production sur Vercel.
 
 **Solution** : Domaines explicitement autorisés dans `next.config.js` :
-- `laboutiquedemorgane.webprocreation.fr` (WordPress/WooCommerce)
+- `wp.laboutiquedemorgane.com` (WordPress/WooCommerce)
 - `images.pexels.com` (images de placeholder)
-- `hondlefoprhtrpxnumyj.supabase.co` (Supabase)
+- `xaldjtbabtlmdroshzux.supabase.co` (Supabase)
 - `**.supabase.co` (tous les sous-domaines Supabase)
 
 ### 2. Optimisation des images

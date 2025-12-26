@@ -198,18 +198,18 @@ export default function ScratchCardGame({
   if (showSecondChanceScreen) {
     return (
       <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-        <Card className="w-full max-w-2xl p-6 md:p-12 relative bg-gradient-to-br from-yellow-50 via-orange-50 to-red-50">
+        <Card className="w-full max-w-2xl p-6 md:p-12 relative bg-gradient-to-br from-white via-amber-50 to-stone-100 border-2 border-[#b8933d]/30">
           <div className="text-center">
-            <Sparkles className="w-16 h-16 md:w-24 md:h-24 mx-auto mb-4 md:mb-6 text-yellow-500 animate-pulse" />
-            <h2 className="text-3xl md:text-5xl font-bold bg-gradient-to-r from-yellow-600 via-orange-600 to-red-600 bg-clip-text text-transparent mb-3 md:mb-4">
+            <Sparkles className="w-16 h-16 md:w-24 md:h-24 mx-auto mb-4 md:mb-6 text-[#b8933d] animate-pulse" />
+            <h2 className="text-3xl md:text-5xl font-bold bg-gradient-to-r from-[#b8933d] via-[#d4af37] to-[#c9a961] bg-clip-text text-transparent mb-3 md:mb-4">
               2ème CHANCE !
             </h2>
-            <p className="text-lg md:text-2xl text-gray-700 mb-4 md:mb-6">Vous avez droit à une nouvelle tentative !</p>
-            <p className="text-base md:text-lg text-gray-600 mb-6 md:mb-8">La chance va tourner, retentez votre chance maintenant !</p>
+            <p className="text-lg md:text-2xl text-gray-800 mb-4 md:mb-6">Vous avez droit à une nouvelle tentative !</p>
+            <p className="text-base md:text-lg text-gray-700 mb-6 md:mb-8">La chance va tourner, retentez votre chance maintenant !</p>
             <Button
               onClick={handleSecondChance}
               size="lg"
-              className="text-base md:text-xl px-8 md:px-12 py-4 md:py-6 bg-gradient-to-r from-yellow-500 to-orange-500 hover:from-yellow-600 hover:to-orange-600"
+              className="text-base md:text-xl px-8 md:px-12 py-4 md:py-6 bg-gradient-to-r from-[#b8933d] to-[#d4af37] hover:from-[#a07c2f] hover:to-[#b8933d]"
             >
               <Sparkles className="mr-2 w-5 h-5" />
               Jouer ma 2ème chance !
@@ -222,26 +222,26 @@ export default function ScratchCardGame({
 
   return (
     <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-3 md:p-4 overflow-y-auto">
-      <Card className="w-full max-w-4xl p-4 md:p-8 relative bg-gradient-to-br from-purple-50 via-pink-50 to-yellow-50 my-auto">
+      <Card className="w-full max-w-4xl p-4 md:p-8 relative bg-gradient-to-br from-white via-amber-50 to-stone-100 my-auto border-2 border-[#b8933d]/20">
         <button
           onClick={onClose}
-          className="absolute top-3 right-3 md:top-4 md:right-4 text-gray-500 hover:text-gray-700 z-10"
+          className="absolute top-3 right-3 md:top-4 md:right-4 text-gray-600 hover:text-black z-10"
         >
           <X className="w-5 h-5 md:w-6 md:h-6" />
         </button>
 
         <div className="text-center mb-4 md:mb-8">
           <div className="flex items-center justify-center mb-3 md:mb-4">
-            <Sparkles className="w-8 h-8 md:w-12 md:h-12 text-yellow-500 animate-pulse" />
-            <Gift className="w-10 h-10 md:w-16 md:h-16 text-pink-500 mx-2 md:mx-4" />
-            <Sparkles className="w-8 h-8 md:w-12 md:h-12 text-yellow-500 animate-pulse" />
+            <Sparkles className="w-8 h-8 md:w-12 md:h-12 text-[#b8933d] animate-pulse" />
+            <Gift className="w-10 h-10 md:w-16 md:h-16 text-[#b8933d] mx-2 md:mx-4" />
+            <Sparkles className="w-8 h-8 md:w-12 md:h-12 text-[#b8933d] animate-pulse" />
           </div>
-          <h2 className="text-2xl md:text-4xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent mb-1 md:mb-2">
+          <h2 className="text-2xl md:text-4xl font-bold bg-gradient-to-r from-[#b8933d] via-[#d4af37] to-[#c9a961] bg-clip-text text-transparent mb-1 md:mb-2">
             Jeu Concours
           </h2>
-          <p className="text-sm md:text-lg text-gray-700">Choisissez une carte et tentez de gagner !</p>
+          <p className="text-sm md:text-lg text-gray-800">Choisissez une carte et tentez de gagner !</p>
           {gameResult === null && (
-            <p className="text-xs md:text-sm text-gray-500 mt-1 md:mt-2">Bonne chance !</p>
+            <p className="text-xs md:text-sm text-gray-600 mt-1 md:mt-2">Bonne chance !</p>
           )}
         </div>
 
@@ -260,7 +260,7 @@ export default function ScratchCardGame({
               }}
             >
               {!card.isRevealed ? (
-                <div className="absolute inset-0 bg-gradient-to-br from-purple-500 via-pink-500 to-yellow-500 rounded-lg md:rounded-2xl shadow-xl md:shadow-2xl flex items-center justify-center border-2 md:border-4 border-white">
+                <div className="absolute inset-0 bg-gradient-to-br from-[#b8933d] via-[#d4af37] to-[#c9a961] rounded-lg md:rounded-2xl shadow-xl md:shadow-2xl flex items-center justify-center border-2 md:border-4 border-white">
                   <div className="text-center text-white">
                     <Gift className="w-8 h-8 md:w-16 md:h-16 mx-auto mb-2 md:mb-4 animate-bounce" />
                     <p className="text-xl md:text-2xl font-bold">?</p>
@@ -268,10 +268,10 @@ export default function ScratchCardGame({
                 </div>
               ) : (
                 <div
-                  className={`absolute inset-0 rounded-lg md:rounded-2xl shadow-xl md:shadow-2xl flex items-center justify-center border-2 md:border-4 border-white p-2 md:p-6 ${
+                  className={`absolute inset-0 rounded-lg md:rounded-2xl shadow-xl md:shadow-2xl flex items-center justify-center border-2 md:border-4 p-2 md:p-6 ${
                     card.isWinner
-                      ? 'bg-gradient-to-br from-green-400 to-emerald-500'
-                      : 'bg-gradient-to-br from-gray-400 to-gray-500'
+                      ? 'bg-gradient-to-br from-[#d4af37] via-[#f4d03f] to-[#c9a961] border-[#b8933d]'
+                      : 'bg-gradient-to-br from-stone-400 to-stone-500 border-stone-300'
                   }`}
                 >
                   <div className="text-center text-white">
@@ -301,12 +301,12 @@ export default function ScratchCardGame({
         {gameResult && (
           <div className="text-center space-y-3 md:space-y-4">
             {gameResult === 'win' && winningPrize && !user && (
-              <div className="bg-yellow-100 border-2 border-yellow-400 rounded-lg p-4 md:p-6">
-                <h3 className="text-xl md:text-2xl font-bold text-yellow-800 mb-2">Félicitations !</h3>
-                <p className="text-sm md:text-base text-yellow-700 mb-2">
-                  Vous avez gagné : <span className="font-bold">{winningPrize.description}</span>
+              <div className="bg-amber-50 border-2 border-[#b8933d] rounded-lg p-4 md:p-6">
+                <h3 className="text-xl md:text-2xl font-bold text-[#8b7355] mb-2">Félicitations !</h3>
+                <p className="text-sm md:text-base text-gray-800 mb-2">
+                  Vous avez gagné : <span className="font-bold text-[#b8933d]">{winningPrize.description}</span>
                 </p>
-                <p className="text-xs md:text-sm text-yellow-700 mb-3 md:mb-4">
+                <p className="text-xs md:text-sm text-gray-700 mb-3 md:mb-4">
                   Connectez-vous ou créez un compte pour récupérer votre gain
                 </p>
                 <div className="flex flex-col sm:flex-row gap-2 md:gap-3 justify-center">
@@ -319,32 +319,32 @@ export default function ScratchCardGame({
                   <Button
                     onClick={() => router.push('/auth/register?prize_pending=true')}
                     variant="outline"
-                    className="w-full sm:w-auto"
+                    className="w-full sm:w-auto border-[#b8933d] text-[#b8933d] hover:bg-amber-50"
                   >
                     Créer un compte
                   </Button>
                 </div>
-                <p className="text-xs text-yellow-600 mt-2">
+                <p className="text-xs text-gray-600 mt-2">
                   Votre gain est valable 24h
                 </p>
               </div>
             )}
             {gameResult === 'win' && winningPrize && user && (
-              <div className="bg-green-100 border-2 border-green-400 rounded-lg p-4 md:p-6">
-                <h3 className="text-xl md:text-2xl font-bold text-green-800 mb-2">Félicitations !</h3>
-                <p className="text-sm md:text-base text-green-700 mb-2">
-                  Vous avez gagné : <span className="font-bold">{winningPrize.description}</span>
+              <div className="bg-amber-50 border-2 border-[#b8933d] rounded-lg p-4 md:p-6">
+                <h3 className="text-xl md:text-2xl font-bold text-[#8b7355] mb-2">Félicitations !</h3>
+                <p className="text-sm md:text-base text-gray-800 mb-2">
+                  Vous avez gagné : <span className="font-bold text-[#b8933d]">{winningPrize.description}</span>
                 </p>
-                <p className="text-xs md:text-sm text-green-600">
+                <p className="text-xs md:text-sm text-gray-700">
                   Votre coupon est disponible dans votre compte, section "Mes Coupons"
                 </p>
-                <p className="text-xs text-green-600 mt-2">
+                <p className="text-xs text-gray-600 mt-2">
                   Valable jusqu'au 01/02/2026 - Non cumulable avec d'autres réductions
                 </p>
               </div>
             )}
             {gameResult === 'lose' && isSecondChance && (
-              <div className="bg-gray-100 border-2 border-gray-400 rounded-lg p-4 md:p-6">
+              <div className="bg-stone-100 border-2 border-stone-400 rounded-lg p-4 md:p-6">
                 <h3 className="text-xl md:text-2xl font-bold text-gray-800 mb-2">Dommage !</h3>
                 <p className="text-sm md:text-base text-gray-700">
                   Ce n'est pas grave, d'autres opportunités vous attendent !
@@ -352,7 +352,7 @@ export default function ScratchCardGame({
               </div>
             )}
             {(gameResult === 'win' || (gameResult === 'lose' && isSecondChance)) && user && (
-              <Button onClick={onClose} size="lg" className="mt-3 md:mt-4 w-full sm:w-auto">
+              <Button onClick={onClose} size="lg" className="mt-3 md:mt-4 w-full sm:w-auto bg-[#b8933d] hover:bg-[#a07c2f]">
                 Fermer
               </Button>
             )}

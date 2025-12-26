@@ -3,6 +3,7 @@
 import { createContext, useContext, useEffect, useState } from 'react';
 import { User, AuthError } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase-client';
+import { clearSupabaseAuth, isAuthError } from '@/lib/auth-cleanup';
 
 interface Profile {
   id: string;
@@ -45,6 +46,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         if (error) {
           console.error('Session error:', error);
+
+          if (isAuthError(error)) {
+            console.log('Auth error detected, clearing localStorage');
+            clearSupabaseAuth();
+          }
+
           await supabase.auth.signOut();
           setUser(null);
           setProfile(null);
@@ -73,6 +80,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (event === 'TOKEN_REFRESHED') {
           console.log('Token refreshed successfully');
         } else if (event === 'SIGNED_OUT') {
+          console.log('User signed out');
           setUser(null);
           setProfile(null);
         } else if (event === 'USER_UPDATED') {

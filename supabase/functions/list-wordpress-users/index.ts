@@ -6,13 +6,13 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
-const WORDPRESS_URL = Deno.env.get('WORDPRESS_URL') || 'https://laboutiquedemorgane.webprocreation.fr';
-const WP_APP_USER = Deno.env.get('WP_APP_USER');
-const WP_APP_PASSWORD = Deno.env.get('WP_APP_PASSWORD');
+const WORDPRESS_URL = Deno.env.get('WORDPRESS_URL');
+const WORDPRESS_USERNAME = Deno.env.get('WORDPRESS_USERNAME');
+const WORDPRESS_APP_PASSWORD = Deno.env.get('WORDPRESS_APP_PASSWORD');
 
 const getAuthHeader = () => {
-  if (WP_APP_USER && WP_APP_PASSWORD) {
-    const credentials = btoa(`${WP_APP_USER}:${WP_APP_PASSWORD}`);
+  if (WORDPRESS_USERNAME && WORDPRESS_APP_PASSWORD) {
+    const credentials = btoa(`${WORDPRESS_USERNAME}:${WORDPRESS_APP_PASSWORD}`);
     return `Basic ${credentials}`;
   }
   return null;
@@ -29,10 +29,10 @@ Deno.serve(async (req: Request) => {
   try {
     const authHeader = getAuthHeader();
 
-    if (!authHeader) {
+    if (!authHeader || !WORDPRESS_URL) {
       return new Response(
         JSON.stringify({
-          error: 'Configuration manquante : WP_APP_USER et WP_APP_PASSWORD doivent être configurés',
+          error: 'Configuration manquante : WORDPRESS_URL, WORDPRESS_USERNAME et WORDPRESS_APP_PASSWORD doivent être configurés',
           users: []
         }),
         {

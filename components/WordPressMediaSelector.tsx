@@ -20,8 +20,8 @@ import {
 interface MediaItem {
   id: number;
   source_url: string;
-  title: { rendered: string };
-  alt_text: string;
+  title?: { rendered: string } | string;
+  alt_text?: string;
 }
 
 interface WordPressMediaSelectorProps {
@@ -287,7 +287,7 @@ export default function WordPressMediaSelector({ onSelect, selectedImage }: Word
                     >
                       <img
                         src={item.source_url}
-                        alt={item.alt_text || item.title.rendered}
+                        alt={item.alt_text || (typeof item.title === 'string' ? item.title : item.title?.rendered || 'Image')}
                         className="w-full h-full object-cover"
                       />
                       <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-30 transition-all flex items-center justify-center">

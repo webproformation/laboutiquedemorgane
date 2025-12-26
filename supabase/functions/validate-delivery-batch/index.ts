@@ -105,7 +105,7 @@ Deno.serve(async (req: Request) => {
       clientSecret = stripeData.client_secret;
     }
 
-    const woocommerceUrl = Deno.env.get('WORDPRESS_URL') || 'https://laboutiquedemorgane.webprocreation.fr';
+    const woocommerceUrl = Deno.env.get('WORDPRESS_URL');
     const wooKey = Deno.env.get('WOOCOMMERCE_CONSUMER_KEY');
     const wooSecret = Deno.env.get('WOOCOMMERCE_CONSUMER_SECRET');
 

@@ -58,11 +58,11 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    const WORDPRESS_URL = Deno.env.get("WORDPRESS_URL") || "https://laboutiquedemorgane.webprocreation.fr";
+    const WORDPRESS_URL = Deno.env.get("WORDPRESS_URL");
     const WC_CONSUMER_KEY = Deno.env.get("WOOCOMMERCE_CONSUMER_KEY");
     const WC_CONSUMER_SECRET = Deno.env.get("WOOCOMMERCE_CONSUMER_SECRET");
 
-    if (!WC_CONSUMER_KEY || !WC_CONSUMER_SECRET) {
+    if (!WORDPRESS_URL || !WC_CONSUMER_KEY || !WC_CONSUMER_SECRET) {
       return new Response(
         JSON.stringify({ 
           error: "WooCommerce credentials not configured" 

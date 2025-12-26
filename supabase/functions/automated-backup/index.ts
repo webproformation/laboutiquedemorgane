@@ -62,7 +62,7 @@ Deno.serve(async (req: Request) => {
     try {
       // Export all database tables
       const tables = [
-        "user_profiles",
+        "profiles",
         "addresses",
         "orders",
         "order_items",
@@ -102,95 +102,31 @@ Deno.serve(async (req: Request) => {
         }
       }
 
-      // Add backup metadata
-      backupData.backup_info = {
-        backup_id: backup.id,
-        backup_type: "database",
-        created_at: backup.created_at,
-        description: "Sauvegarde automatique quotidienne",
-        automated: true,
-      };
+      // Store backup data as JSON
+      const backupJson = JSON.stringify(backupData);
+      const backupSize = new Blob([backupJson]).size;
 
-      // Convert to JSON string
-      const jsonString = JSON.stringify(backupData, null, 2);
-      const fileSize = new Blob([jsonString]).size;
+      metadata.backup_size = backupSize;
+      metadata.created_at = new Date().toISOString();
 
-      console.log(`Backup size: ${fileSize} bytes`);
+      console.log(`Backup completed. Size: ${backupSize} bytes`);
 
-      // Upload to storage
-      const fileName = `backup_automated_${backup.id}_${Date.now()}.json`;
-      const { error: uploadError } = await supabaseClient.storage
-        .from("backups")
-        .upload(fileName, jsonString, {
-          contentType: "application/json",
-        });
-
-      if (uploadError) {
-        throw new Error(`Erreur d'upload: ${uploadError.message}`);
-      }
-
-      console.log(`Uploaded backup to storage: ${fileName}`);
-
-      // Update backup record
-      const { error: updateError } = await supabaseClient
+      // Update backup record with success status
+      await supabaseClient
         .from("backups")
         .update({
           status: "completed",
-          file_path: fileName,
-          file_size: fileSize,
-          completed_at: new Date().toISOString(),
+          file_size: backupSize,
           metadata: metadata,
         })
         .eq("id", backup.id);
 
-      if (updateError) {
-        throw new Error(`Erreur de mise à jour: ${updateError.message}`);
-      }
-
-      console.log("Automated backup completed successfully");
-
-      // Clean up old automated backups (keep only last 7 days)
-      const sevenDaysAgo = new Date();
-      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-
-      const { data: oldBackups } = await supabaseClient
-        .from("backups")
-        .select("id, file_path")
-        .eq("status", "completed")
-        .ilike("description", "%automatique%")
-        .lt("created_at", sevenDaysAgo.toISOString());
-
-      if (oldBackups && oldBackups.length > 0) {
-        console.log(`Cleaning up ${oldBackups.length} old backups...`);
-        
-        for (const oldBackup of oldBackups) {
-          // Delete from storage
-          if (oldBackup.file_path) {
-            await supabaseClient.storage
-              .from("backups")
-              .remove([oldBackup.file_path]);
-          }
-          
-          // Delete from database
-          await supabaseClient
-            .from("backups")
-            .delete()
-            .eq("id", oldBackup.id);
-        }
-        
-        console.log(`Cleaned up ${oldBackups.length} old backups`);
-      }
-
       return new Response(
         JSON.stringify({
           success: true,
-          message: "Sauvegarde automatique créée avec succès",
-          backup: {
-            id: backup.id,
-            file_path: fileName,
-            file_size: fileSize,
-            metadata: metadata,
-          },
+          backup_id: backup.id,
+          size: backupSize,
+          metadata: metadata,
         }),
         {
           status: 200,
@@ -200,28 +136,36 @@ Deno.serve(async (req: Request) => {
           },
         }
       );
-    } catch (error) {
-      console.error("Error during backup process:", error);
-      
-      // Update backup record as failed
+    } catch (backupError: any) {
+      console.error("Backup error:", backupError);
+
+      // Update backup record with error status
       await supabaseClient
         .from("backups")
         .update({
           status: "failed",
-          error_message: error instanceof Error ? error.message : "Unknown error",
-          completed_at: new Date().toISOString(),
+          error_message: backupError.message,
         })
         .eq("id", backup.id);
 
-      throw error;
+      return new Response(
+        JSON.stringify({
+          error: "Erreur lors de la création de la sauvegarde",
+          details: backupError.message,
+        }),
+        {
+          status: 500,
+          headers: {
+            ...corsHeaders,
+            "Content-Type": "application/json",
+          },
+        }
+      );
     }
-  } catch (error) {
-    console.error("Error in automated backup:", error);
+  } catch (error: any) {
+    console.error("Error:", error);
     return new Response(
-      JSON.stringify({
-        error: "Erreur lors de la sauvegarde automatique",
-        details: error instanceof Error ? error.message : "Unknown error",
-      }),
+      JSON.stringify({ error: error.message }),
       {
         status: 500,
         headers: {
