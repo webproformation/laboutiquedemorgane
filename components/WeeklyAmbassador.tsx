@@ -54,9 +54,11 @@ export default function WeeklyAmbassador() {
           )
         `)
         .eq("is_active", true)
-        .single();
+        .maybeSingle();
 
-      if (error && error.code !== "PGRST116") throw error;
+      if (error) {
+        console.error("Error fetching ambassador:", error);
+      }
       setAmbassador(data);
     } catch (error) {
       console.error("Error fetching ambassador:", error);

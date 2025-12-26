@@ -10,21 +10,24 @@ export async function GET(request: Request) {
 
     const supabase = await createServerClient();
 
-    // Check if user is admin
-    const { data: { user } } = await supabase.auth.getUser();
+    // Check if user is authenticated
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
 
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    if (authError || !user) {
+      console.log('Auth error in /api/invoices:', authError);
+      return NextResponse.json({ error: 'Non authentifié', invoices: [] }, { status: 401 });
     }
 
     // Check user role
-    const { data: roleData } = await supabase
+    const { data: roleData, error: roleError } = await supabase
       .from('user_roles')
       .select('role')
       .eq('user_id', user.id)
-      .single();
+      .maybeSingle();
 
     const isAdmin = roleData?.role === 'admin';
+
+    console.log('User:', user.id, 'Is Admin:', isAdmin);
 
     // Use service role key for admins to bypass RLS
     let queryClient = supabase;
@@ -43,14 +46,22 @@ export async function GET(request: Request) {
     } else {
       // Return all invoices for admin, or user's own invoices
       if (!isAdmin) {
-        const { data: profile } = await supabase
+        const { data: profile, error: profileError } = await supabase
           .from('profiles')
           .select('email')
           .eq('id', user.id)
-          .single();
+          .maybeSingle();
+
+        if (profileError) {
+          console.error('Error fetching profile:', profileError);
+          return NextResponse.json({ error: 'Erreur de profil', invoices: [] }, { status: 500 });
+        }
 
         if (profile?.email) {
           query = query.eq('customer_email', profile.email);
+        } else {
+          // User has no email in profile, return empty array
+          return NextResponse.json({ invoices: [] });
         }
       }
       query = query.order('created_at', { ascending: false });
@@ -59,11 +70,11 @@ export async function GET(request: Request) {
     const { data, error } = await query;
 
     if (error) {
-      console.error('Database error:', error);
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      console.error('Database error fetching invoices:', error);
+      return NextResponse.json({ error: error.message, invoices: [] }, { status: 500 });
     }
 
-    return NextResponse.json({ invoices: data });
+    return NextResponse.json({ invoices: data || [] });
   } catch (error: any) {
     console.error('API route error:', error);
     return NextResponse.json({ error: error.message }, { status: 500 });

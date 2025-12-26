@@ -114,8 +114,7 @@ export default function RichTextEditor({
           minHeight: `${rows * 28}px`,
           direction: 'ltr',
           textAlign: 'left',
-          unicodeBidi: 'bidi-override',
-          writingMode: 'horizontal-tb',
+          unicodeBidi: 'embed',
         }}
       />
     );
@@ -362,7 +361,7 @@ export default function RichTextEditor({
         [contenteditable] h5,
         [contenteditable] h6 {
           direction: ltr !important;
-          unicode-bidi: bidi-override !important;
+          unicode-bidi: embed !important;
         }
       `}</style>
     </div>

@@ -36,7 +36,7 @@ export function DeliveryBatchBanner() {
         .select('*')
         .eq('user_id', user.id)
         .eq('status', 'pending')
-        .single();
+        .maybeSingle();
 
       if (!error && data) {
         setActiveBatch(data);

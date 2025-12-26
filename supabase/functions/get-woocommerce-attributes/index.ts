@@ -55,74 +55,113 @@ Deno.serve(async (req: Request) => {
     const auth = btoa(`${wcConsumerKey}:${wcConsumerSecret}`);
 
     if (attributeId) {
-      const termsResponse = await fetch(
-        `${wordpressUrl}/wp-json/wc/v3/products/attributes/${attributeId}/terms?per_page=100`,
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+      try {
+        const termsResponse = await fetch(
+          `${wordpressUrl}/wp-json/wc/v3/products/attributes/${attributeId}/terms?per_page=100`,
+          {
+            headers: {
+              Authorization: `Basic ${auth}`,
+            },
+            signal: controller.signal,
+          }
+        );
+
+        clearTimeout(timeoutId);
+
+        if (!termsResponse.ok) {
+          throw new Error(`Failed to fetch attribute terms: ${termsResponse.status}`);
+        }
+
+        const terms: WooCommerceAttributeTerm[] = await termsResponse.json();
+
+        return new Response(JSON.stringify({ terms }), {
+          headers: {
+            ...corsHeaders,
+            "Content-Type": "application/json",
+          },
+        });
+      } catch (error) {
+        clearTimeout(timeoutId);
+        if (error instanceof Error && error.name === 'AbortError') {
+          throw new Error('Request timeout');
+        }
+        throw error;
+      }
+    }
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+    try {
+      const attributesResponse = await fetch(
+        `${wordpressUrl}/wp-json/wc/v3/products/attributes`,
         {
           headers: {
             Authorization: `Basic ${auth}`,
           },
+          signal: controller.signal,
         }
       );
 
-      if (!termsResponse.ok) {
-        throw new Error(`Failed to fetch attribute terms: ${termsResponse.status}`);
+      clearTimeout(timeoutId);
+
+      if (!attributesResponse.ok) {
+        throw new Error(`Failed to fetch attributes: ${attributesResponse.status}`);
       }
 
-      const terms: WooCommerceAttributeTerm[] = await termsResponse.json();
+    const attributes: WooCommerceAttribute[] = await attributesResponse.json();
 
-      return new Response(JSON.stringify({ terms }), {
+      const attributesWithTerms = await Promise.all(
+        attributes.map(async (attribute) => {
+          try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 5000);
+
+            const termsResponse = await fetch(
+              `${wordpressUrl}/wp-json/wc/v3/products/attributes/${attribute.id}/terms?per_page=100`,
+              {
+                headers: {
+                  Authorization: `Basic ${auth}`,
+                },
+                signal: controller.signal,
+              }
+            );
+
+            clearTimeout(timeoutId);
+
+            if (!termsResponse.ok) {
+              return { ...attribute, terms: [] };
+            }
+
+            const terms: WooCommerceAttributeTerm[] = await termsResponse.json();
+            return { ...attribute, terms };
+          } catch (error) {
+            console.error(`Error fetching terms for attribute ${attribute.id}:`, error);
+            return { ...attribute, terms: [] };
+          }
+        })
+      );
+
+      return new Response(JSON.stringify({ attributes: attributesWithTerms }), {
         headers: {
           ...corsHeaders,
           "Content-Type": "application/json",
         },
       });
+    } catch (error) {
+      clearTimeout(timeoutId);
+      throw error;
     }
-
-    const attributesResponse = await fetch(
-      `${wordpressUrl}/wp-json/wc/v3/products/attributes`,
-      {
-        headers: {
-          Authorization: `Basic ${auth}`,
-        },
-      }
-    );
-
-    if (!attributesResponse.ok) {
-      throw new Error(`Failed to fetch attributes: ${attributesResponse.status}`);
-    }
-
-    const attributes: WooCommerceAttribute[] = await attributesResponse.json();
-
-    const attributesWithTerms = await Promise.all(
-      attributes.map(async (attribute) => {
-        const termsResponse = await fetch(
-          `${wordpressUrl}/wp-json/wc/v3/products/attributes/${attribute.id}/terms?per_page=100`,
-          {
-            headers: {
-              Authorization: `Basic ${auth}`,
-            },
-          }
-        );
-
-        if (!termsResponse.ok) {
-          return { ...attribute, terms: [] };
-        }
-
-        const terms: WooCommerceAttributeTerm[] = await termsResponse.json();
-        return { ...attribute, terms };
-      })
-    );
-
-    return new Response(JSON.stringify({ attributes: attributesWithTerms }), {
-      headers: {
-        ...corsHeaders,
-        "Content-Type": "application/json",
-      },
-    });
   } catch (error) {
     console.error("Error fetching WooCommerce attributes:", error);
     return new Response(
-      JSON.stringify({ error: error instanceof Error ? error.message : "Unknown error" }),
+      JSON.stringify({
+        error: error instanceof Error ? error.message : "Unknown error",
+        attributes: []
+      }),
       {
         status: 500,
         headers: {
