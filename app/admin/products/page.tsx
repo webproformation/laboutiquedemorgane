@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Plus, Search, Edit, Loader2, Upload, Filter, Eye, EyeOff, GripVertical, Star, Gem } from 'lucide-react';
+import { Plus, Search, Edit, Loader2, Upload, Filter, Eye, EyeOff, GripVertical, Star, Gem, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase-client';
@@ -23,6 +23,16 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 interface WooProduct {
   id: number;
@@ -59,6 +69,8 @@ export default function AdminProducts() {
   const [statusUpdating, setStatusUpdating] = useState<number | null>(null);
   const [statusFilter, setStatusFilter] = useState<'all' | 'publish' | 'draft'>('all');
   const [productFlags, setProductFlags] = useState<Map<number, ProductFlags>>(new Map());
+  const [productToDelete, setProductToDelete] = useState<WooProduct | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   const perPage = 10;
 
   useEffect(() => {
@@ -224,6 +236,39 @@ export default function AdminProducts() {
       console.error(error);
     } finally {
       setStatusUpdating(null);
+    }
+  };
+
+  const handleDeleteProduct = async () => {
+    if (!productToDelete) return;
+
+    setIsDeleting(true);
+    try {
+      const response = await fetch('/api/woocommerce/products', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          action: 'delete',
+          productId: productToDelete.id,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Erreur lors de la suppression du produit');
+      }
+
+      toast.success('Produit supprimé avec succès');
+      await loadProducts();
+      await loadProductFlags();
+      setProductToDelete(null);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Erreur lors de la suppression');
+      console.error(error);
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -431,11 +476,22 @@ export default function AdminProducts() {
                           </Button>
                         </TableCell>
                         <TableCell>
-                          <Link href={`/admin/products/${product.id}`}>
-                            <Button variant="ghost" size="sm">
-                              <Edit className="w-4 h-4" />
+                          <div className="flex items-center gap-1">
+                            <Link href={`/admin/products/${product.id}`}>
+                              <Button variant="ghost" size="sm" title="Modifier">
+                                <Edit className="w-4 h-4" />
+                              </Button>
+                            </Link>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setProductToDelete(product)}
+                              className="hover:bg-red-50 hover:text-red-600"
+                              title="Supprimer"
+                            >
+                              <Trash2 className="w-4 h-4" />
                             </Button>
-                          </Link>
+                          </div>
                         </TableCell>
                       </TableRow>
                     );
@@ -560,6 +616,16 @@ export default function AdminProducts() {
                               <EyeOff className="w-4 h-4 text-gray-400" />
                             )}
                           </Button>
+
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setProductToDelete(product)}
+                            className="hover:bg-red-50 hover:text-red-600"
+                            title="Supprimer"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
                         </div>
                       </div>
                     </div>
@@ -592,6 +658,36 @@ export default function AdminProducts() {
           )}
         </>
       )}
+
+      <AlertDialog open={!!productToDelete} onOpenChange={(open) => !open && setProductToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirmer la suppression</AlertDialogTitle>
+            <AlertDialogDescription>
+              Êtes-vous sûr de vouloir supprimer le produit <strong>{productToDelete?.name}</strong> ?
+              <br /><br />
+              Cette action est irréversible et supprimera le produit de WooCommerce ainsi que toutes les données associées.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>Annuler</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteProduct}
+              disabled={isDeleting}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              {isDeleting ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Suppression...
+                </>
+              ) : (
+                'Supprimer'
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

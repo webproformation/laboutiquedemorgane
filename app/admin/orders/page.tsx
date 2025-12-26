@@ -534,9 +534,7 @@ export default function AdminOrders() {
                               ) : (
                                 <Send className="w-4 h-4 mr-2" />
                               )}
-                              {invoices[order.id].sent_at
-                                ? 'Renvoyer au client'
-                                : 'Envoyer au client'}
+                              Envoyer au client
                             </Button>
                             {invoices[order.id].sent_at && (
                               <span className="text-xs text-green-600 self-center">

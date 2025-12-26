@@ -34,6 +34,11 @@ function RegisterForm() {
     const prizePending = searchParams.get('prize_pending');
     const pendingPrize = localStorage.getItem('pending_prize');
     setHasPendingPrize(prizePending === 'true' && !!pendingPrize);
+
+    const refCode = searchParams.get('ref');
+    if (refCode) {
+      setReferralCode(refCode);
+    }
   }, [searchParams]);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -57,12 +62,15 @@ function RegisterForm() {
     setGdprError('');
     setLoading(true);
 
-    const { error } = await signUp(email, password, firstName, lastName, birthDate || null);
+    const { error } = await signUp(email, password, firstName, lastName, birthDate || null, referralCode || undefined);
 
     if (error) {
       toast.error(error.message || 'Une erreur est survenue lors de l\'inscription');
     } else {
-      if (hasPendingPrize) {
+      if (referralCode && referralCode.trim()) {
+        toast.success('Compte créé avec succès ! Vous et votre parrain avez chacun reçu un coupon de 5€ !');
+        router.push('/account/coupons');
+      } else if (hasPendingPrize) {
         toast.success('Compte créé avec succès ! Votre gain a été ajouté à votre compte.');
         router.push('/account/coupons');
       } else {

@@ -13,6 +13,7 @@ import Link from 'next/link';
 import { formatPrice } from '@/lib/utils';
 import { toast } from 'sonner';
 import { GuestbookForm } from '@/components/GuestbookForm';
+import html2pdf from 'html2pdf.js';
 
 interface Order {
   id: string;
@@ -146,30 +147,92 @@ export default function OrdersPage() {
   };
 
   const downloadInvoice = async (orderId: number) => {
+    let tempContainer: HTMLElement | null = null;
+    const loadingToastId = toast.loading('Génération du PDF en cours...');
     setLoadingInvoice(orderId.toString());
+
     try {
       const invoice = invoices[orderId];
-      if (invoice?.pdf_url) {
-        const invoiceResponse = await fetch(invoice.pdf_url);
-        const invoiceData = await invoiceResponse.json();
 
-        const blob = new Blob([invoiceData.html], { type: 'text/html' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `bon-commande-${invoice.invoice_number}.html`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-
-        toast.success('Bon de commande téléchargé avec succès');
-      } else {
+      if (!invoice?.pdf_url) {
+        toast.dismiss(loadingToastId);
         toast.error('Bon de commande non disponible');
+        return;
       }
+
+      const invoiceResponse = await fetch(invoice.pdf_url);
+      if (!invoiceResponse.ok) {
+        throw new Error('Impossible de charger le document');
+      }
+
+      const invoiceData = await invoiceResponse.json();
+
+      if (!invoiceData.html) {
+        throw new Error('Le document est invalide');
+      }
+
+      // Create temporary container for HTML
+      tempContainer = document.createElement('div');
+      tempContainer.innerHTML = invoiceData.html;
+      tempContainer.style.position = 'absolute';
+      tempContainer.style.left = '-9999px';
+      tempContainer.style.top = '0';
+      tempContainer.style.width = '800px';
+      document.body.appendChild(tempContainer);
+
+      // Wait for images to load
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      // Configure PDF options
+      const opt = {
+        margin: [10, 10, 10, 10] as [number, number, number, number],
+        filename: `bon-commande-${invoice.invoice_number}.pdf`,
+        image: { type: 'jpeg' as const, quality: 0.98 },
+        html2canvas: {
+          scale: 2,
+          useCORS: true,
+          logging: false,
+          letterRendering: true,
+          allowTaint: true,
+          backgroundColor: '#ffffff'
+        },
+        jsPDF: {
+          unit: 'mm' as const,
+          format: 'a4' as const,
+          orientation: 'portrait' as const
+        },
+        pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
+      };
+
+      // Generate and download PDF
+      const htmlElement = tempContainer.querySelector('.container') as HTMLElement;
+      if (!htmlElement) {
+        throw new Error('Structure du document invalide');
+      }
+
+      await html2pdf().set(opt).from(htmlElement).save();
+
+      // Cleanup
+      if (tempContainer && document.body.contains(tempContainer)) {
+        document.body.removeChild(tempContainer);
+      }
+
+      toast.dismiss(loadingToastId);
+      toast.success('Bon de commande téléchargé avec succès');
     } catch (error) {
       console.error('Error downloading invoice:', error);
-      toast.error('Erreur lors du téléchargement du bon de commande');
+
+      // Cleanup on error
+      if (tempContainer && document.body.contains(tempContainer)) {
+        try {
+          document.body.removeChild(tempContainer);
+        } catch (cleanupError) {
+          console.error('Cleanup error:', cleanupError);
+        }
+      }
+
+      toast.dismiss(loadingToastId);
+      toast.error(`Erreur: ${(error as Error).message}`);
     } finally {
       setLoadingInvoice(null);
     }
@@ -328,7 +391,6 @@ export default function OrdersPage() {
               </div>
 
               {order.woocommerce_order_id &&
-                order.status === 'processing' &&
                 invoices[order.woocommerce_order_id] && (
                   <div className="pt-4 border-t">
                     <div className="flex flex-wrap gap-2">

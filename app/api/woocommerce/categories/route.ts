@@ -43,7 +43,7 @@ function buildCategoryTree(categories: Category[]): HierarchicalCategory[] {
   return rootCategories;
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const wordpressUrl = process.env.WORDPRESS_URL;
     const consumerKey = process.env.WC_CONSUMER_KEY;
@@ -58,8 +58,12 @@ export async function GET() {
 
     const auth = Buffer.from(`${consumerKey}:${consumerSecret}`).toString('base64');
 
+    const url = new URL(request.url);
+    const action = url.searchParams.get('action');
+    const perPage = url.searchParams.get('per_page') || '100';
+
     const response = await fetch(
-      `${wordpressUrl}/wp-json/wc/v3/products/categories?per_page=100`,
+      `${wordpressUrl}/wp-json/wc/v3/products/categories?per_page=${perPage}`,
       {
         headers: {
           Authorization: `Basic ${auth}`,
@@ -78,12 +82,18 @@ export async function GET() {
       name: cat.name,
       slug: cat.slug,
       parent: cat.parent,
+      description: cat.description || '',
       image: cat.image,
       count: cat.count || 0,
     }));
 
-    const hierarchicalCategories = buildCategoryTree(categories);
+    // If action is 'list', return flat array (for management page)
+    if (action === 'list') {
+      return NextResponse.json(categories);
+    }
 
+    // Otherwise, return hierarchical structure
+    const hierarchicalCategories = buildCategoryTree(categories);
     return NextResponse.json(hierarchicalCategories);
   } catch (error) {
     console.error('Error fetching categories:', error);
@@ -97,7 +107,7 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { action } = body;
+    const { action, categoryData } = body;
 
     const wordpressUrl = process.env.WORDPRESS_URL;
     const consumerKey = process.env.WC_CONSUMER_KEY;
@@ -111,6 +121,31 @@ export async function POST(request: Request) {
     }
 
     const auth = Buffer.from(`${consumerKey}:${consumerSecret}`).toString('base64');
+
+    if (action === 'create') {
+      const createResponse = await fetch(
+        `${wordpressUrl}/wp-json/wc/v3/products/categories`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Basic ${auth}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(categoryData),
+        }
+      );
+
+      if (!createResponse.ok) {
+        const errorData = await createResponse.json();
+        return NextResponse.json(
+          { error: 'Failed to create category', details: errorData },
+          { status: createResponse.status }
+        );
+      }
+
+      const createdCategory = await createResponse.json();
+      return NextResponse.json(createdCategory);
+    }
 
     if (action === 'setup-morgane-categories') {
       const existingResponse = await fetch(
@@ -210,6 +245,130 @@ export async function POST(request: Request) {
     );
   } catch (error) {
     console.error('Error in POST /api/woocommerce/categories:', error);
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : 'Unknown error' },
+      { status: 500 }
+    );
+  }
+}
+
+export async function PUT(request: Request) {
+  try {
+    const body = await request.json();
+    const { action, categoryId, categoryData } = body;
+
+    const wordpressUrl = process.env.WORDPRESS_URL;
+    const consumerKey = process.env.WC_CONSUMER_KEY;
+    const consumerSecret = process.env.WC_CONSUMER_SECRET;
+
+    if (!wordpressUrl || !consumerKey || !consumerSecret) {
+      return NextResponse.json(
+        { error: 'Missing WooCommerce configuration' },
+        { status: 500 }
+      );
+    }
+
+    const auth = Buffer.from(`${consumerKey}:${consumerSecret}`).toString('base64');
+
+    if (action === 'update') {
+      if (!categoryId) {
+        return NextResponse.json(
+          { error: 'Category ID is required' },
+          { status: 400 }
+        );
+      }
+
+      const updateResponse = await fetch(
+        `${wordpressUrl}/wp-json/wc/v3/products/categories/${categoryId}`,
+        {
+          method: 'PUT',
+          headers: {
+            Authorization: `Basic ${auth}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(categoryData),
+        }
+      );
+
+      if (!updateResponse.ok) {
+        const errorData = await updateResponse.json();
+        return NextResponse.json(
+          { error: 'Failed to update category', details: errorData },
+          { status: updateResponse.status }
+        );
+      }
+
+      const updatedCategory = await updateResponse.json();
+      return NextResponse.json(updatedCategory);
+    }
+
+    return NextResponse.json(
+      { error: 'Invalid action' },
+      { status: 400 }
+    );
+  } catch (error) {
+    console.error('Error in PUT /api/woocommerce/categories:', error);
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : 'Unknown error' },
+      { status: 500 }
+    );
+  }
+}
+
+export async function DELETE(request: Request) {
+  try {
+    const body = await request.json();
+    const { action, categoryId } = body;
+
+    const wordpressUrl = process.env.WORDPRESS_URL;
+    const consumerKey = process.env.WC_CONSUMER_KEY;
+    const consumerSecret = process.env.WC_CONSUMER_SECRET;
+
+    if (!wordpressUrl || !consumerKey || !consumerSecret) {
+      return NextResponse.json(
+        { error: 'Missing WooCommerce configuration' },
+        { status: 500 }
+      );
+    }
+
+    const auth = Buffer.from(`${consumerKey}:${consumerSecret}`).toString('base64');
+
+    if (action === 'delete') {
+      if (!categoryId) {
+        return NextResponse.json(
+          { error: 'Category ID is required' },
+          { status: 400 }
+        );
+      }
+
+      const deleteResponse = await fetch(
+        `${wordpressUrl}/wp-json/wc/v3/products/categories/${categoryId}?force=true`,
+        {
+          method: 'DELETE',
+          headers: {
+            Authorization: `Basic ${auth}`,
+          },
+        }
+      );
+
+      if (!deleteResponse.ok) {
+        const errorData = await deleteResponse.json();
+        return NextResponse.json(
+          { error: 'Failed to delete category', details: errorData },
+          { status: deleteResponse.status }
+        );
+      }
+
+      const deletedCategory = await deleteResponse.json();
+      return NextResponse.json(deletedCategory);
+    }
+
+    return NextResponse.json(
+      { error: 'Invalid action' },
+      { status: 400 }
+    );
+  } catch (error) {
+    console.error('Error in DELETE /api/woocommerce/categories:', error);
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }

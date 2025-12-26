@@ -196,6 +196,29 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(product);
     }
 
+    if (action === 'delete' && productId) {
+      const response = await fetch(
+        `${WORDPRESS_URL}/wp-json/wc/v3/products/${productId}?force=true`,
+        {
+          method: 'DELETE',
+          headers: {
+            'Authorization': getAuthHeader(),
+          },
+        }
+      );
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        return NextResponse.json(
+          { error: 'Erreur lors de la suppression du produit', details: result },
+          { status: response.status }
+        );
+      }
+
+      return NextResponse.json(result);
+    }
+
     return NextResponse.json(
       { error: 'Action invalide' },
       { status: 400 }

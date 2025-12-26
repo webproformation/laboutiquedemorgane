@@ -24,7 +24,7 @@ interface AuthContextType {
   user: User | null;
   profile: Profile | null;
   loading: boolean;
-  signUp: (email: string, password: string, firstName: string, lastName: string, birthDate?: string | null) => Promise<{ error: AuthError | null }>;
+  signUp: (email: string, password: string, firstName: string, lastName: string, birthDate?: string | null, referralCode?: string) => Promise<{ error: AuthError | null }>;
   signIn: (email: string, password: string) => Promise<{ error: AuthError | null }>;
   signOut: () => Promise<void>;
   updateProfile: (data: Partial<Profile>) => Promise<{ error: any }>;
@@ -160,7 +160,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const signUp = async (email: string, password: string, firstName: string, lastName: string, birthDate?: string | null) => {
+  const signUp = async (email: string, password: string, firstName: string, lastName: string, birthDate?: string | null, referralCode?: string) => {
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
@@ -213,6 +213,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       await claimPendingPrize(data.user.id);
+
+      // Process referral code if provided
+      if (referralCode && referralCode.trim()) {
+        try {
+          const { data: referralResult, error: referralError } = await supabase
+            .rpc('process_referral', {
+              p_referral_code: referralCode.trim(),
+              p_referred_id: data.user.id
+            });
+
+          if (referralError) {
+            console.error('Error processing referral:', referralError);
+          } else if (referralResult) {
+            if (referralResult.success) {
+              console.log('Referral processed successfully:', referralResult);
+            } else {
+              console.error('Referral processing failed:', referralResult.error);
+            }
+          }
+        } catch (referralError) {
+          console.error('Error calling process_referral:', referralError);
+        }
+      }
 
       try {
         const response = await fetch('/api/woocommerce/sync-customer', {

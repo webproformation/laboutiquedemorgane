@@ -114,7 +114,7 @@ export default function ReferralPage() {
       <div>
         <h1 className="text-3xl font-bold text-gray-900">Parrainage</h1>
         <p className="mt-2 text-gray-600">
-          Parrainez vos amies et recevez chacune 8€ de réduction
+          Parrainez vos amies et recevez chacune 5€ de réduction
         </p>
       </div>
 
@@ -157,7 +157,7 @@ export default function ReferralPage() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-600">Gains totaux</p>
-                <p className="text-2xl font-bold text-gray-900 mt-1">{totalReferrals * 8}€</p>
+                <p className="text-2xl font-bold text-gray-900 mt-1">{totalReferrals * 5}€</p>
               </div>
               <div className="w-12 h-12 rounded-full bg-[#F2F2E8] flex items-center justify-center">
                 <Gift className="h-6 w-6 text-[#D4AF37]" />
@@ -200,9 +200,9 @@ export default function ReferralPage() {
               <div className="w-16 h-16 rounded-full bg-[#D4AF37] text-white flex items-center justify-center text-2xl font-bold mx-auto mb-4">
                 3
               </div>
-              <h3 className="font-semibold text-gray-900 mb-2">Vous gagnez 8€ chacune</h3>
+              <h3 className="font-semibold text-gray-900 mb-2">Vous gagnez 5€ chacune</h3>
               <p className="text-sm text-gray-600">
-                Vous recevez toutes les deux un bon de 8€
+                Vous recevez toutes les deux un bon de 5€
               </p>
             </div>
           </div>
