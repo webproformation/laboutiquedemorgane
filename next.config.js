@@ -9,6 +9,11 @@ const nextConfig = {
       },
       {
         protocol: 'https',
+        hostname: 'laboutiquedemorgane.webprocreation.fr',
+        pathname: '/**',
+      },
+      {
+        protocol: 'https',
         hostname: 'images.pexels.com',
         pathname: '/**',
       },
