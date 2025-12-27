@@ -16,6 +16,7 @@ const getAuthHeader = () => {
 export async function GET() {
   try {
     if (!WORDPRESS_URL || !WC_CONSUMER_KEY || !WC_CONSUMER_SECRET) {
+      console.error('Missing WooCommerce configuration');
       return NextResponse.json(
         { error: 'Configuration WooCommerce manquante' },
         { status: 500 }
@@ -23,6 +24,10 @@ export async function GET() {
     }
 
     let shippingMethods: any[] = [];
+
+    console.log('Fetching shipping methods from Supabase...');
+    console.log('Supabase URL:', supabaseUrl ? 'present' : 'missing');
+    console.log('Supabase Anon Key:', supabaseAnonKey ? 'present' : 'missing');
 
     if (supabaseUrl && supabaseAnonKey) {
       try {
@@ -33,6 +38,12 @@ export async function GET() {
           .select('*')
           .eq('is_active', true)
           .order('sort_order', { ascending: true });
+
+        console.log('Supabase response:', {
+          data: shippingMethodsFromDb,
+          error: shippingError,
+          count: shippingMethodsFromDb?.length
+        });
 
         if (shippingError) {
           console.error('Error fetching shipping methods from Supabase:', shippingError);
@@ -48,10 +59,15 @@ export async function GET() {
             description: method.description,
             is_relay: method.is_relay,
           }));
+          console.log('Mapped shipping methods:', shippingMethods.length);
+        } else {
+          console.warn('No shipping methods found in database');
         }
       } catch (error) {
         console.error('Error accessing Supabase shipping methods:', error);
       }
+    } else {
+      console.error('Supabase configuration missing');
     }
 
     const [paymentResponse, taxResponse] = await Promise.all([

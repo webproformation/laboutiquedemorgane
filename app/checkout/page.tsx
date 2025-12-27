@@ -314,8 +314,16 @@ export default function CheckoutPage() {
 
       const response = await fetch('/api/woocommerce/checkout-options');
 
+      console.log('Checkout options API response:', response.status, response.statusText);
+
       if (response.ok) {
         const data = await response.json();
+
+        console.log('Checkout options data received:', {
+          shippingMethodsCount: data.shippingMethods?.length || 0,
+          paymentGatewaysCount: data.paymentGateways?.length || 0,
+          taxRatesCount: data.taxRates?.length || 0,
+        });
 
         localStorage.setItem(cacheKey, JSON.stringify(data));
         localStorage.setItem(cacheTimeKey, now.toString());
@@ -324,16 +332,26 @@ export default function CheckoutPage() {
         setPaymentGateways(data.paymentGateways || []);
         setTaxRates(data.taxRates || []);
 
+        console.log('Shipping methods set:', data.shippingMethods?.length || 0);
+
         if (data.shippingMethods && data.shippingMethods.length > 0) {
           const availableMethods = data.shippingMethods.filter((m: ShippingMethod) => m.method_id !== 'free_shipping');
+          console.log('Available shipping methods:', availableMethods.length);
           if (availableMethods.length > 0) {
             setSelectedShippingMethod(availableMethods[0].id);
+            console.log('Selected shipping method:', availableMethods[0].id);
           }
+        } else {
+          console.warn('No shipping methods received from API!');
         }
 
         if (data.paymentGateways && data.paymentGateways.length > 0) {
           setSelectedPaymentMethod(data.paymentGateways[0].id);
         }
+      } else {
+        console.error('Failed to fetch checkout options:', response.status, response.statusText);
+        const errorText = await response.text();
+        console.error('Error response:', errorText);
       }
     } catch (error) {
       console.error('Error loading checkout options:', error);
