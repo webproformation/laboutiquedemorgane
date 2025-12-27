@@ -92,7 +92,7 @@ async function syncCategoriesFromWooCommerce() {
 
     try {
       const response = await fetch(
-        `${wordpressUrl}/wp-json/wc/v3/products/categories?per_page=100&page=${page}&orderby=menu_order&order=asc`,
+        `${wordpressUrl}/wp-json/wc/v3/products/categories?per_page=100&page=${page}`,
         {
           headers: { Authorization: auth },
           signal: controller.signal,
