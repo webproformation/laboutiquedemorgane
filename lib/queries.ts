@@ -378,7 +378,7 @@ export const GET_PRODUCTS_BY_IDS = gql`
 
 export const GET_PRODUCT_CATEGORIES = gql`
   query GetProductCategories {
-    productCategories(first: 100, where: { hideEmpty: true }) {
+    productCategories(first: 100) {
       nodes {
         id
         name
