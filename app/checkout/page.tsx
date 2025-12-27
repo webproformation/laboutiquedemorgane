@@ -81,6 +81,7 @@ interface ShippingMethod {
   title: string;
   cost: string;
   description: string;
+  is_relay?: boolean;
 }
 
 interface PaymentGateway {
@@ -432,10 +433,7 @@ export default function CheckoutPage() {
       }
 
       const method = shippingMethods.find(m => m.id === selectedShippingMethod);
-      const isRelayDelivery = method?.title?.toLowerCase().includes('relais') ||
-                             method?.title?.toLowerCase().includes('locker') ||
-                             method?.description?.toLowerCase().includes('relais') ||
-                             method?.description?.toLowerCase().includes('locker');
+      const isRelayDelivery = method?.is_relay === true;
 
       if (isRelayDelivery && !selectedRelayPoint) {
         toast.error('Veuillez sélectionner un point relais');
@@ -1125,10 +1123,7 @@ export default function CheckoutPage() {
     }
 
     const method = shippingMethods.find(m => m.id === selectedShippingMethod);
-    const isRelayDelivery = method?.title?.toLowerCase().includes('relais') ||
-                           method?.title?.toLowerCase().includes('locker') ||
-                           method?.description?.toLowerCase().includes('relais') ||
-                           method?.description?.toLowerCase().includes('locker');
+    const isRelayDelivery = method?.is_relay === true;
 
     if (isRelayDelivery && !selectedRelayPoint) {
       toast.error('Veuillez sélectionner un point relais');
@@ -1519,10 +1514,7 @@ export default function CheckoutPage() {
                selectedAddressId &&
                (() => {
                  const method = shippingMethods.find(m => m.id === selectedShippingMethod);
-                 const isRelayDelivery = method?.title?.toLowerCase().includes('relais') ||
-                                        method?.title?.toLowerCase().includes('locker') ||
-                                        method?.description?.toLowerCase().includes('relais') ||
-                                        method?.description?.toLowerCase().includes('locker');
+                 const isRelayDelivery = method?.is_relay === true;
                  const selectedAddress = addresses.find(addr => addr.id === selectedAddressId);
 
                  if (!isRelayDelivery || !selectedAddress) return null;

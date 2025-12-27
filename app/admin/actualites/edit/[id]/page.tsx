@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ArrowLeft, BookOpen, Save, Loader2, Image, Tag } from 'lucide-react';
+import { ArrowLeft, BookOpen, Save, Loader2, Image, Tag, Plus, Trash2, AlertCircle } from 'lucide-react';
 import Link from 'next/link';
 import { toast } from 'sonner';
 import RichTextEditor from '@/components/RichTextEditor';
@@ -19,6 +19,25 @@ import { Badge } from '@/components/ui/badge';
 import { useQuery } from '@apollo/client/react';
 import { GET_POST_CATEGORIES } from '@/lib/queries';
 import { GetPostCategoriesResponse } from '@/types';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 interface PostFormData {
   title: string;
@@ -49,8 +68,17 @@ export default function EditPostPage({ params }: { params: Promise<{ id: string 
     categories: [],
   });
 
-  const { data: categoriesData, loading: categoriesLoading } = useQuery<GetPostCategoriesResponse>(GET_POST_CATEGORIES);
+  const { data: categoriesData, loading: categoriesLoading, refetch: refetchCategories } = useQuery<GetPostCategoriesResponse>(GET_POST_CATEGORIES);
   const availableCategories = categoriesData?.categories?.nodes || [];
+
+  const [showCreateCategoryDialog, setShowCreateCategoryDialog] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const [newCategorySlug, setNewCategorySlug] = useState('');
+  const [newCategoryDescription, setNewCategoryDescription] = useState('');
+  const [isCreatingCategory, setIsCreatingCategory] = useState(false);
+
+  const [categoryToDelete, setCategoryToDelete] = useState<any>(null);
+  const [isDeletingCategory, setIsDeletingCategory] = useState(false);
 
   useEffect(() => {
     if (!isNewPost) {
@@ -110,6 +138,96 @@ export default function EditPostPage({ params }: { params: Promise<{ id: string 
         ? currentCategories.filter(id => id !== categoryId)
         : [...currentCategories, categoryId],
     });
+  };
+
+  const generateSlug = (name: string) => {
+    return name
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '');
+  };
+
+  const handleCreateCategory = async () => {
+    if (!newCategoryName.trim()) {
+      toast.error('Le nom de la catégorie est obligatoire');
+      return;
+    }
+
+    const slug = newCategorySlug.trim() || generateSlug(newCategoryName);
+
+    try {
+      setIsCreatingCategory(true);
+
+      const response = await fetch('/api/wordpress/categories', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: newCategoryName.trim(),
+          slug,
+          description: newCategoryDescription.trim(),
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Erreur lors de la création');
+      }
+
+      const newCategory = await response.json();
+      toast.success('Catégorie créée avec succès !');
+
+      setNewCategoryName('');
+      setNewCategorySlug('');
+      setNewCategoryDescription('');
+      setShowCreateCategoryDialog(false);
+
+      await refetchCategories();
+
+      setFormData({
+        ...formData,
+        categories: [...(formData.categories || []), newCategory.id],
+      });
+    } catch (error: any) {
+      console.error('Error creating category:', error);
+      toast.error(error.message || 'Erreur lors de la création de la catégorie');
+    } finally {
+      setIsCreatingCategory(false);
+    }
+  };
+
+  const handleDeleteCategory = async () => {
+    if (!categoryToDelete) return;
+
+    try {
+      setIsDeletingCategory(true);
+
+      const categoryId = parseInt(categoryToDelete.databaseId || categoryToDelete.id);
+      const response = await fetch(`/api/wordpress/categories?id=${categoryId}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Erreur lors de la suppression');
+      }
+
+      toast.success('Catégorie supprimée avec succès !');
+
+      setFormData({
+        ...formData,
+        categories: (formData.categories || []).filter(id => id !== categoryId),
+      });
+
+      await refetchCategories();
+      setCategoryToDelete(null);
+    } catch (error: any) {
+      console.error('Error deleting category:', error);
+      toast.error(error.message || 'Erreur lors de la suppression de la catégorie');
+    } finally {
+      setIsDeletingCategory(false);
+    }
   };
 
   const handleSave = async () => {
@@ -323,13 +441,94 @@ export default function EditPostPage({ params }: { params: Promise<{ id: string 
 
           <Card>
             <CardHeader>
-              <div className="flex items-center gap-2">
-                <Tag className="h-5 w-5 text-[#b8933d]" />
-                <CardTitle className="text-lg">Catégories *</CardTitle>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Tag className="h-5 w-5 text-[#b8933d]" />
+                  <div>
+                    <CardTitle className="text-lg">Catégories *</CardTitle>
+                    <CardDescription className="mt-1">
+                      Sélectionnez au moins une catégorie
+                    </CardDescription>
+                  </div>
+                </div>
+                <Dialog open={showCreateCategoryDialog} onOpenChange={setShowCreateCategoryDialog}>
+                  <DialogTrigger asChild>
+                    <Button size="sm" variant="outline" className="gap-2">
+                      <Plus className="h-4 w-4" />
+                      Créer
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Créer une nouvelle catégorie</DialogTitle>
+                      <DialogDescription>
+                        Ajoutez une nouvelle catégorie pour vos articles
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4 py-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="category-name">Nom *</Label>
+                        <Input
+                          id="category-name"
+                          value={newCategoryName}
+                          onChange={(e) => setNewCategoryName(e.target.value)}
+                          placeholder="Ex: Mode, Beauté, Lifestyle..."
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="category-slug">Slug (optionnel)</Label>
+                        <Input
+                          id="category-slug"
+                          value={newCategorySlug}
+                          onChange={(e) => setNewCategorySlug(e.target.value)}
+                          placeholder="Ex: mode, beaute, lifestyle"
+                        />
+                        <p className="text-xs text-gray-500">
+                          Laissez vide pour générer automatiquement
+                        </p>
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="category-description">Description (optionnel)</Label>
+                        <Textarea
+                          id="category-description"
+                          value={newCategoryDescription}
+                          onChange={(e) => setNewCategoryDescription(e.target.value)}
+                          placeholder="Décrivez cette catégorie..."
+                          rows={3}
+                        />
+                      </div>
+                    </div>
+                    <DialogFooter>
+                      <Button
+                        variant="outline"
+                        onClick={() => {
+                          setShowCreateCategoryDialog(false);
+                          setNewCategoryName('');
+                          setNewCategorySlug('');
+                          setNewCategoryDescription('');
+                        }}
+                        disabled={isCreatingCategory}
+                      >
+                        Annuler
+                      </Button>
+                      <Button
+                        onClick={handleCreateCategory}
+                        disabled={isCreatingCategory}
+                        className="bg-[#b8933d] hover:bg-[#a07c2f]"
+                      >
+                        {isCreatingCategory ? (
+                          <>
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                            Création...
+                          </>
+                        ) : (
+                          'Créer la catégorie'
+                        )}
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
               </div>
-              <CardDescription>
-                Sélectionnez au moins une catégorie
-              </CardDescription>
             </CardHeader>
             <CardContent>
               {categoriesLoading ? (
@@ -338,17 +537,14 @@ export default function EditPostPage({ params }: { params: Promise<{ id: string 
                 </div>
               ) : availableCategories.length === 0 ? (
                 <div className="text-center py-6 text-sm text-gray-500">
+                  <AlertCircle className="h-12 w-12 mx-auto mb-3 text-gray-400" />
                   <p className="mb-3">Aucune catégorie disponible</p>
-                  <Link href="/admin/actualites/categories">
-                    <Button size="sm" variant="outline">
-                      Créer une catégorie
-                    </Button>
-                  </Link>
+                  <p className="text-xs mb-4">Créez votre première catégorie pour continuer</p>
                 </div>
               ) : (
                 <div className="space-y-3">
                   {availableCategories.map((category: any) => (
-                    <div key={category.id} className="flex items-start space-x-3 p-2 rounded hover:bg-gray-50">
+                    <div key={category.id} className="flex items-start space-x-3 p-2 rounded hover:bg-gray-50 group">
                       <Checkbox
                         id={`category-${category.id}`}
                         checked={formData.categories?.includes(parseInt(category.databaseId || category.id))}
@@ -367,6 +563,15 @@ export default function EditPostPage({ params }: { params: Promise<{ id: string 
                           </p>
                         )}
                       </div>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="opacity-0 group-hover:opacity-100 h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                        onClick={() => setCategoryToDelete(category)}
+                        title="Supprimer cette catégorie"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
                     </div>
                   ))}
                   {formData.categories && formData.categories.length > 0 && (
@@ -394,6 +599,37 @@ export default function EditPostPage({ params }: { params: Promise<{ id: string 
               )}
             </CardContent>
           </Card>
+
+          <AlertDialog open={!!categoryToDelete} onOpenChange={(open) => !open && setCategoryToDelete(null)}>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Supprimer cette catégorie ?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Êtes-vous sûr de vouloir supprimer la catégorie <strong>{categoryToDelete?.name}</strong> ?
+                  Cette action est irréversible.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel disabled={isDeletingCategory}>
+                  Annuler
+                </AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={handleDeleteCategory}
+                  disabled={isDeletingCategory}
+                  className="bg-red-600 hover:bg-red-700"
+                >
+                  {isDeletingCategory ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Suppression...
+                    </>
+                  ) : (
+                    'Supprimer'
+                  )}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
 
           <Card>
             <CardHeader>

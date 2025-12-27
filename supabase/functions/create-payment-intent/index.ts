@@ -68,10 +68,12 @@ Deno.serve(async (req: Request) => {
       headers: {
         "Authorization": `Bearer ${STRIPE_SECRET_KEY}`,
         "Content-Type": "application/x-www-form-urlencoded",
+        "Stripe-Version": "2024-11-20.acacia",
       },
       body: new URLSearchParams({
         amount: Math.round(amount * 100).toString(),
         currency: currency,
+        "automatic_payment_methods[enabled]": "true",
         ...(orderId && { "metadata[order_id]": orderId }),
         "metadata[user_id]": user.id,
       }),

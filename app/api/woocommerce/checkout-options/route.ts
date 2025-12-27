@@ -1,8 +1,12 @@
 import { NextResponse } from 'next/server';
+import { createClient } from '@supabase/supabase-js';
 
 const WORDPRESS_URL = process.env.WORDPRESS_URL;
 const WC_CONSUMER_KEY = process.env.WOOCOMMERCE_CONSUMER_KEY;
 const WC_CONSUMER_SECRET = process.env.WOOCOMMERCE_CONSUMER_SECRET;
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 
 const getAuthHeader = () => {
   const credentials = Buffer.from(`${WC_CONSUMER_KEY}:${WC_CONSUMER_SECRET}`).toString('base64');
@@ -18,10 +22,31 @@ export async function GET() {
       );
     }
 
-    const [shippingResponse, paymentResponse, taxResponse] = await Promise.all([
-      fetch(`${WORDPRESS_URL}/wp-json/wc/v3/shipping/zones`, {
-        headers: { 'Authorization': getAuthHeader() },
-      }),
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+    const { data: shippingMethodsFromDb, error: shippingError } = await supabase
+      .from('shipping_methods')
+      .select('*')
+      .eq('is_active', true)
+      .order('sort_order', { ascending: true });
+
+    if (shippingError) {
+      console.error('Error fetching shipping methods from Supabase:', shippingError);
+    }
+
+    const shippingMethods = (shippingMethodsFromDb || []).map((method) => ({
+      id: method.code,
+      zone_id: 1,
+      zone_name: 'France',
+      instance_id: method.id,
+      method_id: method.code,
+      title: method.name,
+      cost: method.cost.toString(),
+      description: method.description,
+      is_relay: method.is_relay,
+    }));
+
+    const [paymentResponse, taxResponse] = await Promise.all([
       fetch(`${WORDPRESS_URL}/wp-json/wc/v3/payment_gateways`, {
         headers: { 'Authorization': getAuthHeader() },
       }),
@@ -30,39 +55,8 @@ export async function GET() {
       }),
     ]);
 
-    const shippingZones = shippingResponse.ok ? await shippingResponse.json() : [];
     const paymentGateways = paymentResponse.ok ? await paymentResponse.json() : [];
     const taxRates = taxResponse.ok ? await taxResponse.json() : [];
-
-    const shippingMethods: any[] = [];
-    for (const zone of shippingZones) {
-      const methodsResponse = await fetch(
-        `${WORDPRESS_URL}/wp-json/wc/v3/shipping/zones/${zone.id}/methods`,
-        {
-          headers: { 'Authorization': getAuthHeader() },
-        }
-      );
-
-      if (methodsResponse.ok) {
-        const methods = await methodsResponse.json();
-        methods.forEach((method: any) => {
-          if (method.enabled) {
-            let cost = method.settings?.cost?.value || '0';
-
-            shippingMethods.push({
-              id: `${zone.id}_${method.instance_id}`,
-              zone_id: zone.id,
-              zone_name: zone.name,
-              instance_id: method.instance_id,
-              method_id: method.method_id,
-              title: method.title || method.method_title,
-              cost: cost,
-              description: method.method_description || '',
-            });
-          }
-        });
-      }
-    }
 
     const activePaymentGateways = paymentGateways.filter((gateway: any) => gateway.enabled);
 

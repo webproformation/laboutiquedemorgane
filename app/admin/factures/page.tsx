@@ -53,7 +53,9 @@ export default function AdminFacturesPage() {
   const loadInvoices = async () => {
     setLoading(true);
     try {
-      const response = await fetch('/api/invoices');
+      const response = await fetch('/api/invoices', {
+        credentials: 'include',
+      });
       if (!response.ok) throw new Error('Failed to fetch invoices');
 
       const data = await response.json();
@@ -134,7 +136,9 @@ export default function AdminFacturesPage() {
 
   const viewInvoice = async (invoice: Invoice) => {
     try {
-      const invoiceResponse = await fetch(invoice.pdf_url);
+      const invoiceResponse = await fetch(invoice.pdf_url, {
+        credentials: 'include',
+      });
       if (!invoiceResponse.ok) {
         throw new Error('Impossible de charger le document');
       }
@@ -163,7 +167,9 @@ export default function AdminFacturesPage() {
     try {
       toast.loading('Génération du PDF en cours...');
 
-      const invoiceResponse = await fetch(invoice.pdf_url);
+      const invoiceResponse = await fetch(invoice.pdf_url, {
+        credentials: 'include',
+      });
       if (!invoiceResponse.ok) {
         throw new Error('Impossible de charger le document');
       }
@@ -230,7 +236,9 @@ export default function AdminFacturesPage() {
 
       for (const invoice of monthData.invoices) {
         try {
-          const invoiceResponse = await fetch(invoice.pdf_url);
+          const invoiceResponse = await fetch(invoice.pdf_url, {
+            credentials: 'include',
+          });
           if (!invoiceResponse.ok) continue;
 
           const invoiceData = await invoiceResponse.json();
@@ -302,6 +310,7 @@ export default function AdminFacturesPage() {
       const response = await fetch('/api/invoices/send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({ invoiceId, resend: true }),
       });
 

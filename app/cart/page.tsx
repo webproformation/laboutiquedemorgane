@@ -84,7 +84,7 @@ export default function CartPage() {
           .from('delivery_batches')
           .select('id')
           .eq('user_id', user.id)
-          .eq('status', 'open')
+          .eq('status', 'pending')
           .single();
 
         if (data) {
