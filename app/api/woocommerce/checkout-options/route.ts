@@ -6,7 +6,7 @@ const WC_CONSUMER_KEY = process.env.WOOCOMMERCE_CONSUMER_KEY;
 const WC_CONSUMER_SECRET = process.env.WOOCOMMERCE_CONSUMER_SECRET;
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
 const getAuthHeader = () => {
   const credentials = Buffer.from(`${WC_CONSUMER_KEY}:${WC_CONSUMER_SECRET}`).toString('base64');
@@ -24,9 +24,9 @@ export async function GET() {
 
     let shippingMethods: any[] = [];
 
-    if (supabaseUrl && supabaseServiceKey) {
+    if (supabaseUrl && supabaseAnonKey) {
       try {
-        const supabase = createClient(supabaseUrl, supabaseServiceKey);
+        const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
         const { data: shippingMethodsFromDb, error: shippingError } = await supabase
           .from('shipping_methods')
@@ -36,7 +36,7 @@ export async function GET() {
 
         if (shippingError) {
           console.error('Error fetching shipping methods from Supabase:', shippingError);
-        } else if (shippingMethodsFromDb) {
+        } else if (shippingMethodsFromDb && shippingMethodsFromDb.length > 0) {
           shippingMethods = shippingMethodsFromDb.map((method) => ({
             id: method.code,
             zone_id: 1,
