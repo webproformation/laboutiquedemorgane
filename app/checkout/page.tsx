@@ -170,6 +170,12 @@ export default function CheckoutPage() {
       return;
     }
 
+    // Clear old cache versions
+    localStorage.removeItem('checkout_options_cache');
+    localStorage.removeItem('checkout_options_cache_time');
+    localStorage.removeItem('checkout_options_cache_v2');
+    localStorage.removeItem('checkout_options_cache_time_v2');
+
     loadCheckoutData();
   }, [user, cart]);
 
@@ -283,35 +289,8 @@ export default function CheckoutPage() {
 
   const loadCheckoutOptions = async () => {
     try {
-      const cacheKey = 'checkout_options_cache_v2';
-      const cacheTimeKey = 'checkout_options_cache_time_v2';
-      const cacheExpiry = 60 * 60 * 1000;
-
-      const cachedTime = localStorage.getItem(cacheTimeKey);
-      const now = Date.now();
-
-      if (cachedTime && now - parseInt(cachedTime) < cacheExpiry) {
-        const cached = localStorage.getItem(cacheKey);
-        if (cached) {
-          const data = JSON.parse(cached);
-          setShippingMethods(data.shippingMethods || []);
-          setPaymentGateways(data.paymentGateways || []);
-          setTaxRates(data.taxRates || []);
-
-          if (data.shippingMethods && data.shippingMethods.length > 0) {
-            const availableMethods = data.shippingMethods.filter((m: ShippingMethod) => m.method_id !== 'free_shipping');
-            if (availableMethods.length > 0) {
-              setSelectedShippingMethod(availableMethods[0].id);
-            }
-          }
-
-          if (data.paymentGateways && data.paymentGateways.length > 0) {
-            setSelectedPaymentMethod(data.paymentGateways[0].id);
-          }
-          return;
-        }
-      }
-
+      // Ne plus utiliser le cache - toujours charger depuis l'API
+      console.log('Loading checkout options from API...');
       const response = await fetch('/api/woocommerce/checkout-options');
 
       console.log('Checkout options API response:', response.status, response.statusText);
@@ -324,9 +303,6 @@ export default function CheckoutPage() {
           paymentGatewaysCount: data.paymentGateways?.length || 0,
           taxRatesCount: data.taxRates?.length || 0,
         });
-
-        localStorage.setItem(cacheKey, JSON.stringify(data));
-        localStorage.setItem(cacheTimeKey, now.toString());
 
         setShippingMethods(data.shippingMethods || []);
         setPaymentGateways(data.paymentGateways || []);
@@ -1477,32 +1453,50 @@ export default function CheckoutPage() {
                 </CardContent>
               </Card>
 
-              {(!useDeliveryBatch || (useDeliveryBatch && !activeBatch)) && shippingMethods.length > 0 && (
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <Truck className="h-5 w-5 text-[#b8933d]" />
-                      Mode de livraison
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <RadioGroup value={selectedShippingMethod} onValueChange={(value) => {
-                      setSelectedShippingMethod(value);
-                      setSelectedRelayPoint(null);
-                    }}>
-                      <div className="space-y-4">
-                        {shippingMethods.filter(method => method.method_id !== 'free_shipping').map((method) => (
-                          <div
-                            key={method.id}
-                            className={`flex items-start space-x-3 p-4 rounded-lg border-2 transition-colors cursor-pointer ${
-                              selectedShippingMethod === method.id
-                                ? 'border-[#b8933d] bg-[#b8933d]/5'
-                                : 'border-gray-200 hover:border-gray-300'
-                            }`}
-                            onClick={() => {
-                              setSelectedShippingMethod(method.id);
-                              setSelectedRelayPoint(null);
-                            }}
+              {(!useDeliveryBatch || (useDeliveryBatch && !activeBatch)) && (
+                <>
+                  {shippingMethods.length === 0 ? (
+                    <Alert className="border-orange-200 bg-orange-50">
+                      <Info className="h-4 w-4 text-orange-600" />
+                      <AlertDescription className="text-orange-800">
+                        <strong>Aucune méthode de livraison disponible.</strong>
+                        <br />
+                        Veuillez actualiser la page ou contacter le support si le problème persiste.
+                        <br />
+                        <button
+                          onClick={() => window.location.reload()}
+                          className="mt-2 underline font-semibold"
+                        >
+                          Actualiser la page
+                        </button>
+                      </AlertDescription>
+                    </Alert>
+                  ) : (
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                          <Truck className="h-5 w-5 text-[#b8933d]" />
+                          Mode de livraison
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <RadioGroup value={selectedShippingMethod} onValueChange={(value) => {
+                          setSelectedShippingMethod(value);
+                          setSelectedRelayPoint(null);
+                        }}>
+                          <div className="space-y-4">
+                            {shippingMethods.filter(method => method.method_id !== 'free_shipping').map((method) => (
+                              <div
+                                key={method.id}
+                                className={`flex items-start space-x-3 p-4 rounded-lg border-2 transition-colors cursor-pointer ${
+                                  selectedShippingMethod === method.id
+                                    ? 'border-[#b8933d] bg-[#b8933d]/5'
+                                    : 'border-gray-200 hover:border-gray-300'
+                                }`}
+                                onClick={() => {
+                                  setSelectedShippingMethod(method.id);
+                                  setSelectedRelayPoint(null);
+                                }}
                           >
                             <RadioGroupItem value={method.id} id={method.id} className="mt-1" />
                             <div className="flex-1">
@@ -1524,8 +1518,10 @@ export default function CheckoutPage() {
                         ))}
                       </div>
                     </RadioGroup>
-                  </CardContent>
-                </Card>
+                      </CardContent>
+                    </Card>
+                  )}
+                </>
               )}
 
               {(!useDeliveryBatch || (useDeliveryBatch && !activeBatch)) && selectedShippingMethod &&
