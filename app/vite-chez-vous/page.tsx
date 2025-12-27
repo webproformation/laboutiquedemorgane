@@ -42,19 +42,29 @@ export default function ViteChezVousPage() {
               <div className="space-y-6">
                 <div className="border-l-4 border-[#C6A15B] pl-6 py-4 bg-[#C6A15B]/5">
                   <h3 className="text-xl font-semibold text-gray-900 mb-2">
-                    Livraison en Point Relais (Dès 3,90 €)
+                    Chronopost Shop to Shop (3,90€)
                   </h3>
                   <p className="text-gray-700">
-                    La solution économique et écologique. Votre colis vous attend près de chez vous ou de votre bureau. Idéal si vous n'êtes pas souvent à la maison !
+                    La solution ultra-rapide et économique ! Votre colis arrive en 1 à 2 jours ouvrés dans le point relais de votre choix.
                   </p>
                 </div>
 
                 <div className="border-l-4 border-gray-300 pl-6 py-4 bg-gray-50">
                   <h3 className="text-xl font-semibold text-gray-900 mb-2">
-                    Livraison à Domicile (Colissimo)
+                    Points Relais (Mondial Relay & GLS - 5,90€)
                   </h3>
                   <p className="text-gray-700">
-                    Pour celles qui préfèrent le confort de recevoir leur shopping directement dans leur boîte aux lettres.
+                    La solution écologique. Votre colis vous attend près de chez vous ou de votre bureau. Idéal si vous n'êtes pas souvent à la maison !
+                    <strong className="block mt-1">Mondial Relay gratuit dès 80€ d'achat.</strong>
+                  </p>
+                </div>
+
+                <div className="border-l-4 border-gray-300 pl-6 py-4 bg-gray-50">
+                  <h3 className="text-xl font-semibold text-gray-900 mb-2">
+                    Livraison à Domicile (GLS 7,90€ / Colissimo 8,90€)
+                  </h3>
+                  <p className="text-gray-700">
+                    Pour celles qui préfèrent le confort de recevoir leur shopping directement dans leur boîte aux lettres ou remis en main propre.
                   </p>
                 </div>
               </div>

@@ -183,10 +183,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return { error: { message: 'User creation failed' } as AuthError };
       }
 
-      // Step 2: Wait a moment for auth to settle
+      // Step 2: Set user in context immediately
+      setUser(data.user);
+
+      // Step 3: Wait a moment for auth to settle
       await new Promise(resolve => setTimeout(resolve, 1000));
 
-      // Step 3: Explicitly create user profile using our robust function
+      // Step 4: Explicitly create user profile using our robust function
       try {
         const { data: profileResult, error: profileError } = await supabase.rpc(
           'create_user_profile_manually',
@@ -204,12 +207,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           console.error('Error creating profile:', profileError);
         } else if (profileResult && !profileResult.success) {
           console.error('Profile creation failed:', profileResult.error);
+        } else {
+          // Load the newly created profile into context
+          await loadProfile(data.user.id);
         }
       } catch (profileErr) {
         console.error('Exception creating profile:', profileErr);
       }
 
-      // Step 4: Create WordPress user (non-blocking)
+      // Step 5: Create WordPress user (non-blocking)
       let wordpressUserId = null;
       try {
         const wpUserResponse = await fetch('/api/wordpress/create-user', {
@@ -234,12 +240,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           await supabase.from('profiles').update({
             wordpress_user_id: wordpressUserId,
           }).eq('id', data.user.id);
+
+          // Reload profile to get the updated wordpress_user_id
+          await loadProfile(data.user.id);
         }
       } catch (wpError) {
         console.error('Error creating WordPress user:', wpError);
       }
 
-      // Step 5: Sync with WooCommerce (non-blocking)
+      // Step 6: Sync with WooCommerce (non-blocking)
       try {
         await fetch('/api/woocommerce/sync-customer', {
           method: 'POST',
@@ -256,10 +265,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         console.error('Error syncing with WooCommerce:', syncError);
       }
 
-      // Step 6: Process pending prize
+      // Step 7: Process pending prize
       await claimPendingPrize(data.user.id);
 
-      // Step 7: Process referral code
+      // Step 8: Process referral code
       if (referralCode && referralCode.trim()) {
         try {
           await supabase.rpc('process_referral', {

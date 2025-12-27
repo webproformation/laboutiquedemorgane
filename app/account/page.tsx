@@ -74,7 +74,7 @@ export default function AccountPage() {
         return;
       }
 
-      const estimatedShippingCostPerBatch = 4.90;
+      const estimatedShippingCostPerBatch = 5.90;
       const openBatches = batches?.length || 0;
       const totalSavings = openBatches > 1 ? (openBatches - 1) * estimatedShippingCostPerBatch : 0;
 

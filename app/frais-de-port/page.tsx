@@ -25,7 +25,7 @@ export default function FraisDePortPage() {
 
           <div className="prose prose-lg max-w-none">
             <p className="text-gray-700 text-lg leading-relaxed mb-6">
-              Profitez de la livraison gratuite en Mondial Relay pour toutes vos commandes
+              Profitez de la livraison gratuite en Point Relais pour toutes vos commandes
               à partir de 80€ d'achat.
             </p>
 
@@ -36,6 +36,23 @@ export default function FraisDePortPage() {
             <div className="space-y-6 mb-8">
               <div className="bg-[#C6A15B] bg-opacity-10 p-6 rounded-lg border border-[#C6A15B]">
                 <h3 className="text-xl font-bold text-gray-900 mb-3">
+                  Chronopost (Shop to Shop)
+                </h3>
+                <div className="space-y-2">
+                  <p className="text-gray-700">
+                    <strong>3,90€</strong>
+                  </p>
+                  <p className="text-gray-700">
+                    Délai de livraison : <strong>1 à 2 jours ouvrés</strong>
+                  </p>
+                  <p className="text-gray-600 text-sm">
+                    La solution la plus rapide et économique !
+                  </p>
+                </div>
+              </div>
+
+              <div className="bg-gray-50 p-6 rounded-lg">
+                <h3 className="text-xl font-bold text-gray-900 mb-3">
                   Mondial Relay
                 </h3>
                 <div className="space-y-2">
@@ -43,10 +60,38 @@ export default function FraisDePortPage() {
                     <strong>Gratuit</strong> à partir de 80€ d'achat
                   </p>
                   <p className="text-gray-700">
-                    <strong>4,90€</strong> pour les commandes inférieures à 80€
+                    <strong>5,90€</strong> pour les commandes inférieures à 80€
                   </p>
                   <p className="text-gray-700">
                     Délai de livraison : <strong>3 à 5 jours ouvrés</strong>
+                  </p>
+                </div>
+              </div>
+
+              <div className="bg-gray-50 p-6 rounded-lg">
+                <h3 className="text-xl font-bold text-gray-900 mb-3">
+                  GLS Point Relais
+                </h3>
+                <div className="space-y-2">
+                  <p className="text-gray-700">
+                    <strong>5,90€</strong>
+                  </p>
+                  <p className="text-gray-700">
+                    Délai de livraison : <strong>2 à 4 jours ouvrés</strong>
+                  </p>
+                </div>
+              </div>
+
+              <div className="bg-gray-50 p-6 rounded-lg">
+                <h3 className="text-xl font-bold text-gray-900 mb-3">
+                  GLS Domicile
+                </h3>
+                <div className="space-y-2">
+                  <p className="text-gray-700">
+                    <strong>7,90€</strong>
+                  </p>
+                  <p className="text-gray-700">
+                    Délai de livraison : <strong>2 à 4 jours ouvrés</strong>
                   </p>
                 </div>
               </div>
@@ -57,7 +102,7 @@ export default function FraisDePortPage() {
                 </h3>
                 <div className="space-y-2">
                   <p className="text-gray-700">
-                    <strong>6,90€</strong> (quel que soit le montant de la commande)
+                    <strong>8,90€</strong>
                   </p>
                   <p className="text-gray-700">
                     Délai de livraison : <strong>2 à 4 jours ouvrés</strong>

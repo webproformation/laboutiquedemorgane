@@ -137,6 +137,7 @@ export default function RichTextEditor({
           direction: 'ltr',
           textAlign: 'left',
           writingMode: 'horizontal-tb',
+          unicodeBidi: 'isolate',
         }}
       />
     );
@@ -367,6 +368,8 @@ export default function RichTextEditor({
           -webkit-user-modify: read-write-plaintext-only;
           direction: ltr !important;
           writing-mode: horizontal-tb !important;
+          unicode-bidi: isolate !important;
+          text-align: start !important;
         }
 
         [contenteditable] *,
@@ -387,15 +390,23 @@ export default function RichTextEditor({
           direction: ltr !important;
           text-align: left !important;
           writing-mode: horizontal-tb !important;
+          unicode-bidi: isolate !important;
         }
 
         [contenteditable]:focus,
         [contenteditable]:active {
           direction: ltr !important;
+          unicode-bidi: isolate !important;
         }
 
         /* Force LTR for empty contenteditable */
         [contenteditable]:empty:before {
+          direction: ltr !important;
+          unicode-bidi: isolate !important;
+        }
+
+        /* Prevent any RTL behavior */
+        [contenteditable] [dir="rtl"] {
           direction: ltr !important;
         }
       `}</style>
