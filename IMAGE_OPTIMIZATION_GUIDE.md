@@ -10,6 +10,7 @@
 **Solution** : Domaines explicitement autorisés dans `next.config.js` :
 - `wp.laboutiquedemorgane.com` (WordPress/WooCommerce)
 - `images.pexels.com` (images de placeholder)
+- `xaldjtbabtlmdroshzux.supabase.co` (Supabase)
 - `**.supabase.co` (tous les sous-domaines Supabase)
 
 ### 2. Optimisation des images

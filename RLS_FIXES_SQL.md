@@ -5,7 +5,7 @@ Les erreurs 406 que vous rencontrez sont dues à des problèmes de Row Level Sec
 ## Comment appliquer ces corrections
 
 Allez dans votre dashboard Supabase :
-1. Ouvrez https://supabase.com/dashboard/project/ftgclacfleknkqbfbsbs/editor
+1. Ouvrez https://supabase.com/dashboard/project/xaldjtbabtlmdroshzux/editor
 2. Cliquez sur "SQL Editor" dans le menu de gauche
 3. Créez une nouvelle requête et collez le SQL ci-dessous
 4. Exécutez la requête
