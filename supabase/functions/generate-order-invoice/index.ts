@@ -81,7 +81,7 @@ function generateInvoiceHTML(order: OrderData, invoiceNumber: string): string {
     body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #1f2937; line-height: 1.3; background: white; font-size: 10px; }
     .container { max-width: 800px; margin: 0 auto; padding: 10px 15px; }
     .logo-header { margin-bottom: 10px; text-align: center; }
-    .logo-header img { max-width: 250px; height: auto; display: inline-block; }
+    .logo-header img { width: 100%; max-width: 600px; height: auto; display: block; margin: 0 auto; }
     .header { background: linear-gradient(135deg, #b8933d 0%, #a07c2f 100%); color: white; padding: 12px 15px; border-radius: 6px; margin-bottom: 10px; }
     .header h1 { font-size: 18px; margin-bottom: 6px; text-align: center; }
     .header-info { display: flex; justify-content: space-between; margin-top: 8px; font-size: 9px; }
