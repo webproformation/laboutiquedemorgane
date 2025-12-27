@@ -71,25 +71,37 @@ async function syncCategoriesFromWooCommerce() {
   }
 
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
-  const auth = Buffer.from(`${consumerKey}:${consumerSecret}`).toString('base64');
+  const auth = `Basic ${Buffer.from(`${consumerKey}:${consumerSecret}`).toString('base64')}`;
 
-  const response = await fetch(
-    `${wordpressUrl}/wp-json/wc/v3/products/categories?per_page=100&orderby=menu_order&order=asc`,
-    {
-      headers: { Authorization: `Basic ${auth}` },
-      next: { revalidate: 0 }
+  // Récupérer TOUTES les catégories avec pagination
+  let allCategories: any[] = [];
+  let page = 1;
+  let hasMore = true;
+
+  while (hasMore) {
+    const response = await fetch(
+      `${wordpressUrl}/wp-json/wc/v3/products/categories?per_page=100&page=${page}&orderby=menu_order&order=asc`,
+      {
+        headers: { Authorization: auth },
+        next: { revalidate: 0 }
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error(`WooCommerce API error: ${response.status}`);
     }
-  );
 
-  if (!response.ok) {
-    throw new Error(`WooCommerce API error: ${response.status}`);
+    const pageCategories = await response.json();
+    allCategories = [...allCategories, ...pageCategories];
+
+    const totalPages = response.headers.get('x-wp-totalpages');
+    hasMore = totalPages ? page < parseInt(totalPages) : false;
+    page++;
   }
-
-  const rawCategories = await response.json();
 
   await supabase.from('woocommerce_categories_cache').delete().neq('id', 0);
 
-  const categoriesToInsert = rawCategories.map((cat: any) => ({
+  const categoriesToInsert = allCategories.map((cat: any) => ({
     category_id: cat.id,
     name: cat.name,
     slug: cat.slug,
@@ -135,31 +147,45 @@ export async function GET(request: Request) {
       );
     }
 
-    const apiUrl = `${wordpressUrl}/wp-json/wc/v3/products/categories?per_page=100&orderby=menu_order&order=asc`;
-    console.log('[Categories API] Fetching from:', apiUrl);
+    const auth = `Basic ${Buffer.from(`${consumerKey}:${consumerSecret}`).toString('base64')}`;
 
-    const response = await fetch(apiUrl, {
-      headers: {
-        Authorization: `Basic ${Buffer.from(`${consumerKey}:${consumerSecret}`).toString('base64')}`
-      },
-      cache: 'no-store'
-    });
+    // Récupérer TOUTES les catégories avec pagination
+    let allCategories: any[] = [];
+    let page = 1;
+    let hasMore = true;
 
-    console.log('[Categories API] Response status:', response.status);
+    while (hasMore) {
+      const apiUrl = `${wordpressUrl}/wp-json/wc/v3/products/categories?per_page=100&page=${page}&orderby=menu_order&order=asc`;
+      console.log(`[Categories API] Fetching page ${page} from:`, apiUrl);
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('[Categories API] WooCommerce error:', errorText);
-      return NextResponse.json(
-        { error: `WooCommerce API error: ${response.status}` },
-        { status: 500 }
-      );
+      const response = await fetch(apiUrl, {
+        headers: { Authorization: auth },
+        cache: 'no-store'
+      });
+
+      console.log(`[Categories API] Page ${page} response status:`, response.status);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('[Categories API] WooCommerce error:', errorText);
+        return NextResponse.json(
+          { error: `WooCommerce API error: ${response.status}` },
+          { status: 500 }
+        );
+      }
+
+      const pageCategories = await response.json();
+      allCategories = [...allCategories, ...pageCategories];
+
+      // Vérifier s'il y a d'autres pages
+      const totalPages = response.headers.get('x-wp-totalpages');
+      hasMore = totalPages ? page < parseInt(totalPages) : false;
+      page++;
     }
 
-    const rawCategories = await response.json();
-    console.log('[Categories API] Received categories count:', rawCategories.length);
+    console.log('[Categories API] Total categories received:', allCategories.length);
 
-    const categories: Category[] = rawCategories.map((cat: any) => ({
+    const categories: Category[] = allCategories.map((cat: any) => ({
       id: cat.id,
       name: cat.name,
       slug: cat.slug,
