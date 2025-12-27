@@ -128,65 +128,57 @@ export async function GET(request: Request) {
   try {
     const url = new URL(request.url);
     const action = url.searchParams.get('action');
+    const refresh = url.searchParams.get('refresh') === 'true';
 
-    const wordpressUrl = process.env.WORDPRESS_URL;
-    const consumerKey = process.env.WC_CONSUMER_KEY;
-    const consumerSecret = process.env.WC_CONSUMER_SECRET;
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+    const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    console.log('[Categories API] Checking env vars:', {
-      hasWordpressUrl: !!wordpressUrl,
-      hasConsumerKey: !!consumerKey,
-      hasConsumerSecret: !!consumerSecret
-    });
-
-    if (!wordpressUrl || !consumerKey || !consumerSecret) {
-      console.error('[Categories API] Missing configuration');
-      return NextResponse.json(
-        { error: 'Missing WooCommerce configuration' },
-        { status: 500 }
-      );
+    // Si refresh est demandé, synchroniser depuis WooCommerce
+    if (refresh) {
+      console.log('[Categories API] Refresh requested, syncing from WooCommerce...');
+      await syncCategoriesFromWooCommerce();
     }
 
-    const auth = `Basic ${Buffer.from(`${consumerKey}:${consumerSecret}`).toString('base64')}`;
+    // Charger depuis le cache
+    const { data: cachedCategories, error: cacheError } = await supabase
+      .from('woocommerce_categories_cache')
+      .select('*')
+      .order('category_id', { ascending: true });
 
-    // Récupérer TOUTES les catégories avec pagination
-    let allCategories: any[] = [];
-    let page = 1;
-    let hasMore = true;
+    if (cacheError) {
+      console.error('[Categories API] Cache error:', cacheError);
+      throw cacheError;
+    }
 
-    while (hasMore) {
-      const apiUrl = `${wordpressUrl}/wp-json/wc/v3/products/categories?per_page=100&page=${page}&orderby=menu_order&order=asc`;
-      console.log(`[Categories API] Fetching page ${page} from:`, apiUrl);
+    // Si le cache est vide, synchroniser depuis WooCommerce
+    if (!cachedCategories || cachedCategories.length === 0) {
+      console.log('[Categories API] Cache empty, syncing from WooCommerce...');
+      const synced = await syncCategoriesFromWooCommerce();
 
-      const response = await fetch(apiUrl, {
-        headers: { Authorization: auth },
-        cache: 'no-store'
-      });
+      const categories: Category[] = synced.map((cat: any) => ({
+        id: cat.category_id,
+        name: cat.name,
+        slug: cat.slug,
+        parent: cat.parent,
+        description: cat.description || '',
+        image: cat.image,
+        count: cat.count || 0,
+      }));
 
-      console.log(`[Categories API] Page ${page} response status:`, response.status);
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('[Categories API] WooCommerce error:', errorText);
-        return NextResponse.json(
-          { error: `WooCommerce API error: ${response.status}` },
-          { status: 500 }
-        );
+      if (action === 'list') {
+        return NextResponse.json(categories);
       }
 
-      const pageCategories = await response.json();
-      allCategories = [...allCategories, ...pageCategories];
-
-      // Vérifier s'il y a d'autres pages
-      const totalPages = response.headers.get('x-wp-totalpages');
-      hasMore = totalPages ? page < parseInt(totalPages) : false;
-      page++;
+      const tree = buildCategoryTree(categories);
+      return NextResponse.json(tree);
     }
 
-    console.log('[Categories API] Total categories received:', allCategories.length);
+    // Utiliser le cache
+    console.log('[Categories API] Using cached categories:', cachedCategories.length);
 
-    const categories: Category[] = allCategories.map((cat: any) => ({
-      id: cat.id,
+    const categories: Category[] = cachedCategories.map((cat: any) => ({
+      id: cat.category_id,
       name: cat.name,
       slug: cat.slug,
       parent: cat.parent,
