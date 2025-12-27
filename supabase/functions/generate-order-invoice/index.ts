@@ -103,7 +103,7 @@ function generateInvoiceHTML(order: OrderData, invoiceNumber: string): string {
 <body>
   <div class="container">
     <div class="logo-header">
-      <img src="https://laboutiquedemorgane.com/public/logo-bdc.png" alt="La Boutique de Morgane" onerror="this.style.display='none'" />
+      <img src="https://laboutiquedemorgane.com/logo-bdc.png" alt="La Boutique de Morgane" onerror="this.style.display='none'" />
     </div>
 
     <div class="header">

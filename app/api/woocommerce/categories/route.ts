@@ -120,7 +120,14 @@ export async function GET(request: Request) {
     const action = url.searchParams.get('action');
     const forceRefresh = url.searchParams.get('refresh') === 'true';
 
-    const { data: cacheExpired } = await supabase.rpc('is_categories_cache_expired');
+    // Check if cache exists and is not expired
+    const { data: recentCache, error: cacheCheckError } = await supabase
+      .from('woocommerce_categories_cache')
+      .select('updated_at')
+      .gte('updated_at', new Date(Date.now() - 5 * 60 * 1000).toISOString())
+      .limit(1);
+
+    const cacheExpired = !recentCache || recentCache.length === 0;
 
     if (forceRefresh || cacheExpired) {
       await syncCategoriesFromWooCommerce();
