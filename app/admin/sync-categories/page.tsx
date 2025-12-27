@@ -21,7 +21,19 @@ export default function SyncCategoriesPage() {
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.error || 'Erreur lors de la synchronisation');
+        console.error('Sync error response:', errorData);
+
+        const errorMessage = errorData.details || errorData.error || 'Erreur lors de la synchronisation';
+        const suggestion = errorData.suggestion || '';
+
+        setResult({
+          success: false,
+          message: errorMessage,
+          suggestion: suggestion
+        });
+
+        toast.error(errorMessage);
+        return;
       }
 
       const categories = await response.json();
@@ -35,10 +47,11 @@ export default function SyncCategoriesPage() {
       toast.success('Catégories synchronisées avec succès');
     } catch (error: any) {
       console.error('Error syncing categories:', error);
-      toast.error(error.message || 'Erreur lors de la synchronisation');
+      const errorMessage = error.message || 'Erreur lors de la synchronisation';
+      toast.error(errorMessage);
       setResult({
         success: false,
-        message: error.message
+        message: errorMessage
       });
     } finally {
       setSyncing(false);
@@ -208,6 +221,14 @@ export default function SyncCategoriesPage() {
             </CardHeader>
             <CardContent>
               <p className="text-sm mb-4">{result.message}</p>
+
+              {result.suggestion && (
+                <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded">
+                  <p className="text-sm text-yellow-800">
+                    <strong>Suggestion :</strong> {result.suggestion}
+                  </p>
+                </div>
+              )}
 
               {result.created && result.created.length > 0 && (
                 <div className="mb-4">
