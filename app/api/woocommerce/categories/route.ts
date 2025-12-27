@@ -115,30 +115,47 @@ export async function GET(request: Request) {
     const url = new URL(request.url);
     const action = url.searchParams.get('action');
 
-    // Récupération directe depuis WooCommerce (plus fiable)
     const wordpressUrl = process.env.WORDPRESS_URL;
     const consumerKey = process.env.WC_CONSUMER_KEY;
     const consumerSecret = process.env.WC_CONSUMER_SECRET;
 
+    console.log('[Categories API] Checking env vars:', {
+      hasWordpressUrl: !!wordpressUrl,
+      hasConsumerKey: !!consumerKey,
+      hasConsumerSecret: !!consumerSecret
+    });
+
     if (!wordpressUrl || !consumerKey || !consumerSecret) {
-      throw new Error('Missing WooCommerce configuration');
+      console.error('[Categories API] Missing configuration');
+      return NextResponse.json(
+        { error: 'Missing WooCommerce configuration' },
+        { status: 500 }
+      );
     }
 
-    const auth = Buffer.from(`${consumerKey}:${consumerSecret}`).toString('base64');
+    const apiUrl = `${wordpressUrl}/wp-json/wc/v3/products/categories?per_page=100&orderby=menu_order&order=asc`;
+    console.log('[Categories API] Fetching from:', apiUrl);
 
-    const response = await fetch(
-      `${wordpressUrl}/wp-json/wc/v3/products/categories?per_page=100&orderby=menu_order&order=asc`,
-      {
-        headers: { Authorization: `Basic ${auth}` },
-        cache: 'no-store'
-      }
-    );
+    const response = await fetch(apiUrl, {
+      headers: {
+        Authorization: `Basic ${Buffer.from(`${consumerKey}:${consumerSecret}`).toString('base64')}`
+      },
+      cache: 'no-store'
+    });
+
+    console.log('[Categories API] Response status:', response.status);
 
     if (!response.ok) {
-      throw new Error(`WooCommerce API error: ${response.status}`);
+      const errorText = await response.text();
+      console.error('[Categories API] WooCommerce error:', errorText);
+      return NextResponse.json(
+        { error: `WooCommerce API error: ${response.status}` },
+        { status: 500 }
+      );
     }
 
     const rawCategories = await response.json();
+    console.log('[Categories API] Received categories count:', rawCategories.length);
 
     const categories: Category[] = rawCategories.map((cat: any) => ({
       id: cat.id,
@@ -154,11 +171,12 @@ export async function GET(request: Request) {
       return NextResponse.json(categories);
     }
 
-    return NextResponse.json(buildCategoryTree(categories));
+    const tree = buildCategoryTree(categories);
+    return NextResponse.json(tree);
   } catch (error) {
-    console.error('Error fetching categories:', error);
+    console.error('[Categories API] Error:', error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Unknown error' },
+      { error: error instanceof Error ? error.message : 'Unknown error', stack: error instanceof Error ? error.stack : undefined },
       { status: 500 }
     );
   }
