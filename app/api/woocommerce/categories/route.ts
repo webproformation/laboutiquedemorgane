@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
+console.log('[Categories Route] Module loaded');
+
 interface Category {
   id: number;
   name: string;
