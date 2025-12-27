@@ -1327,6 +1327,68 @@ export default function CheckoutPage() {
 
         <div className="max-w-4xl mx-auto">
             <div className="space-y-6">
+              <Card className="border-2 border-blue-200 bg-blue-50">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-blue-900">
+                    <Clock className="h-5 w-5 text-blue-600" />
+                    Mon colis ouvert (5 jours)
+                  </CardTitle>
+                  <CardDescription className="text-blue-800">
+                    Économisez sur les frais de livraison en groupant vos achats
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {activeBatch && (
+                    <Alert className="bg-green-50 border-green-200">
+                      <Info className="h-4 w-4 text-green-600" />
+                      <AlertDescription className="text-green-800">
+                        Vous avez déjà un colis ouvert. Ces articles seront ajoutés sans frais de livraison supplémentaires !
+                      </AlertDescription>
+                    </Alert>
+                  )}
+
+                  <div className="flex items-center justify-between p-4 bg-white rounded-lg">
+                    <div className="flex-1">
+                      <Label htmlFor="delivery-batch" className="text-base font-semibold text-gray-900 cursor-pointer">
+                        Activer mon colis ouvert
+                      </Label>
+                      <p className="text-sm text-gray-600 mt-1">
+                        {activeBatch
+                          ? 'Ajouter à votre colis existant sans frais supplémentaires'
+                          : 'Vous aurez 5 jours pour ajouter d\'autres produits sans payer de nouveaux frais de livraison'
+                        }
+                      </p>
+                    </div>
+                    <Switch
+                      id="delivery-batch"
+                      checked={useDeliveryBatch}
+                      onCheckedChange={setUseDeliveryBatch}
+                      className="ml-4"
+                    />
+                  </div>
+
+                  {useDeliveryBatch && (
+                    <Alert className="bg-white border-blue-200">
+                      <Info className="h-4 w-4 text-blue-600" />
+                      <AlertDescription className="text-blue-800">
+                        {activeBatch ? (
+                          <>
+                            <strong>Colis ouvert actif :</strong> Vos articles seront ajoutés à votre colis en cours.
+                            Vous pourrez valider le colis à tout moment depuis votre espace client.
+                          </>
+                        ) : (
+                          <>
+                            <strong>Comment ça marche ?</strong> Vos articles seront mis en attente pendant 5 jours.
+                            Vous pourrez ajouter d&apos;autres produits sans payer de frais de livraison supplémentaires,
+                            puis valider le colis quand vous le souhaitez depuis votre espace client.
+                          </>
+                        )}
+                      </AlertDescription>
+                    </Alert>
+                  )}
+                </CardContent>
+              </Card>
+
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
@@ -1701,68 +1763,6 @@ export default function CheckoutPage() {
                   </CardContent>
                 </Card>
               )}
-
-              <Card className="border-2 border-blue-200 bg-blue-50">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-blue-900">
-                    <Clock className="h-5 w-5 text-blue-600" />
-                    Mon colis ouvert (5 jours)
-                  </CardTitle>
-                  <CardDescription className="text-blue-800">
-                    Économisez sur les frais de livraison en groupant vos achats
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  {activeBatch && (
-                    <Alert className="bg-green-50 border-green-200">
-                      <Info className="h-4 w-4 text-green-600" />
-                      <AlertDescription className="text-green-800">
-                        Vous avez déjà un colis ouvert. Ces articles seront ajoutés sans frais de livraison supplémentaires !
-                      </AlertDescription>
-                    </Alert>
-                  )}
-
-                  <div className="flex items-center justify-between p-4 bg-white rounded-lg">
-                    <div className="flex-1">
-                      <Label htmlFor="delivery-batch" className="text-base font-semibold text-gray-900 cursor-pointer">
-                        Activer mon colis ouvert
-                      </Label>
-                      <p className="text-sm text-gray-600 mt-1">
-                        {activeBatch
-                          ? 'Ajouter à votre colis existant sans frais supplémentaires'
-                          : 'Vous aurez 5 jours pour ajouter d\'autres produits sans payer de nouveaux frais de livraison'
-                        }
-                      </p>
-                    </div>
-                    <Switch
-                      id="delivery-batch"
-                      checked={useDeliveryBatch}
-                      onCheckedChange={setUseDeliveryBatch}
-                      className="ml-4"
-                    />
-                  </div>
-
-                  {useDeliveryBatch && (
-                    <Alert className="bg-white border-blue-200">
-                      <Info className="h-4 w-4 text-blue-600" />
-                      <AlertDescription className="text-blue-800">
-                        {activeBatch ? (
-                          <>
-                            <strong>Colis ouvert actif :</strong> Vos articles seront ajoutés à votre colis en cours.
-                            Vous pourrez valider le colis à tout moment depuis votre espace client.
-                          </>
-                        ) : (
-                          <>
-                            <strong>Comment ça marche ?</strong> Vos articles seront mis en attente pendant 5 jours.
-                            Vous pourrez ajouter d&apos;autres produits sans payer de frais de livraison supplémentaires,
-                            puis valider le colis quand vous le souhaitez depuis votre espace client.
-                          </>
-                        )}
-                      </AlertDescription>
-                    </Alert>
-                  )}
-                </CardContent>
-              </Card>
 
               <Card>
                 <CardHeader>
