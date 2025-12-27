@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server';
-import { createServerClient } from '@/lib/supabase-server';
 import { createClient } from '@supabase/supabase-js';
 
 export async function GET(request: Request) {
@@ -8,67 +7,91 @@ export async function GET(request: Request) {
     const orderId = searchParams.get('orderId');
     const orderNumber = searchParams.get('orderNumber');
 
-    const supabase = await createServerClient();
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+    const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 
-    // Check if user is authenticated
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (!supabaseUrl || !supabaseServiceKey) {
+      console.error('Missing Supabase configuration');
+      return NextResponse.json({ error: 'Configuration serveur manquante', invoices: [] }, { status: 500 });
+    }
 
-    console.log('API /invoices - Auth check:', {
-      hasUser: !!user,
-      userId: user?.id,
-      hasError: !!authError,
-      errorMessage: authError?.message,
-      cookies: request.headers.get('cookie')?.substring(0, 100)
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+    const authHeader = request.headers.get('authorization');
+    const cookies = request.headers.get('cookie');
+
+    console.log('API /invoices - Request info:', {
+      hasAuthHeader: !!authHeader,
+      hasCookies: !!cookies,
+      orderId,
+      orderNumber
     });
 
-    if (authError || !user) {
-      console.log('Auth error in /api/invoices:', authError);
-      return NextResponse.json({ error: 'Non authentifié', invoices: [] }, { status: 401 });
+    let userId: string | null = null;
+    let isAdmin = false;
+
+    if (authHeader?.startsWith('Bearer ')) {
+      const token = authHeader.replace('Bearer ', '');
+      const { data: { user }, error: tokenError } = await supabase.auth.getUser(token);
+
+      if (user && !tokenError) {
+        userId = user.id;
+      }
     }
 
-    // Check user role
-    const { data: roleData, error: roleError } = await supabase
-      .from('user_roles')
-      .select('role')
-      .eq('user_id', user.id)
-      .maybeSingle();
+    if (cookies) {
+      const accessTokenMatch = cookies.match(/sb-[^-]+-auth-token=([^;]+)/);
+      if (accessTokenMatch) {
+        try {
+          const tokenData = JSON.parse(decodeURIComponent(accessTokenMatch[1]));
+          const accessToken = tokenData?.[0];
 
-    const isAdmin = roleData?.role === 'admin';
+          if (accessToken) {
+            const { data: { user }, error: cookieError } = await supabase.auth.getUser(accessToken);
 
-    console.log('User:', user.id, 'Is Admin:', isAdmin);
-
-    // Use service role key for admins to bypass RLS
-    let queryClient = supabase;
-    if (isAdmin) {
-      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-      const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-      queryClient = createClient(supabaseUrl, supabaseServiceKey);
+            if (user && !cookieError) {
+              userId = user.id;
+            }
+          }
+        } catch (e) {
+          console.error('Error parsing cookie token:', e);
+        }
+      }
     }
 
-    let query = queryClient.from('order_invoices').select('*');
+    if (userId) {
+      const { data: roleData } = await supabase
+        .from('user_roles')
+        .select('role')
+        .eq('user_id', userId)
+        .maybeSingle();
+
+      isAdmin = roleData?.role === 'admin';
+    }
+
+    console.log('User ID:', userId, 'Is Admin:', isAdmin);
+
+    let query = supabase.from('order_invoices').select('*');
 
     if (orderId) {
       query = query.eq('woocommerce_order_id', parseInt(orderId));
     } else if (orderNumber) {
       query = query.eq('order_number', orderNumber);
     } else {
-      // Return all invoices for admin, or user's own invoices
       if (!isAdmin) {
-        const { data: profile, error: profileError } = await supabase
+        if (!userId) {
+          return NextResponse.json({ error: 'Non authentifié', invoices: [] }, { status: 401 });
+        }
+
+        const { data: profile } = await supabase
           .from('profiles')
           .select('email')
-          .eq('id', user.id)
+          .eq('id', userId)
           .maybeSingle();
-
-        if (profileError) {
-          console.error('Error fetching profile:', profileError);
-          return NextResponse.json({ error: 'Erreur de profil', invoices: [] }, { status: 500 });
-        }
 
         if (profile?.email) {
           query = query.eq('customer_email', profile.email);
         } else {
-          // User has no email in profile, return empty array
           return NextResponse.json({ invoices: [] });
         }
       }
@@ -85,6 +108,6 @@ export async function GET(request: Request) {
     return NextResponse.json({ invoices: data || [] });
   } catch (error: any) {
     console.error('API route error:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: error.message, invoices: [] }, { status: 500 });
   }
 }
