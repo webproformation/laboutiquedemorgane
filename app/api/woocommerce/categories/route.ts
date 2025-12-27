@@ -3,6 +3,9 @@ import { createClient } from '@supabase/supabase-js';
 
 console.log('[Categories Route] Module loaded');
 
+// Configuration pour augmenter le timeout sur Vercel
+export const maxDuration = 30; // 30 secondes max
+
 interface Category {
   id: number;
   name: string;
@@ -64,7 +67,9 @@ async function syncCategoriesFromWooCommerce() {
   const consumerKey = process.env.WC_CONSUMER_KEY;
   const consumerSecret = process.env.WC_CONSUMER_SECRET;
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+
+  console.log('[Sync] Starting sync from WooCommerce...');
 
   if (!wordpressUrl || !consumerKey || !consumerSecret) {
     throw new Error('Missing WooCommerce configuration');
@@ -73,32 +78,55 @@ async function syncCategoriesFromWooCommerce() {
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
   const auth = `Basic ${Buffer.from(`${consumerKey}:${consumerSecret}`).toString('base64')}`;
 
-  // Récupérer TOUTES les catégories avec pagination
+  // Récupérer TOUTES les catégories avec pagination (limite à 10 pages max)
   let allCategories: any[] = [];
   let page = 1;
   let hasMore = true;
+  const maxPages = 10;
 
-  while (hasMore) {
-    const response = await fetch(
-      `${wordpressUrl}/wp-json/wc/v3/products/categories?per_page=100&page=${page}&orderby=menu_order&order=asc`,
-      {
-        headers: { Authorization: auth },
-        next: { revalidate: 0 }
+  while (hasMore && page <= maxPages) {
+    console.log(`[Sync] Fetching page ${page}...`);
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 8000); // 8 secondes max
+
+    try {
+      const response = await fetch(
+        `${wordpressUrl}/wp-json/wc/v3/products/categories?per_page=100&page=${page}&orderby=menu_order&order=asc`,
+        {
+          headers: { Authorization: auth },
+          signal: controller.signal,
+          cache: 'no-store'
+        }
+      );
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        console.error(`[Sync] WooCommerce API error on page ${page}:`, response.status);
+        throw new Error(`WooCommerce API error: ${response.status}`);
       }
-    );
 
-    if (!response.ok) {
-      throw new Error(`WooCommerce API error: ${response.status}`);
+      const pageCategories = await response.json();
+      console.log(`[Sync] Page ${page} returned ${pageCategories.length} categories`);
+      allCategories = [...allCategories, ...pageCategories];
+
+      const totalPages = response.headers.get('x-wp-totalpages');
+      hasMore = totalPages ? page < parseInt(totalPages) : false;
+      page++;
+    } catch (error: any) {
+      clearTimeout(timeoutId);
+      if (error.name === 'AbortError') {
+        console.error(`[Sync] Timeout on page ${page}`);
+        throw new Error('WooCommerce request timeout');
+      }
+      throw error;
     }
-
-    const pageCategories = await response.json();
-    allCategories = [...allCategories, ...pageCategories];
-
-    const totalPages = response.headers.get('x-wp-totalpages');
-    hasMore = totalPages ? page < parseInt(totalPages) : false;
-    page++;
   }
 
+  console.log(`[Sync] Total categories fetched: ${allCategories.length}`);
+
+  // Effacer le cache
   await supabase.from('woocommerce_categories_cache').delete().neq('id', 0);
 
   const categoriesToInsert = allCategories.map((cat: any) => ({
@@ -112,15 +140,18 @@ async function syncCategoriesFromWooCommerce() {
     updated_at: new Date().toISOString()
   }));
 
+  console.log(`[Sync] Inserting ${categoriesToInsert.length} categories into cache...`);
+
   const { error } = await supabase
     .from('woocommerce_categories_cache')
     .insert(categoriesToInsert);
 
   if (error) {
-    console.error('Error inserting categories into cache:', error);
+    console.error('[Sync] Error inserting categories into cache:', error);
     throw error;
   }
 
+  console.log('[Sync] Sync completed successfully');
   return categoriesToInsert;
 }
 
@@ -131,7 +162,7 @@ export async function GET(request: Request) {
     const refresh = url.searchParams.get('refresh') === 'true';
 
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-    const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+    const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     // Si refresh est demandé, synchroniser depuis WooCommerce
@@ -204,7 +235,7 @@ export async function GET(request: Request) {
 
 async function invalidateCache() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
   await supabase.from('woocommerce_categories_cache').delete().neq('id', 0);

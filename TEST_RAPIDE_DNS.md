@@ -27,12 +27,12 @@ fetch('/_next/static/chunks/').then(() => {
   scripts.forEach(script => {
     fetch(script.src).then(r => r.text()).then(text => {
       if(text.includes('supabase.co')) {
-        if(text.includes('xaldjtbabtlmdroshzux')) {
-          console.log('✅ CORRECT : Utilise xaldjtbabtlmdroshzux (nouvelle instance)');
+        if(text.includes('ftgclacfleknkqbfbsbs')) {
+          console.log('✅ CORRECT : Utilise ftgclacfleknkqbfbsbs (nouvelle instance)');
           found = true;
         }
-        if(text.includes('hondlefoprhtrpxnumyj')) {
-          console.log('❌ ERREUR : Utilise encore l\'ancienne instance hondlefoprhtrpxnumyj');
+        if(text.includes('hondlefoprhtrpxnumyj') || text.includes('xaldjtbabtlmdroshzux')) {
+          console.log('❌ ERREUR : Utilise encore une ancienne instance');
           found = true;
         }
       }
@@ -58,13 +58,10 @@ setTimeout(() => {
 
 **✅ CORRECT si vous voyez :**
 ```
-https://xaldjtbabtlmdroshzux.supabase.co/...
+https://ftgclacfleknkqbfbsbs.supabase.co/...
 ```
 
-**❌ PROBLÈME si vous voyez :**
-```
-https://hondlefoprhtrpxnumyj.supabase.co/...
-```
+**❌ PROBLÈME si vous voyez une autre URL Supabase (anciennes instances)**
 
 ### Méthode C : Via le code source
 
@@ -89,14 +86,11 @@ https://hondlefoprhtrpxnumyj.supabase.co/...
 
 **✅ DOIT ÊTRE :**
 ```
-NEXT_PUBLIC_SUPABASE_URL=https://xaldjtbabtlmdroshzux.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=sb_publishable_5oj7ecUlHZEaH1e61lDJTA_EfZbWAy6
+NEXT_PUBLIC_SUPABASE_URL=https://ftgclacfleknkqbfbsbs.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZ0Z2NsYWNmbGVrbmtxYmZic2JzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjUwMzA3NjUsImV4cCI6MjA4MDYwNjc2NX0.fZ_yi8opM3kQ4T-hCagMebTvM7spx7tIMZvaTBPBSe8
 ```
 
-**❌ SI C'EST :**
-```
-NEXT_PUBLIC_SUPABASE_URL=https://hondlefoprhtrpxnumyj.supabase.co
-```
+**❌ SI C'EST UNE AUTRE URL SUPABASE :**
 → **Il faut corriger !**
 
 ---
@@ -118,7 +112,7 @@ NEXT_PUBLIC_SUPABASE_URL=https://hondlefoprhtrpxnumyj.supabase.co
 5. Dans la section **Environment variables**, vérifiez :
 
 ```
-NEXT_PUBLIC_SUPABASE_URL = https://xaldjtbabtlmdroshzux.supabase.co
+NEXT_PUBLIC_SUPABASE_URL = https://ftgclacfleknkqbfbsbs.supabase.co
 ```
 
 ---
@@ -131,20 +125,20 @@ NEXT_PUBLIC_SUPABASE_URL = https://xaldjtbabtlmdroshzux.supabase.co
 
 1. **Via cPanel > Gestionnaire de fichiers**
    - Éditez le fichier `.env`
-   - Remplacez l'ancienne URL par `xaldjtbabtlmdroshzux`
+   - Remplacez l'ancienne URL par `ftgclacfleknkqbfbsbs`
    - Sauvegardez
 
 2. **Via cPanel > Setup Node.js App**
    - Cliquez sur **Edit** (votre app)
    - Dans **Environment variables**
-   - Changez `NEXT_PUBLIC_SUPABASE_URL` pour : `https://xaldjtbabtlmdroshzux.supabase.co`
+   - Changez `NEXT_PUBLIC_SUPABASE_URL` pour : `https://ftgclacfleknkqbfbsbs.supabase.co`
    - Cliquez sur **Save**
    - Cliquez sur **Restart** (redémarrer l'application)
 
 3. **Rebuild local et re-upload**
    - Sur votre ordinateur local :
      ```bash
-     # Vérifier que .env contient xaldjtbabtlmdroshzux
+     # Vérifier que .env contient ftgclacfleknkqbfbsbs
      npm run build
      ```
    - Supprimez le dossier `.next/` sur o2switch
@@ -158,8 +152,8 @@ NEXT_PUBLIC_SUPABASE_URL = https://xaldjtbabtlmdroshzux.supabase.co
 | Test | Outil | Ce que vous devez voir |
 |------|-------|------------------------|
 | **DNS** | whatsmydns.net | IP o2switch (54.36.x.x) |
-| **Supabase** | Network (F12) | xaldjtbabtlmdroshzux.supabase.co |
-| **Fichier .env** | cPanel | NEXT_PUBLIC_SUPABASE_URL=...xaldjtbabtlmdroshzux |
+| **Supabase** | Network (F12) | ftgclacfleknkqbfbsbs.supabase.co |
+| **Fichier .env** | cPanel | NEXT_PUBLIC_SUPABASE_URL=...ftgclacfleknkqbfbsbs |
 | **Application** | Setup Node.js App | Status: Running 🟢 |
 
 ---
