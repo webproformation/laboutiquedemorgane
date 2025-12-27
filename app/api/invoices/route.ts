@@ -13,6 +13,14 @@ export async function GET(request: Request) {
     // Check if user is authenticated
     const { data: { user }, error: authError } = await supabase.auth.getUser();
 
+    console.log('API /invoices - Auth check:', {
+      hasUser: !!user,
+      userId: user?.id,
+      hasError: !!authError,
+      errorMessage: authError?.message,
+      cookies: request.headers.get('cookie')?.substring(0, 100)
+    });
+
     if (authError || !user) {
       console.log('Auth error in /api/invoices:', authError);
       return NextResponse.json({ error: 'Non authentifié', invoices: [] }, { status: 401 });
