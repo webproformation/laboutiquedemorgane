@@ -64,7 +64,6 @@ export default function RichTextEditor({
       // Force LTR direction on container
       previewRef.current.setAttribute('dir', 'ltr');
       previewRef.current.style.direction = 'ltr';
-      previewRef.current.style.unicodeBidi = 'bidi-override';
 
       // Force LTR on all child elements
       const allElements = previewRef.current.querySelectorAll('*');
@@ -72,7 +71,6 @@ export default function RichTextEditor({
         if (el instanceof HTMLElement) {
           el.setAttribute('dir', 'ltr');
           el.style.direction = 'ltr';
-          el.style.unicodeBidi = 'bidi-override';
         }
       });
 
@@ -104,7 +102,6 @@ export default function RichTextEditor({
           if (previewRef.current) {
             previewRef.current.setAttribute('dir', 'ltr');
             previewRef.current.style.direction = 'ltr';
-            previewRef.current.style.unicodeBidi = 'bidi-override';
           }
         }}
         onPaste={(e) => {
@@ -114,14 +111,12 @@ export default function RichTextEditor({
               if (previewRef.current) {
                 previewRef.current.setAttribute('dir', 'ltr');
                 previewRef.current.style.direction = 'ltr';
-                previewRef.current.style.unicodeBidi = 'bidi-override';
 
                 const allElements = previewRef.current.querySelectorAll('*');
                 allElements.forEach((el: Element) => {
                   if (el instanceof HTMLElement) {
                     el.setAttribute('dir', 'ltr');
                     el.style.direction = 'ltr';
-                    el.style.unicodeBidi = 'bidi-override';
                   }
                 });
               }
@@ -141,7 +136,6 @@ export default function RichTextEditor({
           minHeight: `${rows * 28}px`,
           direction: 'ltr',
           textAlign: 'left',
-          unicodeBidi: 'bidi-override',
           writingMode: 'horizontal-tb',
         }}
       />
@@ -372,7 +366,6 @@ export default function RichTextEditor({
         [contenteditable] {
           -webkit-user-modify: read-write-plaintext-only;
           direction: ltr !important;
-          unicode-bidi: bidi-override !important;
           writing-mode: horizontal-tb !important;
         }
 
@@ -392,7 +385,6 @@ export default function RichTextEditor({
         [contenteditable] blockquote,
         [contenteditable] a {
           direction: ltr !important;
-          unicode-bidi: bidi-override !important;
           text-align: left !important;
           writing-mode: horizontal-tb !important;
         }
@@ -400,13 +392,11 @@ export default function RichTextEditor({
         [contenteditable]:focus,
         [contenteditable]:active {
           direction: ltr !important;
-          unicode-bidi: bidi-override !important;
         }
 
         /* Force LTR for empty contenteditable */
         [contenteditable]:empty:before {
           direction: ltr !important;
-          unicode-bidi: bidi-override !important;
         }
       `}</style>
     </div>
