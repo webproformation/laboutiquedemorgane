@@ -33,6 +33,50 @@ interface WooCategory {
   children?: WooCategory[];
 }
 
+interface CategoryItemProps {
+  category: WooCategory;
+  selectedCategories: number[];
+  onToggle: (categoryId: number, checked: boolean) => void;
+  level: number;
+}
+
+function CategoryItem({ category, selectedCategories, onToggle, level }: CategoryItemProps) {
+  const indent = level * 24;
+  const fontWeight = level === 0 ? 'font-semibold' : 'font-normal';
+  const textColor = level === 0 ? 'text-gray-900' : 'text-gray-700';
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center space-x-2" style={{ paddingLeft: `${indent}px` }}>
+        <Checkbox
+          id={`category-${category.id}`}
+          checked={selectedCategories.includes(category.id)}
+          onCheckedChange={(checked) => onToggle(category.id, checked as boolean)}
+        />
+        <Label
+          htmlFor={`category-${category.id}`}
+          className={`text-sm cursor-pointer ${fontWeight} ${textColor}`}
+        >
+          {decodeHtmlEntities(category.name)}
+        </Label>
+      </div>
+      {category.children && category.children.length > 0 && (
+        <div className="space-y-2">
+          {category.children.map((subcategory) => (
+            <CategoryItem
+              key={subcategory.id}
+              category={subcategory}
+              selectedCategories={selectedCategories}
+              onToggle={onToggle}
+              level={level + 1}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function CreateProduct() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
@@ -228,64 +272,25 @@ export default function CreateProduct() {
                   <p className="text-sm text-gray-500">Aucune catégorie disponible</p>
                 ) : (
                   categories.map((category) => (
-                    <div key={category.id} className="space-y-2">
-                      <div className="flex items-center space-x-2">
-                        <Checkbox
-                          id={`category-${category.id}`}
-                          checked={product.categories.includes(category.id)}
-                          onCheckedChange={(checked) => {
-                            if (checked) {
-                              setProduct({
-                                ...product,
-                                categories: [...product.categories, category.id]
-                              });
-                            } else {
-                              setProduct({
-                                ...product,
-                                categories: product.categories.filter(id => id !== category.id)
-                              });
-                            }
-                          }}
-                        />
-                        <Label
-                          htmlFor={`category-${category.id}`}
-                          className="text-sm font-semibold cursor-pointer"
-                        >
-                          {decodeHtmlEntities(category.name)}
-                        </Label>
-                      </div>
-                      {category.children && category.children.length > 0 && (
-                        <div className="ml-6 space-y-2 border-l-2 border-gray-200 pl-4">
-                          {category.children.map((subcategory) => (
-                            <div key={subcategory.id} className="flex items-center space-x-2">
-                              <Checkbox
-                                id={`category-${subcategory.id}`}
-                                checked={product.categories.includes(subcategory.id)}
-                                onCheckedChange={(checked) => {
-                                  if (checked) {
-                                    setProduct({
-                                      ...product,
-                                      categories: [...product.categories, subcategory.id]
-                                    });
-                                  } else {
-                                    setProduct({
-                                      ...product,
-                                      categories: product.categories.filter(id => id !== subcategory.id)
-                                    });
-                                  }
-                                }}
-                              />
-                              <Label
-                                htmlFor={`category-${subcategory.id}`}
-                                className="text-sm font-normal cursor-pointer text-gray-700"
-                              >
-                                {decodeHtmlEntities(subcategory.name)}
-                              </Label>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
+                    <CategoryItem
+                      key={category.id}
+                      category={category}
+                      selectedCategories={product.categories}
+                      onToggle={(categoryId, checked) => {
+                        if (checked) {
+                          setProduct({
+                            ...product,
+                            categories: [...product.categories, categoryId]
+                          });
+                        } else {
+                          setProduct({
+                            ...product,
+                            categories: product.categories.filter(id => id !== categoryId)
+                          });
+                        }
+                      }}
+                      level={0}
+                    />
                   ))
                 )}
               </div>

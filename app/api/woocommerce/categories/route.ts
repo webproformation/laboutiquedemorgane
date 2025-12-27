@@ -21,10 +21,12 @@ function buildCategoryTree(categories: Category[]): HierarchicalCategory[] {
   const categoryMap = new Map<number, HierarchicalCategory>();
   const rootCategories: HierarchicalCategory[] = [];
 
+  // First pass: Create all category objects
   categories.forEach(cat => {
     categoryMap.set(cat.id, { ...cat, children: [] });
   });
 
+  // Second pass: Build the tree structure
   categories.forEach(cat => {
     const category = categoryMap.get(cat.id)!;
     if (cat.parent === 0) {
@@ -36,9 +38,25 @@ function buildCategoryTree(categories: Category[]): HierarchicalCategory[] {
           parent.children = [];
         }
         parent.children.push(category);
+      } else {
+        // If parent not found, treat as root category
+        rootCategories.push(category);
       }
     }
   });
+
+  // Recursive function to clean up empty children arrays
+  const cleanEmptyChildren = (cats: HierarchicalCategory[]) => {
+    cats.forEach(cat => {
+      if (cat.children && cat.children.length === 0) {
+        delete cat.children;
+      } else if (cat.children && cat.children.length > 0) {
+        cleanEmptyChildren(cat.children);
+      }
+    });
+  };
+
+  cleanEmptyChildren(rootCategories);
 
   return rootCategories;
 }
@@ -62,8 +80,9 @@ export async function GET(request: Request) {
     const action = url.searchParams.get('action');
     const perPage = url.searchParams.get('per_page') || '100';
 
+    // Fetch all categories by requesting a large number
     const response = await fetch(
-      `${wordpressUrl}/wp-json/wc/v3/products/categories?per_page=${perPage}`,
+      `${wordpressUrl}/wp-json/wc/v3/products/categories?per_page=100&orderby=menu_order&order=asc`,
       {
         headers: {
           Authorization: `Basic ${auth}`,

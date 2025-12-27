@@ -20,11 +20,13 @@ function CheckoutForm({ onSuccess, onError, returnUrl }: CheckoutFormProps) {
   const elements = useElements();
   const [processing, setProcessing] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+  const [isReady, setIsReady] = useState(false);
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
 
-    if (!stripe || !elements) {
+    if (!stripe || !elements || !isReady) {
+      setErrorMessage('Le formulaire de paiement n\'est pas encore prêt. Veuillez patienter...');
       return;
     }
 
@@ -68,7 +70,20 @@ function CheckoutForm({ onSuccess, onError, returnUrl }: CheckoutFormProps) {
           <CreditCard className="h-5 w-5 text-[#b8933d]" />
           <span>Informations de paiement</span>
         </div>
-        <PaymentElement />
+        <PaymentElement
+          onReady={() => setIsReady(true)}
+          onLoadError={(error) => {
+            const errorMsg = error.error?.message || 'Erreur lors du chargement du formulaire de paiement';
+            setErrorMessage(errorMsg);
+            onError(errorMsg);
+          }}
+        />
+        {!isReady && (
+          <div className="flex items-center justify-center py-4">
+            <Loader2 className="h-5 w-5 animate-spin text-[#b8933d] mr-2" />
+            <span className="text-sm text-gray-600">Chargement du formulaire...</span>
+          </div>
+        )}
       </div>
 
       <Alert className="bg-green-50 border-green-200">
@@ -80,14 +95,19 @@ function CheckoutForm({ onSuccess, onError, returnUrl }: CheckoutFormProps) {
 
       <Button
         type="submit"
-        disabled={!stripe || processing}
-        className="w-full bg-[#b8933d] hover:bg-[#a07c2f] text-white"
+        disabled={!stripe || !isReady || processing}
+        className="w-full bg-[#b8933d] hover:bg-[#a07c2f] text-white disabled:opacity-50 disabled:cursor-not-allowed"
         size="lg"
       >
         {processing ? (
           <>
             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
             Paiement en cours...
+          </>
+        ) : !isReady ? (
+          <>
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            Chargement...
           </>
         ) : (
           <>
