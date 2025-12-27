@@ -20,6 +20,8 @@ export async function POST(request: NextRequest) {
 
     const orderData = await request.json();
 
+    console.log('Creating WooCommerce order with data:', JSON.stringify(orderData, null, 2));
+
     const response = await fetch(
       `${WORDPRESS_URL}/wp-json/wc/v3/orders`,
       {
@@ -35,11 +37,17 @@ export async function POST(request: NextRequest) {
     const result = await response.json();
 
     if (!response.ok) {
+      console.error('WooCommerce order creation failed:', {
+        status: response.status,
+        error: result
+      });
       return NextResponse.json(
         { success: false, error: 'Erreur WooCommerce', details: result },
         { status: response.status }
       );
     }
+
+    console.log('WooCommerce order created successfully:', result.id);
 
     return NextResponse.json({
       success: true,
