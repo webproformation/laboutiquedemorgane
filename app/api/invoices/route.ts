@@ -15,7 +15,12 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Configuration serveur manquante', invoices: [] }, { status: 500 });
     }
 
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    const supabase = createClient(supabaseUrl, supabaseServiceKey, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false
+      }
+    });
 
     const authHeader = request.headers.get('authorization');
     const cookies = request.headers.get('cookie');
@@ -102,12 +107,29 @@ export async function GET(request: Request) {
 
     if (error) {
       console.error('Database error fetching invoices:', error);
-      return NextResponse.json({ error: error.message, invoices: [] }, { status: 500 });
+      console.error('Error details:', {
+        message: error.message,
+        details: error.details,
+        hint: error.hint,
+        code: error.code
+      });
+      return NextResponse.json({
+        error: `Erreur de base de données: ${error.message}`,
+        details: error.details,
+        code: error.code,
+        invoices: []
+      }, { status: 500 });
     }
 
+    console.log('Successfully fetched invoices:', data?.length || 0);
     return NextResponse.json({ invoices: data || [] });
   } catch (error: any) {
     console.error('API route error:', error);
-    return NextResponse.json({ error: error.message, invoices: [] }, { status: 500 });
+    console.error('Error stack:', error.stack);
+    return NextResponse.json({
+      error: `Erreur serveur: ${error.message}`,
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined,
+      invoices: []
+    }, { status: 500 });
   }
 }

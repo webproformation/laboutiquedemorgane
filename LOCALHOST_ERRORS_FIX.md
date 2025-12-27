@@ -88,11 +88,11 @@ cat .env | grep -E "(SUPABASE|ONESIGNAL|STRIPE)"
 
 Résultat attendu :
 ```
-NEXT_PUBLIC_SUPABASE_URL=https://xaldjtbabtlmdroshzux.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=sb_publishable_5oj7ecUlHZEaH1e61lDJTA_EfZbWAy6
+NEXT_PUBLIC_SUPABASE_URL=https://ftgclacfleknkqbfbsbs.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZ0Z2NsYWNmbGVrbmtxYmZic2JzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjUwMzA3NjUsImV4cCI6MjA4MDYwNjc2NX0.fZ_yi8opM3kQ4T-hCagMebTvM7spx7tIMZvaTBPBSe8
 ONESIGNAL_API_KEY=os_v2_app_...
-ONESIGNAL_APP_ID=lyw37xkvbuyieuz6uhondc5co
-NEXT_PUBLIC_ONESIGNAL_APP_ID=lyw37xkvbuyieuz6uhondc5co
+ONESIGNAL_APP_ID=rqsjl3cqyegwv2lpyae34ra2v
+NEXT_PUBLIC_ONESIGNAL_APP_ID=rqsjl3cqyegwv2lpyae34ra2v
 STRIPE_SECRET_KEY=rk_live_...
 NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_live_...
 ```
