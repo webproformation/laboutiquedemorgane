@@ -112,62 +112,36 @@ async function syncCategoriesFromWooCommerce() {
 
 export async function GET(request: Request) {
   try {
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-    const supabase = createClient(supabaseUrl, supabaseAnonKey);
-
     const url = new URL(request.url);
     const action = url.searchParams.get('action');
-    const forceRefresh = url.searchParams.get('refresh') === 'true';
 
-    // Check if cache exists and is not expired
-    const { data: recentCache, error: cacheCheckError } = await supabase
-      .from('woocommerce_categories_cache')
-      .select('updated_at')
-      .gte('updated_at', new Date(Date.now() - 5 * 60 * 1000).toISOString())
-      .limit(1);
+    // Récupération directe depuis WooCommerce (plus fiable)
+    const wordpressUrl = process.env.WORDPRESS_URL;
+    const consumerKey = process.env.WC_CONSUMER_KEY;
+    const consumerSecret = process.env.WC_CONSUMER_SECRET;
 
-    const cacheExpired = !recentCache || recentCache.length === 0;
-
-    if (forceRefresh || cacheExpired) {
-      await syncCategoriesFromWooCommerce();
+    if (!wordpressUrl || !consumerKey || !consumerSecret) {
+      throw new Error('Missing WooCommerce configuration');
     }
 
-    const { data: cachedCategories, error } = await supabase
-      .from('woocommerce_categories_cache')
-      .select('*')
-      .order('category_id', { ascending: true });
+    const auth = Buffer.from(`${consumerKey}:${consumerSecret}`).toString('base64');
 
-    if (error) {
-      throw error;
-    }
-
-    if (!cachedCategories || cachedCategories.length === 0) {
-      await syncCategoriesFromWooCommerce();
-      const { data: newCategories } = await supabase
-        .from('woocommerce_categories_cache')
-        .select('*')
-        .order('category_id', { ascending: true });
-
-      const categories = (newCategories || []).map((cat: any) => ({
-        id: cat.category_id,
-        name: cat.name,
-        slug: cat.slug,
-        parent: cat.parent,
-        description: cat.description || '',
-        image: cat.image,
-        count: cat.count || 0,
-      }));
-
-      if (action === 'list') {
-        return NextResponse.json(categories);
+    const response = await fetch(
+      `${wordpressUrl}/wp-json/wc/v3/products/categories?per_page=100&orderby=menu_order&order=asc`,
+      {
+        headers: { Authorization: `Basic ${auth}` },
+        cache: 'no-store'
       }
+    );
 
-      return NextResponse.json(buildCategoryTree(categories));
+    if (!response.ok) {
+      throw new Error(`WooCommerce API error: ${response.status}`);
     }
 
-    const categories: Category[] = cachedCategories.map((cat: any) => ({
-      id: cat.category_id,
+    const rawCategories = await response.json();
+
+    const categories: Category[] = rawCategories.map((cat: any) => ({
+      id: cat.id,
       name: cat.name,
       slug: cat.slug,
       parent: cat.parent,
