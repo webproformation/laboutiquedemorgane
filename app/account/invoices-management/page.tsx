@@ -6,9 +6,10 @@ import { useAdmin } from '@/hooks/use-admin';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Loader2, FileText, Check, ArrowLeft } from 'lucide-react';
+import { Loader2, FileText, Check, ArrowLeft, Download, Send, Eye } from 'lucide-react';
 import { toast } from 'sonner';
 import Link from 'next/link';
+import html2pdf from 'html2pdf.js';
 
 interface WooOrder {
   id: number;
@@ -29,6 +30,14 @@ interface MonthlyOrders {
   orders: WooOrder[];
 }
 
+interface Invoice {
+  id: string;
+  invoice_number: string;
+  pdf_url: string;
+  sent_at: string | null;
+  woocommerce_order_id: number;
+}
+
 export default function InvoicesManagementPage() {
   const router = useRouter();
   const { isAdmin, loading: adminLoading } = useAdmin();
@@ -38,6 +47,8 @@ export default function InvoicesManagementPage() {
   const [pastMonthsOrders, setPastMonthsOrders] = useState<MonthlyOrders[]>([]);
   const [selectedOrders, setSelectedOrders] = useState<Set<number>>(new Set());
   const [existingInvoices, setExistingInvoices] = useState<Set<number>>(new Set());
+  const [invoicesMap, setInvoicesMap] = useState<Record<number, Invoice>>({});
+  const [sendingInvoice, setSendingInvoice] = useState<string | null>(null);
 
   useEffect(() => {
     if (!adminLoading) {
@@ -60,10 +71,19 @@ export default function InvoicesManagementPage() {
 
       const invoicesResponse = await fetch('/api/invoices');
       const invoicesData = await invoicesResponse.json();
-      const invoices = invoicesData.invoices || [];
+      const invoices: Invoice[] = invoicesData.invoices || [];
 
-      const invoiceOrderIds = new Set<number>(invoices.map((inv: any) => inv.woocommerce_order_id as number));
+      const invoiceOrderIds = new Set<number>(invoices.map((inv: Invoice) => inv.woocommerce_order_id as number));
       setExistingInvoices(invoiceOrderIds);
+
+      // Create a map of order ID to invoice
+      const invMap: Record<number, Invoice> = {};
+      invoices.forEach((inv: Invoice) => {
+        if (inv.woocommerce_order_id) {
+          invMap[inv.woocommerce_order_id] = inv;
+        }
+      });
+      setInvoicesMap(invMap);
 
       const now = new Date();
       const currentMonth = now.getMonth();
@@ -195,6 +215,184 @@ export default function InvoicesManagementPage() {
     }
   };
 
+  const viewInvoice = async (orderId: number) => {
+    try {
+      const invoice = invoicesMap[orderId];
+
+      if (!invoice) {
+        toast.error('Aucune facture trouvée pour cette commande');
+        return;
+      }
+
+      if (!invoice.pdf_url) {
+        toast.error('URL de la facture manquante');
+        return;
+      }
+
+      const invoiceResponse = await fetch(invoice.pdf_url);
+      if (!invoiceResponse.ok) {
+        throw new Error('Impossible de charger le document');
+      }
+
+      const invoiceData = await invoiceResponse.json();
+
+      if (!invoiceData.html) {
+        toast.error('Le document est invalide');
+        return;
+      }
+
+      const printWindow = window.open('', '_blank');
+      if (printWindow) {
+        printWindow.document.write(invoiceData.html);
+        printWindow.document.close();
+      } else {
+        toast.error('Le popup a été bloqué par votre navigateur');
+      }
+    } catch (error) {
+      toast.error('Erreur lors de l\'ouverture du bon de commande');
+      console.error('View invoice error:', error);
+    }
+  };
+
+  const downloadInvoice = async (orderId: number) => {
+    let tempContainer: HTMLElement | null = null;
+    const loadingToastId = toast.loading('Génération du PDF en cours...');
+
+    try {
+      const invoice = invoicesMap[orderId];
+
+      if (!invoice) {
+        toast.dismiss(loadingToastId);
+        toast.error('Aucune facture trouvée pour cette commande');
+        return;
+      }
+
+      if (!invoice.pdf_url) {
+        toast.dismiss(loadingToastId);
+        toast.error('URL de la facture manquante');
+        return;
+      }
+
+      const invoiceResponse = await fetch(invoice.pdf_url);
+      if (!invoiceResponse.ok) {
+        throw new Error(`Impossible de charger le document (${invoiceResponse.status})`);
+      }
+
+      const invoiceData = await invoiceResponse.json();
+
+      if (!invoiceData.html) {
+        throw new Error('Le document est invalide (HTML manquant)');
+      }
+
+      // Create a temporary container for the HTML
+      tempContainer = document.createElement('div');
+      tempContainer.innerHTML = invoiceData.html;
+      tempContainer.style.position = 'absolute';
+      tempContainer.style.left = '-9999px';
+      tempContainer.style.top = '0';
+      tempContainer.style.width = '800px';
+      document.body.appendChild(tempContainer);
+
+      // Wait a bit for images to load
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      // Configure PDF options
+      const opt = {
+        margin: [10, 10, 10, 10] as [number, number, number, number],
+        filename: `bon-commande-${invoice.invoice_number}.pdf`,
+        image: { type: 'jpeg' as const, quality: 0.98 },
+        html2canvas: {
+          scale: 2,
+          useCORS: true,
+          logging: true,
+          letterRendering: true,
+          allowTaint: true,
+          backgroundColor: '#ffffff'
+        },
+        jsPDF: {
+          unit: 'mm' as const,
+          format: 'a4' as const,
+          orientation: 'portrait' as const
+        },
+        pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
+      };
+
+      // Convert HTML to PDF and download
+      const htmlElement = tempContainer.querySelector('.container') as HTMLElement;
+      if (!htmlElement) {
+        throw new Error('Structure du document invalide');
+      }
+
+      await html2pdf().set(opt).from(htmlElement).save();
+
+      // Clean up
+      if (tempContainer && document.body.contains(tempContainer)) {
+        document.body.removeChild(tempContainer);
+      }
+
+      toast.dismiss(loadingToastId);
+      toast.success('PDF téléchargé avec succès');
+    } catch (error) {
+      console.error('Download error:', error);
+
+      // Clean up on error
+      if (tempContainer && document.body.contains(tempContainer)) {
+        try {
+          document.body.removeChild(tempContainer);
+        } catch (cleanupError) {
+          console.error('Cleanup error:', cleanupError);
+        }
+      }
+
+      toast.dismiss(loadingToastId);
+      toast.error(`Erreur lors de la génération du PDF: ${(error as Error).message}`, {
+        duration: 5000
+      });
+    }
+  };
+
+  const sendInvoiceEmail = async (invoiceId: string) => {
+    setSendingInvoice(invoiceId);
+    try {
+      const response = await fetch('/api/invoices/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ invoiceId, resend: true }),
+      });
+
+      let data;
+      try {
+        data = await response.json();
+      } catch (parseError) {
+        throw new Error('Invalid server response');
+      }
+
+      if (response.ok) {
+        toast.success('Bon de commande envoyé avec succès');
+        // Update invoice sent_at
+        setInvoicesMap((prev) => ({
+          ...prev,
+          ...Object.fromEntries(
+            Object.entries(prev).map(([key, invoice]) =>
+              invoice.id === invoiceId
+                ? [key, { ...invoice, sent_at: new Date().toISOString() }]
+                : [key, invoice]
+            )
+          ),
+        }));
+      } else {
+        const errorMsg = data?.details
+          ? `${data.error}: ${data.details}`
+          : data?.error || 'Erreur lors de l\'envoi';
+        toast.error(errorMsg, { duration: 10000 });
+      }
+    } catch (error) {
+      toast.error('Erreur lors de l\'envoi du bon de commande: ' + (error as Error).message);
+    } finally {
+      setSendingInvoice(null);
+    }
+  };
+
   if (adminLoading || loading) {
     return (
       <div className="flex justify-center py-12">
@@ -249,6 +447,50 @@ export default function InvoicesManagementPage() {
                      order.status}
                   </span>
                 </div>
+
+                {/* Invoice action buttons */}
+                {existingInvoices.has(order.id) && invoicesMap[order.id] && (
+                  <div className="flex flex-wrap gap-2 mt-3">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => viewInvoice(order.id)}
+                      className="text-xs"
+                    >
+                      <Eye className="w-3 h-3 mr-1" />
+                      Voir
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => downloadInvoice(order.id)}
+                      className="text-xs"
+                    >
+                      <Download className="w-3 h-3 mr-1" />
+                      Télécharger
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => sendInvoiceEmail(invoicesMap[order.id].id)}
+                      disabled={sendingInvoice === invoicesMap[order.id].id}
+                      className="text-xs"
+                    >
+                      {sendingInvoice === invoicesMap[order.id].id ? (
+                        <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                      ) : (
+                        <Send className="w-3 h-3 mr-1" />
+                      )}
+                      Envoyer
+                    </Button>
+                    {invoicesMap[order.id].sent_at && (
+                      <span className="text-xs text-green-600 self-center">
+                        Envoyé le{' '}
+                        {new Date(invoicesMap[order.id].sent_at!).toLocaleDateString('fr-FR')}
+                      </span>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           ))}

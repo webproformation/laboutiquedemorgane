@@ -112,9 +112,14 @@ export default function CreateProduct() {
       if (response.ok) {
         const data = await response.json();
         setCategories(data);
+      } else {
+        const errorData = await response.json();
+        console.error('Error loading categories:', errorData);
+        toast.error(`Impossible de charger les catégories: ${errorData.error || 'Erreur serveur'}`);
       }
     } catch (error) {
       console.error('Error loading categories:', error);
+      toast.error('Erreur lors du chargement des catégories');
     } finally {
       setLoadingCategories(false);
     }

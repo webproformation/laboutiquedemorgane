@@ -13,8 +13,26 @@ interface ColorSwatchProps {
 export default function ColorSwatch({ color, isSelected, onClick, size = 'md' }: ColorSwatchProps) {
   const colorValue = getColorValue(color);
 
+  // If no color value is found, log it and render a text button instead
   if (!colorValue) {
-    return null;
+    console.warn(`⚠️ ColorSwatch: No color mapping found for "${color}". Please add it to lib/colors.ts`);
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        className={`
+          px-3 py-2 rounded-lg border-2 text-sm font-medium transition-all
+          ${isSelected
+            ? 'border-[#b8933d] bg-[#b8933d] text-white'
+            : 'border-gray-300 hover:border-[#b8933d] bg-white text-gray-700'
+          }
+        `}
+        title={color}
+        aria-label={`Couleur ${color}`}
+      >
+        {color}
+      </button>
+    );
   }
 
   const sizeClasses = {
