@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { createClient } from '@supabase/supabase-js';
 
 interface Category {
   id: number;
@@ -21,12 +22,10 @@ function buildCategoryTree(categories: Category[]): HierarchicalCategory[] {
   const categoryMap = new Map<number, HierarchicalCategory>();
   const rootCategories: HierarchicalCategory[] = [];
 
-  // First pass: Create all category objects
   categories.forEach(cat => {
     categoryMap.set(cat.id, { ...cat, children: [] });
   });
 
-  // Second pass: Build the tree structure
   categories.forEach(cat => {
     const category = categoryMap.get(cat.id)!;
     if (cat.parent === 0) {
@@ -39,13 +38,11 @@ function buildCategoryTree(categories: Category[]): HierarchicalCategory[] {
         }
         parent.children.push(category);
       } else {
-        // If parent not found, treat as root category
         rootCategories.push(category);
       }
     }
   });
 
-  // Recursive function to clean up empty children arrays
   const cleanEmptyChildren = (cats: HierarchicalCategory[]) => {
     cats.forEach(cat => {
       if (cat.children && cat.children.length === 0) {
@@ -57,47 +54,113 @@ function buildCategoryTree(categories: Category[]): HierarchicalCategory[] {
   };
 
   cleanEmptyChildren(rootCategories);
-
   return rootCategories;
+}
+
+async function syncCategoriesFromWooCommerce() {
+  const wordpressUrl = process.env.WORDPRESS_URL;
+  const consumerKey = process.env.WC_CONSUMER_KEY;
+  const consumerSecret = process.env.WC_CONSUMER_SECRET;
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+
+  if (!wordpressUrl || !consumerKey || !consumerSecret) {
+    throw new Error('Missing WooCommerce configuration');
+  }
+
+  const supabase = createClient(supabaseUrl, supabaseServiceKey);
+  const auth = Buffer.from(`${consumerKey}:${consumerSecret}`).toString('base64');
+
+  const response = await fetch(
+    `${wordpressUrl}/wp-json/wc/v3/products/categories?per_page=100&orderby=menu_order&order=asc`,
+    {
+      headers: { Authorization: `Basic ${auth}` },
+      next: { revalidate: 0 }
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error(`WooCommerce API error: ${response.status}`);
+  }
+
+  const rawCategories = await response.json();
+
+  await supabase.from('woocommerce_categories_cache').delete().neq('id', 0);
+
+  const categoriesToInsert = rawCategories.map((cat: any) => ({
+    category_id: cat.id,
+    name: cat.name,
+    slug: cat.slug,
+    parent: cat.parent,
+    description: cat.description || '',
+    image: cat.image,
+    count: cat.count || 0,
+    updated_at: new Date().toISOString()
+  }));
+
+  const { error } = await supabase
+    .from('woocommerce_categories_cache')
+    .insert(categoriesToInsert);
+
+  if (error) {
+    console.error('Error inserting categories into cache:', error);
+    throw error;
+  }
+
+  return categoriesToInsert;
 }
 
 export async function GET(request: Request) {
   try {
-    const wordpressUrl = process.env.WORDPRESS_URL;
-    const consumerKey = process.env.WC_CONSUMER_KEY;
-    const consumerSecret = process.env.WC_CONSUMER_SECRET;
-
-    if (!wordpressUrl || !consumerKey || !consumerSecret) {
-      return NextResponse.json(
-        { error: 'Missing WooCommerce configuration' },
-        { status: 500 }
-      );
-    }
-
-    const auth = Buffer.from(`${consumerKey}:${consumerSecret}`).toString('base64');
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+    const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
     const url = new URL(request.url);
     const action = url.searchParams.get('action');
-    const perPage = url.searchParams.get('per_page') || '100';
+    const forceRefresh = url.searchParams.get('refresh') === 'true';
 
-    // Fetch all categories by requesting a large number
-    const response = await fetch(
-      `${wordpressUrl}/wp-json/wc/v3/products/categories?per_page=100&orderby=menu_order&order=asc`,
-      {
-        headers: {
-          Authorization: `Basic ${auth}`,
-        },
-      }
-    );
+    const { data: cacheExpired } = await supabase.rpc('is_categories_cache_expired');
 
-    if (!response.ok) {
-      throw new Error(`WooCommerce API error: ${response.status}`);
+    if (forceRefresh || cacheExpired) {
+      await syncCategoriesFromWooCommerce();
     }
 
-    const rawCategories = await response.json();
+    const { data: cachedCategories, error } = await supabase
+      .from('woocommerce_categories_cache')
+      .select('*')
+      .order('category_id', { ascending: true });
 
-    const categories: Category[] = rawCategories.map((cat: any) => ({
-      id: cat.id,
+    if (error) {
+      throw error;
+    }
+
+    if (!cachedCategories || cachedCategories.length === 0) {
+      await syncCategoriesFromWooCommerce();
+      const { data: newCategories } = await supabase
+        .from('woocommerce_categories_cache')
+        .select('*')
+        .order('category_id', { ascending: true });
+
+      const categories = (newCategories || []).map((cat: any) => ({
+        id: cat.category_id,
+        name: cat.name,
+        slug: cat.slug,
+        parent: cat.parent,
+        description: cat.description || '',
+        image: cat.image,
+        count: cat.count || 0,
+      }));
+
+      if (action === 'list') {
+        return NextResponse.json(categories);
+      }
+
+      return NextResponse.json(buildCategoryTree(categories));
+    }
+
+    const categories: Category[] = cachedCategories.map((cat: any) => ({
+      id: cat.category_id,
       name: cat.name,
       slug: cat.slug,
       parent: cat.parent,
@@ -106,14 +169,11 @@ export async function GET(request: Request) {
       count: cat.count || 0,
     }));
 
-    // If action is 'list', return flat array (for management page)
     if (action === 'list') {
       return NextResponse.json(categories);
     }
 
-    // Otherwise, return hierarchical structure
-    const hierarchicalCategories = buildCategoryTree(categories);
-    return NextResponse.json(hierarchicalCategories);
+    return NextResponse.json(buildCategoryTree(categories));
   } catch (error) {
     console.error('Error fetching categories:', error);
     return NextResponse.json(
@@ -121,6 +181,14 @@ export async function GET(request: Request) {
       { status: 500 }
     );
   }
+}
+
+async function invalidateCache() {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+  const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+  await supabase.from('woocommerce_categories_cache').delete().neq('id', 0);
 }
 
 export async function POST(request: Request) {
@@ -163,6 +231,7 @@ export async function POST(request: Request) {
       }
 
       const createdCategory = await createResponse.json();
+      await invalidateCache();
       return NextResponse.json(createdCategory);
     }
 
@@ -252,6 +321,7 @@ export async function POST(request: Request) {
         }
       }
 
+      await invalidateCache();
       return NextResponse.json({
         success: true,
         categories: createdCategories,
@@ -318,6 +388,7 @@ export async function PUT(request: Request) {
       }
 
       const updatedCategory = await updateResponse.json();
+      await invalidateCache();
       return NextResponse.json(updatedCategory);
     }
 
@@ -379,6 +450,7 @@ export async function DELETE(request: Request) {
       }
 
       const deletedCategory = await deleteResponse.json();
+      await invalidateCache();
       return NextResponse.json(deletedCategory);
     }
 
