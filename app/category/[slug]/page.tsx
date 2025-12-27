@@ -13,6 +13,7 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { useParams } from 'next/navigation';
 import { parsePrice } from '@/lib/utils';
+import { useClientSize } from '@/hooks/use-client-size';
 import {
   Sheet,
   SheetContent,
@@ -29,6 +30,7 @@ export default function CategoryPage() {
   const [filters, setFilters] = useState<Record<string, string[]>>({});
   const [priceFilter, setPriceFilter] = useState<{ min: number; max: number } | undefined>();
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const { isProductInMySize } = useClientSize();
 
   const { data: categoriesData } = useQuery<GetProductCategoriesResponse>(GET_PRODUCT_CATEGORIES);
 
@@ -172,37 +174,15 @@ export default function CategoryPage() {
 
           const matchesAllFilters = Object.entries(filters).every(([attributeSlug, selectedTermNames]) => {
             if (attributeSlug === 'my_size') {
-              const sizeAttribute = attributes.find(
-                (attr) => {
-                  const attrName = attr.name.toLowerCase();
-                  const attrSlug = attr.slug?.toLowerCase() || '';
-                  return attrName === 'taille' ||
-                         attrName === 'tailles' ||
-                         attrName === 'size' ||
-                         attrSlug === 'pa_taille' ||
-                         attrSlug === 'pa_tailles' ||
-                         attrSlug === 'pa_size';
-                }
-              );
-
-              if (!sizeAttribute || !sizeAttribute.options) {
-                console.log('[CategoryPage] Product missing size attribute:', {
-                  name: product.name
-                });
-                return false;
-              }
-
-              const hasMatch = selectedTermNames.some((termName) => {
-                return sizeAttribute.options.some((option) =>
-                  option.toUpperCase().trim() === termName.toUpperCase().trim()
-                );
-              });
+              const hasMatch = isProductInMySize(product);
 
               if (!hasMatch) {
                 console.log('[CategoryPage] Product does not match size filter:', {
                   name: product.name,
-                  selectedSize: selectedTermNames,
-                  productSizes: sizeAttribute.options
+                  productAttributes: attributes.map(a => ({
+                    name: a.name,
+                    options: a.options
+                  }))
                 });
               }
 

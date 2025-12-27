@@ -60,10 +60,16 @@ export function useClientSize() {
     if ((!preferredSizeBottom && !preferredSizeTop) || !product) return false;
 
     const sizeAttribute = product.attributes?.nodes?.find(
-      attr => attr.name?.toLowerCase() === 'taille' ||
-              attr.name?.toLowerCase() === 'size' ||
-              attr.slug?.toLowerCase() === 'pa_taille' ||
-              attr.slug?.toLowerCase() === 'pa_size'
+      attr => {
+        const attrName = attr.name?.toLowerCase() || '';
+        const attrSlug = attr.slug?.toLowerCase() || '';
+        return attrName === 'taille' ||
+               attrName === 'tailles' ||
+               attrName === 'size' ||
+               attrSlug === 'pa_taille' ||
+               attrSlug === 'pa_tailles' ||
+               attrSlug === 'pa_size';
+      }
     );
 
     if (!sizeAttribute || !sizeAttribute.options) return false;
@@ -72,9 +78,38 @@ export function useClientSize() {
     const topSizes = preferredSizeTop ? getSizesForCategory(preferredSizeTop) : [];
     const allPreferredSizes = Array.from(new Set([...bottomSizes, ...topSizes]));
 
-    return sizeAttribute.options.some(
-      option => allPreferredSizes.includes(option.trim())
-    );
+    // Check if product options contain individual sizes OR size categories
+    return sizeAttribute.options.some(option => {
+      const optionTrimmed = option.trim();
+
+      // Check if it's an individual size (36, 38, etc.)
+      if (allPreferredSizes.includes(optionTrimmed)) {
+        return true;
+      }
+
+      // Check if it's a size category that matches user preferences
+      const optionUpper = optionTrimmed.toUpperCase();
+
+      // Check if the option matches the user's preferred categories
+      if (preferredSizeBottom && optionUpper === preferredSizeBottom.toUpperCase()) {
+        return true;
+      }
+
+      if (preferredSizeTop && optionUpper === preferredSizeTop.toUpperCase()) {
+        return true;
+      }
+
+      // Check if option is a category that contains any of the preferred sizes
+      if (optionUpper.includes('PETITES TAILLES') && allPreferredSizes.some(size => ['36', '38', '40', '42', '44'].includes(size))) {
+        return true;
+      }
+
+      if (optionUpper.includes('GRANDES TAILLES') && allPreferredSizes.some(size => ['46', '48', '50', '52', '54'].includes(size))) {
+        return true;
+      }
+
+      return false;
+    });
   };
 
   return {

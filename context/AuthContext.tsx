@@ -161,21 +161,56 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signUp = async (email: string, password: string, firstName: string, lastName: string, birthDate?: string | null, referralCode?: string) => {
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: {
-          first_name: firstName,
-          last_name: lastName,
-          birth_date: birthDate || null,
+    try {
+      // Step 1: Create Supabase auth user
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            first_name: firstName,
+            last_name: lastName,
+            birth_date: birthDate || null,
+          },
         },
-      },
-    });
+      });
 
-    if (!error && data.user) {
+      if (error) {
+        return { error };
+      }
+
+      if (!data.user) {
+        return { error: { message: 'User creation failed' } as AuthError };
+      }
+
+      // Step 2: Wait a moment for auth to settle
+      await new Promise(resolve => setTimeout(resolve, 1000));
+
+      // Step 3: Explicitly create user profile using our robust function
+      try {
+        const { data: profileResult, error: profileError } = await supabase.rpc(
+          'create_user_profile_manually',
+          {
+            p_user_id: data.user.id,
+            p_email: email,
+            p_first_name: firstName,
+            p_last_name: lastName,
+            p_birth_date: birthDate || null,
+            p_wordpress_user_id: null,
+          }
+        );
+
+        if (profileError) {
+          console.error('Error creating profile:', profileError);
+        } else if (profileResult && !profileResult.success) {
+          console.error('Profile creation failed:', profileResult.error);
+        }
+      } catch (profileErr) {
+        console.error('Exception creating profile:', profileErr);
+      }
+
+      // Step 4: Create WordPress user (non-blocking)
       let wordpressUserId = null;
-
       try {
         const wpUserResponse = await fetch('/api/wordpress/create-user', {
           method: 'POST',
@@ -183,7 +218,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            email: data.user.email,
+            email: email,
             firstName: firstName,
             lastName: lastName,
             password: password,
@@ -194,73 +229,53 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         if (wpUserResult.success && wpUserResult.userId) {
           wordpressUserId = wpUserResult.userId;
-        } else {
-          console.error('Failed to create WordPress user:', wpUserResult.error);
+
+          // Update profile with WordPress user ID
+          await supabase.from('profiles').update({
+            wordpress_user_id: wordpressUserId,
+          }).eq('id', data.user.id);
         }
       } catch (wpError) {
         console.error('Error creating WordPress user:', wpError);
       }
 
-      // Only update wordpress_user_id if we successfully created a WordPress user
-      if (wordpressUserId) {
-        try {
-          await supabase.from('profiles').update({
-            wordpress_user_id: wordpressUserId,
-          }).eq('id', data.user.id);
-        } catch (updateError) {
-          console.error('Error updating WordPress user ID:', updateError);
-        }
-      }
-
-      await claimPendingPrize(data.user.id);
-
-      // Process referral code if provided
-      if (referralCode && referralCode.trim()) {
-        try {
-          const { data: referralResult, error: referralError } = await supabase
-            .rpc('process_referral', {
-              p_referral_code: referralCode.trim(),
-              p_referred_id: data.user.id
-            });
-
-          if (referralError) {
-            console.error('Error processing referral:', referralError);
-          } else if (referralResult) {
-            if (referralResult.success) {
-              console.log('Referral processed successfully:', referralResult);
-            } else {
-              console.error('Referral processing failed:', referralResult.error);
-            }
-          }
-        } catch (referralError) {
-          console.error('Error calling process_referral:', referralError);
-        }
-      }
-
+      // Step 5: Sync with WooCommerce (non-blocking)
       try {
-        const response = await fetch('/api/woocommerce/sync-customer', {
+        await fetch('/api/woocommerce/sync-customer', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            email: data.user.email,
+            email: email,
             first_name: firstName,
             last_name: lastName,
           }),
         });
-
-        const result = await response.json();
-
-        if (!result.success) {
-          console.error('Failed to sync with WooCommerce:', result.error);
-        }
       } catch (syncError) {
         console.error('Error syncing with WooCommerce:', syncError);
       }
-    }
 
-    return { error };
+      // Step 6: Process pending prize
+      await claimPendingPrize(data.user.id);
+
+      // Step 7: Process referral code
+      if (referralCode && referralCode.trim()) {
+        try {
+          await supabase.rpc('process_referral', {
+            p_referral_code: referralCode.trim(),
+            p_referred_id: data.user.id
+          });
+        } catch (referralError) {
+          console.error('Error processing referral:', referralError);
+        }
+      }
+
+      return { error: null };
+    } catch (err) {
+      console.error('Signup error:', err);
+      return { error: { message: 'An unexpected error occurred' } as AuthError };
+    }
   };
 
   const signIn = async (email: string, password: string) => {
@@ -281,20 +296,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (userProfile?.phone && userProfile.phone.trim() !== '') {
         try {
           const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-          const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+          const { data: { session } } = await supabase.auth.getSession();
 
-          await fetch(`${supabaseUrl}/functions/v1/send-login-sms`, {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${supabaseAnonKey}`,
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              phoneNumber: userProfile.phone,
-              firstName: userProfile.first_name || 'Client',
-              lastName: userProfile.last_name || '',
-            }),
-          });
+          if (session?.access_token) {
+            await fetch(`${supabaseUrl}/functions/v1/send-login-sms`, {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${session.access_token}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                phoneNumber: userProfile.phone,
+                firstName: userProfile.first_name || 'Client',
+                lastName: userProfile.last_name || '',
+              }),
+            });
+          }
         } catch (smsError) {
           console.error('Erreur lors de l\'envoi du SMS de connexion:', smsError);
         }

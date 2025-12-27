@@ -61,14 +61,18 @@ export default function RichTextEditor({
 
   const handlePreviewInput = () => {
     if (previewRef.current) {
+      // Force LTR direction on container
       previewRef.current.setAttribute('dir', 'ltr');
       previewRef.current.style.direction = 'ltr';
+      previewRef.current.style.unicodeBidi = 'bidi-override';
 
+      // Force LTR on all child elements
       const allElements = previewRef.current.querySelectorAll('*');
       allElements.forEach((el: Element) => {
         if (el instanceof HTMLElement) {
           el.setAttribute('dir', 'ltr');
           el.style.direction = 'ltr';
+          el.style.unicodeBidi = 'bidi-override';
         }
       });
 
@@ -93,12 +97,35 @@ export default function RichTextEditor({
         contentEditable
         suppressContentEditableWarning
         dir="ltr"
+        lang="fr"
         onInput={handlePreviewInput}
         onBlur={handlePreviewBlur}
         onKeyDown={(e) => {
           if (previewRef.current) {
             previewRef.current.setAttribute('dir', 'ltr');
             previewRef.current.style.direction = 'ltr';
+            previewRef.current.style.unicodeBidi = 'bidi-override';
+          }
+        }}
+        onPaste={(e) => {
+          // Force LTR on paste
+          if (previewRef.current) {
+            setTimeout(() => {
+              if (previewRef.current) {
+                previewRef.current.setAttribute('dir', 'ltr');
+                previewRef.current.style.direction = 'ltr';
+                previewRef.current.style.unicodeBidi = 'bidi-override';
+
+                const allElements = previewRef.current.querySelectorAll('*');
+                allElements.forEach((el: Element) => {
+                  if (el instanceof HTMLElement) {
+                    el.setAttribute('dir', 'ltr');
+                    el.style.direction = 'ltr';
+                    el.style.unicodeBidi = 'bidi-override';
+                  }
+                });
+              }
+            }, 0);
           }
         }}
         className={`
@@ -114,7 +141,8 @@ export default function RichTextEditor({
           minHeight: `${rows * 28}px`,
           direction: 'ltr',
           textAlign: 'left',
-          unicodeBidi: 'embed',
+          unicodeBidi: 'bidi-override',
+          writingMode: 'horizontal-tb',
         }}
       />
     );
@@ -343,25 +371,42 @@ export default function RichTextEditor({
       <style jsx global>{`
         [contenteditable] {
           -webkit-user-modify: read-write-plaintext-only;
-        }
-
-        [contenteditable] * {
           direction: ltr !important;
-          text-align: left !important;
+          unicode-bidi: bidi-override !important;
+          writing-mode: horizontal-tb !important;
         }
 
+        [contenteditable] *,
         [contenteditable] p,
         [contenteditable] div,
         [contenteditable] span,
         [contenteditable] li,
+        [contenteditable] ul,
+        [contenteditable] ol,
         [contenteditable] h1,
         [contenteditable] h2,
         [contenteditable] h3,
         [contenteditable] h4,
         [contenteditable] h5,
-        [contenteditable] h6 {
+        [contenteditable] h6,
+        [contenteditable] blockquote,
+        [contenteditable] a {
           direction: ltr !important;
-          unicode-bidi: embed !important;
+          unicode-bidi: bidi-override !important;
+          text-align: left !important;
+          writing-mode: horizontal-tb !important;
+        }
+
+        [contenteditable]:focus,
+        [contenteditable]:active {
+          direction: ltr !important;
+          unicode-bidi: bidi-override !important;
+        }
+
+        /* Force LTR for empty contenteditable */
+        [contenteditable]:empty:before {
+          direction: ltr !important;
+          unicode-bidi: bidi-override !important;
         }
       `}</style>
     </div>
