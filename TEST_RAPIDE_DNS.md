@@ -31,8 +31,8 @@ fetch('/_next/static/chunks/').then(() => {
           console.log('✅ CORRECT : Utilise ftgclacfleknkqbfbsbs (nouvelle instance)');
           found = true;
         }
-        if(text.includes('hondlefoprhtrpxnumyj') || text.includes('xaldjtbabtlmdroshzux')) {
-          console.log('❌ ERREUR : Utilise encore une ancienne instance');
+        if(!text.includes('ftgclacfleknkqbfbsbs')) {
+          console.log('❌ ERREUR : N\'utilise pas la bonne instance Supabase');
           found = true;
         }
       }
@@ -87,7 +87,7 @@ https://ftgclacfleknkqbfbsbs.supabase.co/...
 **✅ DOIT ÊTRE :**
 ```
 NEXT_PUBLIC_SUPABASE_URL=https://ftgclacfleknkqbfbsbs.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZ0Z2NsYWNmbGVrbmtxYmZic2JzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjUwMzA3NjUsImV4cCI6MjA4MDYwNjc2NX0.fZ_yi8opM3kQ4T-hCagMebTvM7spx7tIMZvaTBPBSe8
+NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZ0Z2NsYWNmbGVrbmtxYmZic2JzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjUwMzA3NjUsImV4cCI6MjA4MDYwNjc2NX0.2V6yW1X9sSZKWBMeQF89tjk7rYqiZCIhcMLIJQ0cDMQ
 ```
 
 **❌ SI C'EST UNE AUTRE URL SUPABASE :**
