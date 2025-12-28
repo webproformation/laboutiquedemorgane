@@ -1,80 +1,84 @@
-# Correction des Variables d'Environnement
+# 🔧 GUIDE DE RÉSOLUTION - Variables d'environnement
 
-## Problème détecté
+## ⚠️ PROBLÈME RÉCURRENT
 
-Il manque une variable d'environnement critique dans votre fichier `.env` :
+L'application utilisait l'ancienne instance Supabase `hondlefoprhtrpxnumyj` au lieu de la nouvelle `ftgclacfleknkqbfbsbs`.
 
-**`SUPABASE_SERVICE_ROLE_KEY`**
+## ✅ SOLUTION APPLIQUÉE (2024-12-28)
 
-Cette variable est nécessaire pour :
-- L'API des factures (`/api/invoices`)
-- Les opérations administratives sur la base de données
-- La gestion des commandes et des utilisateurs
+### 1. Variables d'environnement corrigées dans `.env`
 
-## Solution
-
-### Étape 1 : Récupérer la clé Service Role de Supabase
-
-1. Allez sur [https://supabase.com/dashboard](https://supabase.com/dashboard)
-2. Sélectionnez votre projet
-3. Allez dans **Settings** > **API**
-4. Copiez la clé **service_role** (⚠️ Attention : cette clé a tous les droits, ne la partagez jamais)
-
-### Étape 2 : Ajouter la variable dans .env
-
-Ouvrez votre fichier `.env` et ajoutez la ligne suivante :
+**IMPORTANT : TOUJOURS utiliser `ftgclacfleknkqbfbsbs` - JAMAIS `hondlefoprhtrpxnumyj`**
 
 ```bash
-SUPABASE_SERVICE_ROLE_KEY=votre_cle_service_role_ici
+NEXT_PUBLIC_SUPABASE_URL=https://ftgclacfleknkqbfbsbs.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZ0Z2NsYWNmbGVrbmtxYmZic2JzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjUwMzA3NjUsImV4cCI6MjA4MDYwNjc2NX0.fZ_yi8opM3kQ4T-hCagMebTvM7spx7tIMZvaTBPBSe8
+SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZ0Z2NsYWNmbGVrbmtxYmZic2JzIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2NTAzMDc2NSwiZXhwIjoyMDgwNjA2NzY1fQ.rpp3Na0D87yoXCTy5P0rNG4B3-n7LkPVyAh-yheoe6E
 ```
 
-La ligne devrait ressembler à ceci :
+### 2. Cache Next.js supprimé et application reconstruite
 
 ```bash
-SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhvbmRsZWZvcHJodHJweG51bXlqIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2NDkzODc5OSwiZXhwIjoyMDgwNTE0Nzk5fQ.XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+rm -rf .next
+npm run build
 ```
 
-### Étape 3 : Redémarrer le serveur
+## 🚨 ACTIONS REQUISES DE VOTRE CÔTÉ
 
-Après avoir ajouté la variable :
+### A. Vider le cache du navigateur (CRITIQUE !)
 
-1. Arrêtez le serveur de développement (Ctrl+C)
-2. Redémarrez-le avec `npm run dev`
+Le navigateur continue d'utiliser `hondlefoprhtrpxnumyj` car il a mis en cache l'ancienne URL.
 
-## Vérification
+#### Option 1 : Hard Refresh (RECOMMANDÉ)
+- **Windows/Linux** : `Ctrl + Shift + R` ou `Ctrl + F5`
+- **Mac** : `Cmd + Shift + R`
 
-Une fois la variable ajoutée et le serveur redémarré :
+#### Option 2 : Vider le cache
+1. Ouvrir DevTools (F12)
+2. Clic droit sur le bouton rafraîchir
+3. "Vider le cache et actualiser en force"
 
-1. Les catégories devraient s'afficher correctement dans les pages de modification de produits
-2. L'API des factures devrait fonctionner sans erreur 500
-3. La gestion des commandes devrait fonctionner normalement
+#### Option 3 : Mode Incognito
+Tester dans une fenêtre de navigation privée
 
-## Autres problèmes identifiés
+### B. Redémarrer le serveur Next.js
 
-### Erreur CORS sur les images WordPress
-
-Si vous voyez cette erreur dans la console :
-```
-Access to image at 'https://wp.laboutiquedemorgane.com/wp-content/uploads/2025/12/Logo-BDC.png'
-from origin 'https://laboutiquedemorgane.com' has been blocked by CORS policy
-```
-
-**Solution** : Ajoutez les en-têtes CORS dans votre configuration WordPress/Apache sur O2Switch.
-
-Dans votre fichier `.htaccess` de WordPress, ajoutez :
-
-```apache
-<IfModule mod_headers.c>
-    Header set Access-Control-Allow-Origin "https://laboutiquedemorgane.com"
-    Header set Access-Control-Allow-Methods "GET, OPTIONS"
-    Header set Access-Control-Allow-Headers "Content-Type"
-</IfModule>
+```bash
+# Arrêter le serveur (Ctrl+C)
+# Puis relancer :
+npm run build
+npm start
 ```
 
-## Support
+## 🔍 VÉRIFICATION
 
-Si le problème persiste après avoir suivi ces étapes, vérifiez :
+Après ces actions, ouvrez la console du navigateur (F12) :
 
-1. Que toutes les variables d'environnement de `.env.example` sont présentes dans `.env`
-2. Qu'il n'y a pas d'espaces en trop avant ou après les valeurs
-3. Que le serveur a bien été redémarré après les modifications
+- ✅ AUCUNE requête vers `hondlefoprhtrpxnumyj.supabase.co`
+- ✅ TOUTES vers `ftgclacfleknkqbfbsbs.supabase.co`
+- ✅ `/api/invoices` retourne 200
+
+## 📝 PRÉVENTION FUTURE
+
+1. Toujours vérifier `.env` avant de démarrer
+2. Supprimer `.next` après changement de variables
+3. Utiliser `node verify-env.js` pour vérifier
+4. Se référer à `CRITICAL_ENV_CONFIG.md`
+
+## ⚡ COMMANDES RAPIDES
+
+```bash
+# Vérifier les variables
+node verify-env.js
+
+# Nettoyer et reconstruire
+rm -rf .next && npm run build
+
+# Vérifier l'URL
+grep NEXT_PUBLIC_SUPABASE_URL .env
+```
+
+---
+
+**Date** : 2024-12-28
+**Statut** : ✅ Fichier .env corrigé - En attente hard refresh navigateur
