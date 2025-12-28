@@ -1,175 +1,180 @@
-# Guide de Débogage en Production
+# 🚨 DEBUGGING EN PRODUCTION
 
-## Problèmes identifiés et corrigés
+## DIAGNOSTIC DU PROBLÈME ACTUEL
 
-### 1. Images ne chargeant pas en production
-**Problème** : Les images WordPress/WooCommerce ne se chargeaient pas en production.
+### Symptômes observés
+- ❌ Erreur 500 sur `/api/invoices`
+- ❌ Erreur 500 sur `/api/woocommerce/categories`
+- ❌ Les catégories ont disparu dans `/admin/categories-management`
 
-**Cause** : Configuration wildcard `hostname: '**'` non fiable en production.
+### Cause racine
+Les variables d'environnement sur Vercel pointent encore vers l'ancienne instance Supabase `hondlefoprhtrpxnumyj` au lieu de `ftgclacfleknkqbfbsbs`.
 
-**Solution** : Domaines explicitement autorisés dans `next.config.js` :
-- `laboutiquedemorgane.webprocreation.fr`
-- `images.pexels.com`
-- Domaines Supabase
+### Pourquoi cela cause des erreurs 500 ?
+1. L'API `/api/woocommerce/categories` essaie de se connecter à Supabase
+2. Elle pointe vers `hondlefoprhtrpxnumyj` (ancienne instance)
+3. La table `woocommerce_categories_cache` n'existe PAS dans l'ancienne instance
+4. Elle existe seulement dans la nouvelle instance `ftgclacfleknkqbfbsbs`
+5. Résultat : erreur 500 car la table est introuvable
 
-### 2. Page Account ne fonctionnant pas
-**Problème** : La page `/account` ne fonctionne plus en production après redéploiement.
+## 🎯 SOLUTION IMMÉDIATE
 
-**Causes possibles identifiées** :
-1. Callback async mal géré dans `onAuthStateChange`
-2. Requêtes à la base de données sans vérification user ID
-3. Session non persistée correctement
+### 1️⃣ Vérifier quelle instance Vercel utilise
 
-**Solutions appliquées** :
-
-#### A. Correction du AuthContext (`context/AuthContext.tsx`)
-```typescript
-// AVANT (incorrect - cause des deadlocks)
-supabase.auth.onAuthStateChange(async (event, session) => {
-  await loadProfile(session.user.id);
-});
-
-// APRÈS (correct)
-supabase.auth.onAuthStateChange((event, session) => {
-  (async () => {
-    await loadProfile(session.user.id);
-  })();
-});
+Allez sur cette URL pour voir quel Supabase est configuré :
+```
+https://laboutiquedemorgane.com/api/debug-env
 ```
 
-#### B. Amélioration de la gestion des erreurs
-```typescript
-const fetchSavingsData = async () => {
-  if (!user?.id) {
-    console.warn('No user ID available');
-    return;
+Si vous voyez `"isCorrect": false`, c'est confirmé : Vercel utilise la mauvaise instance.
+
+### 2️⃣ Mettre à jour les variables sur Vercel
+
+**C'EST LA SEULE SOLUTION**. Modifier le fichier `.env` local ne suffit PAS car le site en production utilise les variables configurées sur Vercel.
+
+#### Étapes précises :
+
+1. **Connexion Vercel**
+   - Allez sur https://vercel.com/dashboard
+   - Sélectionnez votre projet
+
+2. **Accéder aux variables**
+   - Cliquez sur **Settings** (en haut)
+   - Cliquez sur **Environment Variables** (menu gauche)
+
+3. **Modifier les 3 variables critiques**
+
+   Pour chaque variable, cliquez sur l'icône crayon (✏️) puis remplacez par la nouvelle valeur :
+
+   **a) NEXT_PUBLIC_SUPABASE_URL**
+   ```
+   ANCIENNE : https://hondlefoprhtrpxnumyj.supabase.co
+   NOUVELLE : https://ftgclacfleknkqbfbsbs.supabase.co
+   ```
+
+   **b) NEXT_PUBLIC_SUPABASE_ANON_KEY**
+   ```
+   ANCIENNE : eyJhbGc...hondlefoprhtrpxnumyj...
+   NOUVELLE : eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZ0Z2NsYWNmbGVrbmtxYmZic2JzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjUwMzA3NjUsImV4cCI6MjA4MDYwNjc2NX0.fZ_yi8opM3kQ4T-hCagMebTvM7spx7tIMZvaTBPBSe8
+   ```
+
+   **c) SUPABASE_SERVICE_ROLE_KEY**
+   ```
+   ANCIENNE : eyJhbGc...hondlefoprhtrpxnumyj...
+   NOUVELLE : eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZ0Z2NsYWNmbGVrbmtxYmZic2JzIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2NTAzMDc2NSwiZXhwIjoyMDgwNjA2NzY1fQ.rpp3Na0D87yoXCTy5P0rNG4B3-n7LkPVyAh-yheoe6E
+   ```
+
+4. **Cocher les environnements**
+   Pour chaque variable :
+   - ✅ Production
+   - ✅ Preview
+   - ✅ Development
+
+5. **SAUVEGARDER** chaque variable après modification
+
+### 3️⃣ Redéployer l'application
+
+**CRITIQUE** : Modifier les variables ne suffit pas, il faut REDÉPLOYER !
+
+1. Allez dans l'onglet **Deployments**
+2. Trouvez le dernier déploiement (celui en haut)
+3. Cliquez sur les **3 points** (•••) à droite
+4. Cliquez sur **Redeploy**
+5. **IMPORTANT** : Décochez ❌ "Use existing Build Cache"
+6. Cliquez sur **Redeploy** pour confirmer
+
+### 4️⃣ Attendre le déploiement
+
+Le déploiement prend environ 2-3 minutes. Vous pouvez suivre la progression en temps réel.
+
+### 5️⃣ VÉRIFIER que c'est corrigé
+
+Une fois le déploiement terminé :
+
+**A. Hard Refresh du navigateur**
+```
+Windows/Linux : Ctrl + Shift + R
+Mac : Cmd + Shift + R
+```
+
+**B. Tester l'API de debug**
+```
+https://laboutiquedemorgane.com/api/debug-env
+```
+
+Vous devriez voir :
+```json
+{
+  "verdict": "✅ TOUTES LES VARIABLES SONT CORRECTES",
+  "supabase": {
+    "url": {
+      "isCorrect": true
+    },
+    "anonKey": {
+      "isCorrect": true
+    },
+    "serviceRoleKey": {
+      "isCorrect": true
+    }
   }
-  // ... rest of the code
-};
+}
 ```
 
-## Outils de débogage
+**C. Tester les catégories**
+```
+https://laboutiquedemorgane.com/admin/categories-management
+```
+Les catégories devraient s'afficher correctement.
 
-### Page de diagnostic créée : `/debug-auth`
+**D. Vérifier la console (F12)**
+- ✅ Aucune erreur 500 sur `/api/invoices`
+- ✅ Aucune erreur 500 sur `/api/woocommerce/categories`
+- ✅ Toutes les requêtes vont vers `ftgclacfleknkqbfbsbs.supabase.co`
 
-Cette page affiche :
-- État des variables d'environnement (sans exposer les secrets)
-- État du contexte d'authentification
-- Session Supabase directe
-- Profil utilisateur complet
+## 🔍 COMMENT VÉRIFIER LES LOGS VERCEL
 
-**Utilisation** :
-1. Accédez à `https://votre-site.com/debug-auth`
-2. Vérifiez que toutes les variables d'environnement sont "OK"
-3. Vérifiez que la session est active
-4. Vérifiez que le profil se charge correctement
+Si vous voulez voir exactement quelle est l'erreur :
 
-### Logs en production
+1. Allez sur https://vercel.com/dashboard
+2. Sélectionnez votre projet
+3. Cliquez sur l'onglet **Logs** (ou **Functions**)
+4. Filtrez par **Errors**
+5. Vous verrez l'erreur exacte, par exemple :
+   ```
+   relation "woocommerce_categories_cache" does not exist
+   ```
 
-Pour voir les logs en production sur Vercel :
-1. Allez sur votre dashboard Vercel
-2. Cliquez sur votre projet
-3. Allez dans "Functions" > "Logs"
-4. Filtrez par erreur
+Cela confirme que l'API essaie de lire une table qui n'existe pas dans l'ancienne instance.
 
-## Checklist de déploiement
+## 📋 CHECKLIST DE RÉSOLUTION
 
-Avant chaque déploiement, vérifiez :
+- [ ] Les 3 variables sont mises à jour sur Vercel (vérifier avec l'icône ✏️)
+- [ ] Les 3 environnements sont cochés pour chaque variable
+- [ ] Les variables ont été SAUVEGARDÉES
+- [ ] L'application a été REDÉPLOYÉE (sans cache)
+- [ ] Le déploiement est terminé (statut "Ready")
+- [ ] Hard refresh du navigateur effectué
+- [ ] `/api/debug-env` affiche ✅
+- [ ] `/admin/categories-management` affiche les catégories
+- [ ] Console du navigateur sans erreur 500
 
-### Variables d'environnement Vercel
-- [ ] `NEXT_PUBLIC_SUPABASE_URL`
-- [ ] `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-- [ ] `NEXT_PUBLIC_WORDPRESS_API_URL`
-- [ ] `NEXT_PUBLIC_PAYPAL_CLIENT_ID`
-- [ ] `WORDPRESS_URL`
-- [ ] `WORDPRESS_USERNAME`
-- [ ] `WORDPRESS_APP_PASSWORD`
-- [ ] `WOOCOMMERCE_CONSUMER_KEY`
-- [ ] `WOOCOMMERCE_CONSUMER_SECRET`
-- [ ] `PAYPAL_CLIENT_SECRET`
+## ⚠️ POURQUOI LE .ENV LOCAL NE SUFFIT PAS ?
 
-### Configuration Next.js
-- [ ] Domaines d'images correctement configurés
-- [ ] Build passe sans erreur localement
-- [ ] Toutes les pages statiques se génèrent
+Le fichier `.env` dans votre projet local est utilisé UNIQUEMENT pour le développement local (`npm run dev`).
 
-### Configuration Supabase
-- [ ] RLS activé sur toutes les tables
-- [ ] Policies correctement définies
-- [ ] URL CORS configurée pour votre domaine
-- [ ] Auth settings configurés (disable email confirmation si nécessaire)
+Quand le site est en production sur Vercel :
+- Vercel ne lit PAS le fichier `.env` de votre projet
+- Vercel utilise les variables configurées dans **Settings → Environment Variables**
+- C'est pour cela qu'il faut absolument les mettre à jour sur Vercel
 
-## Problèmes courants et solutions
+## 🚀 APRÈS CORRECTION
 
-### "Session expired" en production
-**Cause** : Clés d'environnement manquantes ou incorrectes
-**Solution** : Vérifier les variables d'environnement sur Vercel
+Une fois les variables mises à jour et l'application redéployée, TOUT devrait fonctionner :
+- ✅ Les catégories seront visibles
+- ✅ Plus d'erreur 500
+- ✅ Toutes les APIs fonctionneront
+- ✅ La connexion Supabase sera correcte
 
-### Page blanche après login
-**Cause** : Erreur JavaScript côté client
-**Solution** :
-1. Ouvrir la console du navigateur (F12)
-2. Regarder les erreurs
-3. Vérifier le network tab pour les erreurs API
+---
 
-### Images ne chargent pas
-**Cause** : Domaine non autorisé dans `next.config.js`
-**Solution** : Ajouter le domaine dans `remotePatterns`
-
-### RLS bloque les requêtes
-**Cause** : Policies trop restrictives ou user_id non trouvé
-**Solution** :
-1. Vérifier que `auth.uid()` retourne bien l'ID utilisateur
-2. Vérifier les logs Supabase
-3. Tester la requête manuellement dans l'éditeur SQL Supabase
-
-## Tests après déploiement
-
-1. **Test de connexion**
-   - Se connecter avec un compte existant
-   - Vérifier que la redirection fonctionne
-   - Vérifier que le profil se charge
-
-2. **Test de la page account**
-   - Accéder à `/account`
-   - Vérifier que les données se chargent
-   - Tester la modification du profil
-
-3. **Test des images**
-   - Vérifier que les images produits chargent
-   - Vérifier que les images de profil chargent
-   - Vérifier les slides de la page d'accueil
-
-4. **Test des fonctionnalités critiques**
-   - Panier
-   - Wishlist
-   - Checkout
-   - Lives
-
-## Monitoring continu
-
-### Métriques à surveiller
-- Temps de réponse des API
-- Taux d'erreur des pages
-- Logs d'erreurs JavaScript
-- Temps de chargement des images
-
-### Outils recommandés
-- Vercel Analytics (inclus)
-- Sentry pour le tracking d'erreurs
-- Google Analytics pour le comportement utilisateur
-
-## En cas de problème critique
-
-1. **Vérifier le status Supabase** : https://status.supabase.com/
-2. **Vérifier le status Vercel** : https://www.vercel-status.com/
-3. **Rollback rapide** : Sur Vercel, redéployez la version précédente
-4. **Consulter les logs** : Dashboard Vercel > Functions > Logs
-
-## Support
-
-Si le problème persiste :
-1. Accéder à `/debug-auth` pour collecter les informations
-2. Vérifier les logs Vercel
-3. Vérifier les logs Supabase
-4. Documenter les étapes pour reproduire le problème
+**URGENT** - Ces étapes doivent être faites MAINTENANT pour que le site fonctionne en production.
