@@ -1,687 +1,591 @@
 'use client';
 
-import { use, useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { useEffect, useState } from 'react';
+import { useParams, useRouter } from 'next/navigation';
+import Link from 'next/link';
+import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ArrowLeft, BookOpen, Save, Loader2, Image, Tag, Plus, Trash2, AlertCircle } from 'lucide-react';
-import Link from 'next/link';
-import { toast } from 'sonner';
-import RichTextEditor from '@/components/RichTextEditor';
-import SeoMetadataEditor from '@/components/SeoMetadataEditor';
-import WordPressMediaSelector from '@/components/WordPressMediaSelector';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Badge } from '@/components/ui/badge';
-import { useQuery } from '@apollo/client/react';
-import { GET_POST_CATEGORIES } from '@/lib/queries';
-import { GetPostCategoriesResponse } from '@/types';
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from '@/components/ui/dialog';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Separator } from '@/components/ui/separator';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import RichTextEditor from '@/components/RichTextEditor';
+import MediaLibrary from '@/components/MediaLibrary';
+import { ArrowLeft, Save, Eye } from 'lucide-react';
+import { toast } from 'sonner';
 
-interface PostFormData {
-  title: string;
-  content: string;
-  excerpt: string;
-  status: 'publish' | 'draft' | 'pending';
-  slug: string;
-  featured_media?: number;
-  featured_image_url?: string;
-  categories?: number[];
+interface NewsCategory {
+  id: string;
+  name: string;
+  color: string;
 }
 
-export default function EditPostPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = use(params);
+export default function NewsEditorPage() {
+  const params = useParams();
   const router = useRouter();
-  const isNewPost = id === 'new';
+  const postId = params.id === 'new' ? null : (params.id as string);
 
-  const [isLoading, setIsLoading] = useState(!isNewPost);
-  const [isSaving, setIsSaving] = useState(false);
-  const [formData, setFormData] = useState<PostFormData>({
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [categories, setCategories] = useState<NewsCategory[]>([]);
+  const [showMediaLibrary, setShowMediaLibrary] = useState(false);
+  const [showSocialMediaLibrary, setShowSocialMediaLibrary] = useState(false);
+
+  const [formData, setFormData] = useState({
     title: '',
+    slug: '',
     content: '',
     excerpt: '',
-    status: 'draft',
-    slug: '',
-    featured_media: 0,
     featured_image_url: '',
-    categories: [],
+    status: 'draft' as 'draft' | 'publish' | 'pending',
+    published_at: '',
+    category_ids: [] as string[],
+    seo_title: '',
+    meta_description: '',
+    meta_social_title: '',
+    meta_social_description: '',
+    meta_social_image: '',
   });
 
-  const { data: categoriesData, loading: categoriesLoading, refetch: refetchCategories } = useQuery<GetPostCategoriesResponse>(GET_POST_CATEGORIES);
-  const availableCategories = categoriesData?.categories?.nodes || [];
-
-  const [showCreateCategoryDialog, setShowCreateCategoryDialog] = useState(false);
-  const [newCategoryName, setNewCategoryName] = useState('');
-  const [newCategorySlug, setNewCategorySlug] = useState('');
-  const [newCategoryDescription, setNewCategoryDescription] = useState('');
-  const [isCreatingCategory, setIsCreatingCategory] = useState(false);
-
-  const [categoryToDelete, setCategoryToDelete] = useState<any>(null);
-  const [isDeletingCategory, setIsDeletingCategory] = useState(false);
-
   useEffect(() => {
-    if (!isNewPost) {
-      fetchPost();
+    loadCategories();
+    if (postId) {
+      loadPost();
+    } else {
+      setLoading(false);
     }
-  }, [id, isNewPost]);
+  }, [postId]);
 
-  const fetchPost = async () => {
+  const loadCategories = async () => {
     try {
-      setIsLoading(true);
-      console.log('Fetching post with ID:', id);
-      const response = await fetch(`/api/wordpress/posts?id=${id}`);
-      console.log('Response status:', response.status);
+      const { data, error } = await supabase
+        .from('news_categories')
+        .select('*')
+        .order('display_order', { ascending: true });
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: response.statusText }));
-        console.error('Error response:', errorData);
+      if (error) throw error;
+      setCategories(data || []);
+    } catch (error) {
+      console.error('Error loading categories:', error);
+    }
+  };
 
-        let errorMessage = errorData.error || 'Failed to fetch post';
-        if (errorData.details?.message) {
-          errorMessage += `: ${errorData.details.message}`;
-        }
-        if (errorData.url) {
-          console.log('Attempted URL:', errorData.url);
-        }
+  const loadPost = async () => {
+    if (!postId) return;
 
-        throw new Error(errorMessage);
+    try {
+      const { data: postData, error: postError } = await supabase
+        .from('news_posts')
+        .select(`
+          *,
+          news_post_categories (
+            category_id
+          )
+        `)
+        .eq('id', postId)
+        .maybeSingle();
+
+      if (postError) throw postError;
+
+      if (!postData) {
+        toast.error('Article introuvable');
+        router.push('/admin/actualites');
+        return;
       }
 
-      const post = await response.json();
-      console.log('Post fetched successfully:', post);
       setFormData({
-        title: post.title?.rendered || '',
-        content: post.content?.rendered || '',
-        excerpt: post.excerpt?.rendered || '',
-        status: post.status || 'draft',
-        slug: post.slug || '',
-        featured_media: post.featured_media || 0,
-        featured_image_url: post._embedded?.['wp:featuredmedia']?.[0]?.source_url || '',
-        categories: post.categories || [],
+        title: postData.title,
+        slug: postData.slug,
+        content: postData.content || '',
+        excerpt: postData.excerpt || '',
+        featured_image_url: postData.featured_image_url || '',
+        status: postData.status,
+        published_at: postData.published_at ? new Date(postData.published_at).toISOString().split('T')[0] : '',
+        category_ids: postData.news_post_categories.map((pc: any) => pc.category_id),
+        seo_title: postData.seo_title || '',
+        meta_description: postData.meta_description || '',
+        meta_social_title: postData.meta_social_title || '',
+        meta_social_description: postData.meta_social_description || '',
+        meta_social_image: postData.meta_social_image || '',
       });
-    } catch (error: any) {
-      console.error('Error fetching post:', error);
-      toast.error(`Erreur: ${error.message}`);
+    } catch (error) {
+      console.error('Error loading post:', error);
+      toast.error('Erreur lors du chargement');
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
   };
 
-  const handleCategoryToggle = (categoryId: number) => {
-    const currentCategories = formData.categories || [];
-    const isSelected = currentCategories.includes(categoryId);
-
-    setFormData({
-      ...formData,
-      categories: isSelected
-        ? currentCategories.filter(id => id !== categoryId)
-        : [...currentCategories, categoryId],
-    });
-  };
-
-  const generateSlug = (name: string) => {
-    return name
+  const generateSlug = (title: string) => {
+    return title
       .toLowerCase()
       .normalize('NFD')
       .replace(/[\u0300-\u036f]/g, '')
       .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-+|-+$/g, '');
+      .replace(/(^-|-$)/g, '');
   };
 
-  const handleCreateCategory = async () => {
-    if (!newCategoryName.trim()) {
-      toast.error('Le nom de la catégorie est obligatoire');
+  const handleTitleChange = (title: string) => {
+    setFormData({
+      ...formData,
+      title,
+      slug: postId ? formData.slug : generateSlug(title),
+    });
+  };
+
+  const handleCategoryToggle = (categoryId: string) => {
+    setFormData(prev => ({
+      ...prev,
+      category_ids: prev.category_ids.includes(categoryId)
+        ? prev.category_ids.filter(id => id !== categoryId)
+        : [...prev.category_ids, categoryId]
+    }));
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!formData.title || !formData.slug) {
+      toast.error('Le titre est requis');
       return;
     }
 
-    const slug = newCategorySlug.trim() || generateSlug(newCategoryName);
-
-    try {
-      setIsCreatingCategory(true);
-
-      const response = await fetch('/api/wordpress/categories', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: newCategoryName.trim(),
-          slug,
-          description: newCategoryDescription.trim(),
-        }),
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Erreur lors de la création');
-      }
-
-      const newCategory = await response.json();
-      toast.success('Catégorie créée avec succès !');
-
-      setNewCategoryName('');
-      setNewCategorySlug('');
-      setNewCategoryDescription('');
-      setShowCreateCategoryDialog(false);
-
-      await refetchCategories();
-
-      setFormData({
-        ...formData,
-        categories: [...(formData.categories || []), newCategory.id],
-      });
-    } catch (error: any) {
-      console.error('Error creating category:', error);
-      toast.error(error.message || 'Erreur lors de la création de la catégorie');
-    } finally {
-      setIsCreatingCategory(false);
-    }
-  };
-
-  const handleDeleteCategory = async () => {
-    if (!categoryToDelete) return;
-
-    try {
-      setIsDeletingCategory(true);
-
-      const categoryId = parseInt(categoryToDelete.databaseId || categoryToDelete.id);
-      const response = await fetch(`/api/wordpress/categories?id=${categoryId}`, {
-        method: 'DELETE',
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Erreur lors de la suppression');
-      }
-
-      toast.success('Catégorie supprimée avec succès !');
-
-      setFormData({
-        ...formData,
-        categories: (formData.categories || []).filter(id => id !== categoryId),
-      });
-
-      await refetchCategories();
-      setCategoryToDelete(null);
-    } catch (error: any) {
-      console.error('Error deleting category:', error);
-      toast.error(error.message || 'Erreur lors de la suppression de la catégorie');
-    } finally {
-      setIsDeletingCategory(false);
-    }
-  };
-
-  const handleSave = async () => {
-    if (!formData.title.trim()) {
-      toast.error('Le titre est obligatoire');
-      return;
-    }
-
-    if (!formData.categories || formData.categories.length === 0) {
+    if (formData.category_ids.length === 0) {
       toast.error('Veuillez sélectionner au moins une catégorie');
       return;
     }
 
-    try {
-      setIsSaving(true);
+    setSaving(true);
 
+    try {
       const postData = {
         title: formData.title,
+        slug: formData.slug,
         content: formData.content,
         excerpt: formData.excerpt,
+        featured_image_url: formData.featured_image_url || null,
         status: formData.status,
-        featured_media: formData.featured_media || 0,
-        categories: formData.categories,
+        published_at: formData.published_at || (formData.status === 'publish' ? new Date().toISOString() : null),
+        seo_title: formData.seo_title || null,
+        meta_description: formData.meta_description || null,
+        meta_social_title: formData.meta_social_title || null,
+        meta_social_description: formData.meta_social_description || null,
+        meta_social_image: formData.meta_social_image || null,
       };
 
-      let response;
-      if (isNewPost) {
-        response = await fetch('/api/wordpress/posts', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(postData),
-        });
+      let savedPostId = postId;
+
+      if (postId) {
+        const { error } = await supabase
+          .from('news_posts')
+          .update(postData)
+          .eq('id', postId);
+
+        if (error) throw error;
       } else {
-        response = await fetch(`/api/wordpress/posts?id=${id}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(postData),
-        });
+        const { data, error } = await supabase
+          .from('news_posts')
+          .insert([postData])
+          .select()
+          .single();
+
+        if (error) throw error;
+        savedPostId = data.id;
       }
 
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to save post');
-      }
+      await supabase
+        .from('news_post_categories')
+        .delete()
+        .eq('post_id', savedPostId);
 
-      const savedPost = await response.json();
-      toast.success(isNewPost ? 'Article créé avec succès !' : 'Article mis à jour avec succès !');
+      const categoryMappings = formData.category_ids.map(catId => ({
+        post_id: savedPostId,
+        category_id: catId
+      }));
 
-      if (isNewPost) {
-        setFormData({
-          title: savedPost.title?.rendered || formData.title,
-          content: savedPost.content?.rendered || formData.content,
-          excerpt: savedPost.excerpt?.rendered || formData.excerpt,
-          status: savedPost.status || formData.status,
-          slug: savedPost.slug || '',
-          featured_media: savedPost.featured_media || formData.featured_media || 0,
-          featured_image_url: savedPost._embedded?.['wp:featuredmedia']?.[0]?.source_url || formData.featured_image_url || '',
-          categories: savedPost.categories || formData.categories || [],
-        });
+      await supabase
+        .from('news_post_categories')
+        .insert(categoryMappings);
 
-        router.replace(`/admin/actualites/edit/${savedPost.id}`);
-      } else {
-        setFormData({
-          ...formData,
-          title: savedPost.title?.rendered || formData.title,
-          content: savedPost.content?.rendered || formData.content,
-          excerpt: savedPost.excerpt?.rendered || formData.excerpt,
-          status: savedPost.status || formData.status,
-          slug: savedPost.slug || formData.slug,
-          featured_media: savedPost.featured_media || formData.featured_media || 0,
-          featured_image_url: savedPost._embedded?.['wp:featuredmedia']?.[0]?.source_url || formData.featured_image_url || '',
-          categories: savedPost.categories || formData.categories || [],
-        });
+      toast.success(postId ? 'Article modifié' : 'Article créé');
+
+      if (!postId) {
+        router.push(`/admin/actualites/edit/${savedPostId}`);
       }
     } catch (error: any) {
       console.error('Error saving post:', error);
-      toast.error(error.message || 'Erreur lors de l\'enregistrement');
+      if (error.code === '23505') {
+        toast.error('Ce slug existe déjà');
+      } else {
+        toast.error('Erreur lors de la sauvegarde');
+      }
     } finally {
-      setIsSaving(false);
+      setSaving(false);
     }
   };
 
-  if (isLoading) {
+  if (loading) {
     return (
-      <div className="space-y-6">
-        <div className="flex items-center justify-center py-12">
-          <Loader2 className="h-8 w-8 animate-spin text-[#b8933d]" />
-        </div>
+      <div className="flex items-center justify-center py-20">
+        <div className="text-gray-600">Chargement...</div>
       </div>
     );
   }
 
   return (
-    <div className="max-w-6xl mx-auto space-y-6">
-      <div className="mb-6">
-        <Link href="/admin/actualites">
-          <Button variant="ghost" className="mb-4">
-            <ArrowLeft className="w-4 h-4 mr-2" />
-            Retour aux actualités
-          </Button>
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <Link href="/admin/actualites" className="inline-flex items-center text-gray-400 hover:text-[#d4af37]">
+          <ArrowLeft className="h-4 w-4 mr-2" />
+          Retour aux actualités
         </Link>
-        <h1 className="text-3xl font-bold flex items-center gap-2">
-          <BookOpen className="h-8 w-8 text-[#b8933d]" />
-          {isNewPost ? 'Nouvel article' : 'Modifier l\'article'}
-        </h1>
+        <div className="flex items-center gap-3">
+          {postId && formData.status === 'publish' && (
+            <Link href={`/actualites/${formData.slug}`} target="_blank">
+              <Button variant="outline" className="border-[#d4af37]/30 text-[#d4af37] hover:bg-[#d4af37]/10">
+                <Eye className="h-4 w-4 mr-2" />
+                Voir l'article
+              </Button>
+            </Link>
+          )}
+          <Button
+            onClick={handleSubmit}
+            disabled={saving}
+            className="bg-gradient-to-r from-[#b8933d] to-[#d4af37] hover:from-[#9a7a2f] hover:to-[#b8933d] text-white"
+          >
+            <Save className="h-4 w-4 mr-2" />
+            {saving ? 'Enregistrement...' : (postId ? 'Enregistrer' : 'Créer')}
+          </Button>
+        </div>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-3">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
-          <Card>
+          <Card className="bg-white border-[#d4af37]/30">
             <CardHeader>
-              <CardTitle>Informations de l'article</CardTitle>
-              <CardDescription>
-                Remplissez les détails de votre article
-              </CardDescription>
+              <CardTitle className="text-[#d4af37]">Contenu de l'article</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="title">Titre *</Label>
+            <CardContent className="space-y-6">
+              <div>
+                <Label htmlFor="title" className="text-gray-700">Titre *</Label>
                 <Input
                   id="title"
                   value={formData.title}
-                  onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                  onChange={(e) => handleTitleChange(e.target.value)}
                   placeholder="Titre de l'article"
-                  className="text-lg"
+                  className="text-lg font-semibold bg-white border-[#d4af37]/30 text-gray-900 placeholder:text-gray-400"
+                  required
                 />
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="excerpt">Extrait</Label>
+              <div>
+                <Label htmlFor="excerpt" className="text-gray-700">Extrait</Label>
                 <Textarea
                   id="excerpt"
                   value={formData.excerpt}
                   onChange={(e) => setFormData({ ...formData, excerpt: e.target.value })}
-                  placeholder="Court résumé de l'article (affiché dans les listes d'articles)"
+                  placeholder="Court résumé de l'article (150-200 caractères recommandés)"
                   rows={3}
+                  className="bg-white border-[#d4af37]/30 text-gray-900 placeholder:text-gray-400"
                 />
-                <p className="text-xs text-gray-500">
-                  Recommandé: 150-200 caractères
+                <p className="text-xs text-gray-500 mt-1">
+                  {formData.excerpt.length} / 200 caractères
                 </p>
               </div>
 
-              <div className="space-y-2">
-                <Label>Contenu de l'article</Label>
+              <div>
+                <Label className="text-gray-700">Contenu *</Label>
                 <RichTextEditor
                   value={formData.content}
-                  onChange={(value) => setFormData({ ...formData, content: value })}
-                  placeholder="Rédigez le contenu de votre article ici..."
+                  onChange={(content) => setFormData({ ...formData, content })}
                 />
               </div>
             </CardContent>
           </Card>
 
-          <SeoMetadataEditor
-            entityType="post"
-            entityIdentifier={formData.slug || `new-post-${Date.now()}`}
-            autoSave={false}
-          />
+          <Card className="bg-white border-[#d4af37]/30">
+            <CardHeader>
+              <CardTitle className="text-[#d4af37]">SEO</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <Label htmlFor="seo_title" className="text-gray-700">Titre SEO</Label>
+                <Input
+                  id="seo_title"
+                  value={formData.seo_title}
+                  onChange={(e) => setFormData({ ...formData, seo_title: e.target.value })}
+                  placeholder={formData.title || 'Titre pour les moteurs de recherche'}
+                  className="bg-white border-[#d4af37]/30 text-gray-900 placeholder:text-gray-400"
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="meta_description" className="text-gray-700">Meta Description</Label>
+                <Textarea
+                  id="meta_description"
+                  value={formData.meta_description}
+                  onChange={(e) => setFormData({ ...formData, meta_description: e.target.value })}
+                  placeholder="Description pour les moteurs de recherche"
+                  rows={3}
+                  className="bg-white border-[#d4af37]/30 text-gray-900 placeholder:text-gray-400"
+                />
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-white border-[#d4af37]/30">
+            <CardHeader>
+              <CardTitle className="text-[#d4af37]">Partage Réseaux Sociaux</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <Label htmlFor="meta_social_title" className="text-gray-700">Titre Social</Label>
+                <Input
+                  id="meta_social_title"
+                  value={formData.meta_social_title}
+                  onChange={(e) => setFormData({ ...formData, meta_social_title: e.target.value })}
+                  placeholder={formData.title || 'Titre pour Facebook, Twitter, etc.'}
+                  className="bg-white border-[#d4af37]/30 text-gray-900 placeholder:text-gray-400"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Titre affiché lors du partage sur les réseaux sociaux
+                </p>
+              </div>
+
+              <div>
+                <Label htmlFor="meta_social_description" className="text-gray-700">Description Sociale</Label>
+                <Textarea
+                  id="meta_social_description"
+                  value={formData.meta_social_description}
+                  onChange={(e) => setFormData({ ...formData, meta_social_description: e.target.value })}
+                  placeholder={formData.excerpt || 'Description pour les réseaux sociaux'}
+                  rows={3}
+                  className="bg-white border-[#d4af37]/30 text-gray-900 placeholder:text-gray-400"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Description affichée lors du partage
+                </p>
+              </div>
+
+              <div>
+                <Label className="text-gray-700">Image Sociale</Label>
+                {formData.meta_social_image ? (
+                  <div className="space-y-3">
+                    <img
+                      src={formData.meta_social_image}
+                      alt="Image sociale"
+                      className="w-full h-auto rounded-lg border border-[#d4af37]/30"
+                    />
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setShowSocialMediaLibrary(true)}
+                        className="flex-1 border-[#d4af37]/30 text-[#d4af37] hover:bg-[#d4af37]/10"
+                      >
+                        Changer
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setFormData({ ...formData, meta_social_image: '' })}
+                        className="flex-1 border-red-500/30 text-red-400 hover:bg-red-500/10"
+                      >
+                        Supprimer
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <Button
+                    variant="outline"
+                    onClick={() => setShowSocialMediaLibrary(true)}
+                    className="w-full border-[#d4af37]/30 text-[#d4af37] hover:bg-[#d4af37]/10"
+                  >
+                    Sélectionner une image
+                  </Button>
+                )}
+                <p className="text-xs text-gray-500 mt-2">
+                  Image affichée lors du partage (recommandé : 1200x630px)
+                </p>
+              </div>
+            </CardContent>
+          </Card>
         </div>
 
         <div className="space-y-6">
-          <Card>
+          <Card className="bg-white border-[#d4af37]/30">
             <CardHeader>
-              <CardTitle className="text-lg">Paramètres de publication</CardTitle>
+              <CardTitle className="text-[#d4af37]">Publication</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="status">Statut</Label>
+              <div>
+                <Label htmlFor="status" className="text-gray-700">Statut</Label>
                 <Select
                   value={formData.status}
-                  onValueChange={(value: 'publish' | 'draft' | 'pending') =>
+                  onValueChange={(value: 'draft' | 'publish' | 'pending') =>
                     setFormData({ ...formData, status: value })
                   }
                 >
-                  <SelectTrigger>
+                  <SelectTrigger className="bg-white border-[#d4af37]/30 text-gray-900">
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="draft">
-                      <div className="flex items-center gap-2">
-                        <div className="w-2 h-2 rounded-full bg-gray-400"></div>
-                        Brouillon
-                      </div>
-                    </SelectItem>
-                    <SelectItem value="pending">
-                      <div className="flex items-center gap-2">
-                        <div className="w-2 h-2 rounded-full bg-yellow-400"></div>
-                        En attente
-                      </div>
-                    </SelectItem>
-                    <SelectItem value="publish">
-                      <div className="flex items-center gap-2">
-                        <div className="w-2 h-2 rounded-full bg-green-400"></div>
-                        Publié
-                      </div>
-                    </SelectItem>
+                  <SelectContent className="bg-white border-[#d4af37]/30">
+                    <SelectItem value="draft" className="text-gray-900 hover:bg-[#d4af37]/20">Brouillon</SelectItem>
+                    <SelectItem value="pending" className="text-gray-900 hover:bg-[#d4af37]/20">En attente</SelectItem>
+                    <SelectItem value="publish" className="text-gray-900 hover:bg-[#d4af37]/20">Publié</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
 
-              {!isNewPost && formData.slug && (
-                <div className="space-y-1 p-3 bg-gray-50 rounded-lg">
-                  <Label className="text-xs text-gray-600">URL</Label>
-                  <p className="text-xs font-mono text-gray-900 break-all">
-                    /actualites/{formData.slug}
-                  </p>
-                </div>
-              )}
+              <div>
+                <Label htmlFor="published_at" className="text-gray-700">Date de publication</Label>
+                <Input
+                  id="published_at"
+                  type="date"
+                  value={formData.published_at}
+                  onChange={(e) => setFormData({ ...formData, published_at: e.target.value })}
+                  className="bg-white border-[#d4af37]/30 text-gray-900"
+                />
+              </div>
+
+              <Separator className="bg-[#d4af37]/30" />
+
+              <div>
+                <Label htmlFor="slug" className="text-gray-700">URL (slug)</Label>
+                <Input
+                  id="slug"
+                  value={formData.slug}
+                  onChange={(e) => setFormData({ ...formData, slug: e.target.value })}
+                  placeholder="url-de-larticle"
+                  className="bg-white border-[#d4af37]/30 text-gray-900 placeholder:text-gray-400"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  /actualites/{formData.slug || 'url-de-larticle'}
+                </p>
+              </div>
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="bg-white border-[#d4af37]/30">
             <CardHeader>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Tag className="h-5 w-5 text-[#b8933d]" />
-                  <div>
-                    <CardTitle className="text-lg">Catégories *</CardTitle>
-                    <CardDescription className="mt-1">
-                      Sélectionnez au moins une catégorie
-                    </CardDescription>
+              <CardTitle className="text-[#d4af37]">Catégories *</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                {categories.map((category) => (
+                  <div key={category.id} className="flex items-center space-x-2">
+                    <Checkbox
+                      id={`category-${category.id}`}
+                      checked={formData.category_ids.includes(category.id)}
+                      onCheckedChange={() => handleCategoryToggle(category.id)}
+                      className="border-[#d4af37]/50 data-[state=checked]:bg-[#d4af37] data-[state=checked]:border-[#d4af37]"
+                    />
+                    <Label
+                      htmlFor={`category-${category.id}`}
+                      className="flex items-center gap-2 cursor-pointer text-gray-900"
+                    >
+                      <div
+                        className="w-3 h-3 rounded-full"
+                        style={{ backgroundColor: category.color }}
+                      />
+                      {category.name}
+                    </Label>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-white border-[#d4af37]/30">
+            <CardHeader>
+              <CardTitle className="text-[#d4af37]">Image à la une</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {formData.featured_image_url ? (
+                <div className="space-y-3">
+                  <img
+                    src={formData.featured_image_url}
+                    alt="Image à la une"
+                    className="w-full h-auto rounded-lg border border-[#d4af37]/30"
+                  />
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setShowMediaLibrary(true)}
+                      className="flex-1 border-[#d4af37]/30 text-[#d4af37] hover:bg-[#d4af37]/10"
+                    >
+                      Changer
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setFormData({ ...formData, featured_image_url: '' })}
+                      className="flex-1 border-red-500/30 text-red-400 hover:bg-red-500/10"
+                    >
+                      Supprimer
+                    </Button>
                   </div>
                 </div>
-                <Dialog open={showCreateCategoryDialog} onOpenChange={setShowCreateCategoryDialog}>
-                  <DialogTrigger asChild>
-                    <Button size="sm" variant="outline" className="gap-2">
-                      <Plus className="h-4 w-4" />
-                      Créer
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent>
-                    <DialogHeader>
-                      <DialogTitle>Créer une nouvelle catégorie</DialogTitle>
-                      <DialogDescription>
-                        Ajoutez une nouvelle catégorie pour vos articles
-                      </DialogDescription>
-                    </DialogHeader>
-                    <div className="space-y-4 py-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="category-name">Nom *</Label>
-                        <Input
-                          id="category-name"
-                          value={newCategoryName}
-                          onChange={(e) => setNewCategoryName(e.target.value)}
-                          placeholder="Ex: Mode, Beauté, Lifestyle..."
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="category-slug">Slug (optionnel)</Label>
-                        <Input
-                          id="category-slug"
-                          value={newCategorySlug}
-                          onChange={(e) => setNewCategorySlug(e.target.value)}
-                          placeholder="Ex: mode, beaute, lifestyle"
-                        />
-                        <p className="text-xs text-gray-500">
-                          Laissez vide pour générer automatiquement
-                        </p>
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="category-description">Description (optionnel)</Label>
-                        <Textarea
-                          id="category-description"
-                          value={newCategoryDescription}
-                          onChange={(e) => setNewCategoryDescription(e.target.value)}
-                          placeholder="Décrivez cette catégorie..."
-                          rows={3}
-                        />
-                      </div>
-                    </div>
-                    <DialogFooter>
-                      <Button
-                        variant="outline"
-                        onClick={() => {
-                          setShowCreateCategoryDialog(false);
-                          setNewCategoryName('');
-                          setNewCategorySlug('');
-                          setNewCategoryDescription('');
-                        }}
-                        disabled={isCreatingCategory}
-                      >
-                        Annuler
-                      </Button>
-                      <Button
-                        onClick={handleCreateCategory}
-                        disabled={isCreatingCategory}
-                        className="bg-[#b8933d] hover:bg-[#a07c2f]"
-                      >
-                        {isCreatingCategory ? (
-                          <>
-                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                            Création...
-                          </>
-                        ) : (
-                          'Créer la catégorie'
-                        )}
-                      </Button>
-                    </DialogFooter>
-                  </DialogContent>
-                </Dialog>
-              </div>
-            </CardHeader>
-            <CardContent>
-              {categoriesLoading ? (
-                <div className="flex items-center justify-center py-6">
-                  <Loader2 className="h-6 w-6 animate-spin text-[#b8933d]" />
-                </div>
-              ) : availableCategories.length === 0 ? (
-                <div className="text-center py-6 text-sm text-gray-500">
-                  <AlertCircle className="h-12 w-12 mx-auto mb-3 text-gray-400" />
-                  <p className="mb-3">Aucune catégorie disponible</p>
-                  <p className="text-xs mb-4">Créez votre première catégorie pour continuer</p>
-                </div>
               ) : (
-                <div className="space-y-3">
-                  {availableCategories.map((category: any) => (
-                    <div key={category.id} className="flex items-start space-x-3 p-2 rounded hover:bg-gray-50 group">
-                      <Checkbox
-                        id={`category-${category.id}`}
-                        checked={formData.categories?.includes(parseInt(category.databaseId || category.id))}
-                        onCheckedChange={() => handleCategoryToggle(parseInt(category.databaseId || category.id))}
-                      />
-                      <div className="flex-1">
-                        <label
-                          htmlFor={`category-${category.id}`}
-                          className="text-sm font-medium leading-none cursor-pointer"
-                        >
-                          {category.name}
-                        </label>
-                        {category.description && (
-                          <p className="text-xs text-gray-500 mt-1">
-                            {category.description}
-                          </p>
-                        )}
-                      </div>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="opacity-0 group-hover:opacity-100 h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
-                        onClick={() => setCategoryToDelete(category)}
-                        title="Supprimer cette catégorie"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  ))}
-                  {formData.categories && formData.categories.length > 0 && (
-                    <div className="pt-3 border-t">
-                      <p className="text-xs text-gray-600 mb-2">Catégories sélectionnées:</p>
-                      <div className="flex flex-wrap gap-1">
-                        {formData.categories.map((catId) => {
-                          const cat = availableCategories.find((c: any) =>
-                            parseInt(c.databaseId || c.id) === catId
-                          );
-                          return cat ? (
-                            <Badge
-                              key={catId}
-                              variant="secondary"
-                              className="bg-[#b8933d]/10 text-[#b8933d] text-xs"
-                            >
-                              {cat.name}
-                            </Badge>
-                          ) : null;
-                        })}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          <AlertDialog open={!!categoryToDelete} onOpenChange={(open) => !open && setCategoryToDelete(null)}>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Supprimer cette catégorie ?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  Êtes-vous sûr de vouloir supprimer la catégorie <strong>{categoryToDelete?.name}</strong> ?
-                  Cette action est irréversible.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel disabled={isDeletingCategory}>
-                  Annuler
-                </AlertDialogCancel>
-                <AlertDialogAction
-                  onClick={handleDeleteCategory}
-                  disabled={isDeletingCategory}
-                  className="bg-red-600 hover:bg-red-700"
+                <Button
+                  variant="outline"
+                  onClick={() => setShowMediaLibrary(true)}
+                  className="w-full border-[#d4af37]/30 text-[#d4af37] hover:bg-[#d4af37]/10"
                 >
-                  {isDeletingCategory ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Suppression...
-                    </>
-                  ) : (
-                    'Supprimer'
-                  )}
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
-
-          <Card>
-            <CardHeader>
-              <div className="flex items-center gap-2">
-                <Image className="h-5 w-5 text-[#b8933d]" />
-                <CardTitle className="text-lg">Image mise en avant</CardTitle>
-              </div>
-              <CardDescription>
-                Image principale de l'article
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <WordPressMediaSelector
-                selectedImage={formData.featured_image_url}
-                onSelect={(url, id) =>
-                  setFormData({
-                    ...formData,
-                    featured_image_url: url,
-                    featured_media: id
-                  })
-                }
-              />
+                  Sélectionner une image
+                </Button>
+              )}
             </CardContent>
           </Card>
         </div>
       </div>
 
-      <div className="flex justify-between sticky bottom-0 bg-white border-t p-4 -mx-4">
-        <Link href="/admin/actualites">
-          <Button variant="outline">
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Annuler
-          </Button>
-        </Link>
-        <Button
-          onClick={handleSave}
-          disabled={isSaving}
-          className="bg-[#b8933d] hover:bg-[#a07c2f]"
-        >
-          {isSaving ? (
-            <>
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              Enregistrement...
-            </>
-          ) : (
-            <>
-              <Save className="h-4 w-4 mr-2" />
-              {isNewPost ? 'Créer l\'article' : 'Enregistrer'}
-            </>
-          )}
-        </Button>
-      </div>
+      <Dialog open={showMediaLibrary} onOpenChange={setShowMediaLibrary}>
+        <DialogContent className="max-w-6xl max-h-[90vh] overflow-hidden flex flex-col p-0">
+          <DialogHeader className="p-6 pb-0 shrink-0">
+            <DialogTitle>Sélectionner une image à la une</DialogTitle>
+          </DialogHeader>
+          <div className="p-6 pt-4 overflow-y-auto flex-1">
+            <MediaLibrary
+              bucket="media"
+              onSelect={(url) => {
+                setFormData({ ...formData, featured_image_url: url });
+                setShowMediaLibrary(false);
+              }}
+              onClose={() => setShowMediaLibrary(false)}
+            />
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showSocialMediaLibrary} onOpenChange={setShowSocialMediaLibrary}>
+        <DialogContent className="max-w-6xl max-h-[90vh] overflow-hidden flex flex-col p-0">
+          <DialogHeader className="p-6 pb-0 shrink-0">
+            <DialogTitle>Sélectionner une image sociale</DialogTitle>
+          </DialogHeader>
+          <div className="p-6 pt-4 overflow-y-auto flex-1">
+            <MediaLibrary
+              bucket="media"
+              onSelect={(url) => {
+                setFormData({ ...formData, meta_social_image: url });
+                setShowSocialMediaLibrary(false);
+              }}
+              onClose={() => setShowSocialMediaLibrary(false)}
+            />
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

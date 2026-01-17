@@ -1,244 +1,332 @@
 "use client";
 
-import { useState, useEffect } from 'react';
-import { Button } from '@/components/ui/button';
-import { Label } from '@/components/ui/label';
-import { ProductVariation } from '@/types';
-import ColorSwatch from '@/components/ColorSwatch';
-import { isColorAttribute } from '@/lib/colors';
-import { isStockAvailable } from '@/lib/utils';
+import { useState, useEffect } from "react";
+import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
+import { supabase } from "@/lib/supabase";
+import { useAuth } from "@/context/AuthContext";
+import { Check } from "lucide-react";
 
 interface Attribute {
   name: string;
-  options: string[];
+  option: string;
+}
+
+interface Variation {
+  id: number;
+  attributes: Attribute[];
+  price: string;
+  regular_price: string;
+  sale_price: string | null;
+  stock_status: string;
+  stock_quantity: number | null;
+  image?: {
+    src: string;
+    alt: string;
+  };
+}
+
+interface AttributeTerm {
+  name: string;
+  color_code: string | null;
 }
 
 interface ProductVariationSelectorProps {
-  variations: ProductVariation[];
-  attributes: Attribute[];
-  onVariationChange: (variation: ProductVariation | null) => void;
-  onAttributeSelect?: (attributeName: string, value: string) => void;
-  externalSelectedAttributes?: Record<string, string>;
+  attributes: Array<{
+    name: string;
+    options: string[];
+  }>;
+  variations: Variation[];
+  onVariationChange: (variation: Variation | null) => void;
+  initialSelectedAttributes?: Record<string, string>;
 }
 
-const sizeOrder = ['xs', 's', 'm', 'l', 'xl', 'xxl', 'xxxl'];
+const sizeOrder = ["xs", "s", "m", "l", "xl", "xxl", "xxxl"];
 
-const sortSizes = (options: string[]) => {
-  return [...options].sort((a, b) => {
-    const aLower = a.toLowerCase();
-    const bLower = b.toLowerCase();
-    const aIndex = sizeOrder.indexOf(aLower);
-    const bIndex = sizeOrder.indexOf(bLower);
-
-    if (aIndex !== -1 && bIndex !== -1) {
-      return aIndex - bIndex;
-    }
-    if (aIndex !== -1) return -1;
-    if (bIndex !== -1) return 1;
-    return 0;
-  });
-};
-
-const normalizeAttributeName = (name: string) => {
-  return name.toLowerCase()
-    .replace(/^pa_/, '')
-    .replace(/-/g, ' ')
-    .replace(/_/g, ' ')
-    .trim();
-};
-
-const attributeMatches = (varAttrName: string, selectedAttrName: string, varAttrValue: string, selectedValue: string) => {
-  const normalizedVarAttr = normalizeAttributeName(varAttrName);
-  const normalizedSelectedAttr = normalizeAttributeName(selectedAttrName);
-
-  return (normalizedVarAttr === normalizedSelectedAttr || varAttrName.toLowerCase() === selectedAttrName.toLowerCase()) &&
-         varAttrValue.toLowerCase() === selectedValue.toLowerCase();
-};
-
-export default function ProductVariationSelector({
-  variations,
+export function ProductVariationSelector({
   attributes,
+  variations,
   onVariationChange,
-  onAttributeSelect: onAttributeSelectCallback,
-  externalSelectedAttributes
+  initialSelectedAttributes,
 }: ProductVariationSelectorProps) {
-  const [selectedAttributes, setSelectedAttributes] = useState<Record<string, string>>({});
-  const [selectedVariation, setSelectedVariation] = useState<ProductVariation | null>(null);
+  const { profile } = useAuth();
+  const [selectedAttributes, setSelectedAttributes] = useState<Record<string, string>>(initialSelectedAttributes || {});
+  const [colorCodes, setColorCodes] = useState<Record<string, string>>({});
 
   useEffect(() => {
-    if (externalSelectedAttributes) {
-      setSelectedAttributes(externalSelectedAttributes);
-    }
-  }, [externalSelectedAttributes]);
+    const fetchColorCodes = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('product_attribute_terms')
+          .select('name, color_code')
+          .not('color_code', 'is', null);
+
+        if (error) {
+          console.error('Error fetching color codes:', error);
+          return;
+        }
+
+        if (data) {
+          const colorMap: Record<string, string> = {};
+          data.forEach((term: AttributeTerm) => {
+            const normalizedName = term.name.toLowerCase().trim();
+            if (term.color_code) {
+              colorMap[normalizedName] = term.color_code;
+            }
+          });
+          setColorCodes(colorMap);
+        }
+      } catch (error) {
+        console.error('Error fetching color codes:', error);
+      }
+    };
+
+    fetchColorCodes();
+  }, []);
 
   useEffect(() => {
-    const selectedEntries = Object.entries(selectedAttributes);
-    console.log('🎛️ ProductVariationSelector - useEffect triggered with:', selectedAttributes);
-
-    const matchingVariation = variations.find(variation => {
-      const matches = variation.attributes.every(varAttr => {
-        const found = selectedEntries.some(([selName, selValue]) =>
-          attributeMatches(varAttr.name, selName, varAttr.option, selValue)
-        );
-        return found;
-      }) && variation.attributes.length === selectedEntries.length;
-
-      return matches;
-    });
-
-    console.log('🎛️ ProductVariationSelector - matching variation:', matchingVariation?.id || 'none');
-
-    const newVariation = matchingVariation || null;
-
-    if (newVariation?.id !== selectedVariation?.id) {
-      setSelectedVariation(newVariation);
-      onVariationChange(newVariation);
+    if (initialSelectedAttributes && Object.keys(initialSelectedAttributes).length > 0) {
+      setSelectedAttributes(initialSelectedAttributes);
     }
-  }, [selectedAttributes, variations]);
+  }, [initialSelectedAttributes]);
 
-  const handleAttributeSelect = (attributeName: string, value: string) => {
-    console.log('🎛️ ProductVariationSelector - handleAttributeSelect:', attributeName, '=', value);
-
-    setSelectedAttributes(prev => {
-      const newAttrs = {
-        ...prev,
-        [attributeName]: value
-      };
-      console.log('🎛️ ProductVariationSelector - new selected attributes:', newAttrs);
-      return newAttrs;
-    });
-
-    if (onAttributeSelectCallback) {
-      console.log('🎛️ ProductVariationSelector - calling parent callback');
-      onAttributeSelectCallback(attributeName, value);
-    } else {
-      console.log('⚠️ ProductVariationSelector - no parent callback provided');
+  const safeString = (value: any): string => {
+    if (typeof value === 'object' && value !== null) {
+      return value.name || JSON.stringify(value);
     }
+    return String(value || '');
   };
 
-  const isAttributeValueAvailable = (attributeName: string, value: string) => {
-    const otherSelectedAttributes = Object.entries(selectedAttributes)
-      .filter(([name]) => normalizeAttributeName(name) !== normalizeAttributeName(attributeName));
-
-    if (otherSelectedAttributes.length === 0) {
-      return variations.some(variation => {
-        const matchesCurrent = variation.attributes.some(varAttr =>
-          attributeMatches(varAttr.name, attributeName, varAttr.option, value)
-        );
-        return matchesCurrent && isStockAvailable(variation.stockStatus, variation.stockQuantity);
+  const sortOptions = (options: string[], attributeName: string) => {
+    if (attributeName.toLowerCase().includes("taille") || attributeName.toLowerCase().includes("size")) {
+      return [...options].sort((a, b) => {
+        const aStr = safeString(a).toLowerCase();
+        const bStr = safeString(b).toLowerCase();
+        const aIndex = sizeOrder.indexOf(aStr);
+        const bIndex = sizeOrder.indexOf(bStr);
+        if (aIndex === -1 && bIndex === -1) return 0;
+        if (aIndex === -1) return 1;
+        if (bIndex === -1) return -1;
+        return aIndex - bIndex;
       });
     }
+    return options;
+  };
 
-    return variations.some(variation => {
-      const matchesOthers = otherSelectedAttributes.every(([name, selectedValue]) => {
-        return variation.attributes.some(varAttr =>
-          attributeMatches(varAttr.name, name, varAttr.option, selectedValue)
-        );
-      });
+  const handleAttributeSelect = (attributeName: string, option: string) => {
+    setSelectedAttributes((prev) => ({
+      ...prev,
+      [attributeName]: option,
+    }));
+  };
 
-      const matchesCurrent = variation.attributes.some(varAttr =>
-        attributeMatches(varAttr.name, attributeName, varAttr.option, value)
+  const isOptionAvailable = (attributeName: string, option: string): boolean => {
+    const optionStr = safeString(option);
+    const potentialSelection = { ...selectedAttributes, [attributeName]: optionStr };
+    const allAttributesSelected = attributes.every((attr) => potentialSelection[attr?.name]);
+
+    if (!allAttributesSelected) {
+      return variations.some((variation) =>
+        variation.attributes?.some(
+          (attr) =>
+            attr?.name === attributeName &&
+            safeString(attr?.option).toLowerCase() === optionStr.toLowerCase() &&
+            variation.stock_status === "instock"
+        )
       );
+    }
 
-      return matchesOthers && matchesCurrent && isStockAvailable(variation.stockStatus, variation.stockQuantity);
-    });
+    const matchingVariation = variations.find((variation) =>
+      variation.attributes?.every((attr) =>
+        potentialSelection[attr?.name]?.toLowerCase() === safeString(attr?.option).toLowerCase()
+      )
+    );
+
+    return matchingVariation ? matchingVariation.stock_status === "instock" : false;
   };
 
-  const formatDisplayName = (name: string) => {
-    return name
-      .replace(/^pa_/, '')
-      .replace(/-/g, ' ')
-      .replace(/_/g, ' ')
-      .split(' ')
-      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-      .join(' ');
+  useEffect(() => {
+    const allSelected = attributes.every((attr) => selectedAttributes[attr?.name]);
+
+    if (allSelected) {
+      const matchingVariation = variations.find((variation) =>
+        variation.attributes?.every((attr) =>
+          selectedAttributes[attr?.name]?.toLowerCase() === safeString(attr?.option).toLowerCase()
+        )
+      );
+      onVariationChange(matchingVariation || null);
+    } else {
+      const partialMatch = variations.find((variation) =>
+        Object.entries(selectedAttributes).every(
+          ([attrName, attrValue]) =>
+            variation.attributes?.some(
+              (attr) =>
+                attr?.name === attrName &&
+                safeString(attr?.option).toLowerCase() === attrValue.toLowerCase()
+            )
+        )
+      );
+      onVariationChange(partialMatch || null);
+    }
+  }, [selectedAttributes, variations, attributes, onVariationChange]);
+
+  const isColorAttribute = (name: string) => {
+    const nameLower = name.toLowerCase();
+    return nameLower.includes("couleur") || nameLower.includes("color") || nameLower.includes("teinte");
+  };
+
+  const getColorValue = (colorName: any): string => {
+    const colorStr = safeString(colorName);
+    const normalizedName = colorStr.toLowerCase().trim();
+
+    if (colorCodes[normalizedName]) {
+      return colorCodes[normalizedName];
+    }
+
+    const fallbackColorMap: Record<string, string> = {
+      noir: "#000000",
+      blanc: "#FFFFFF",
+      rouge: "#DC2626",
+      bleu: "#2563EB",
+      vert: "#16A34A",
+      jaune: "#EAB308",
+      rose: "#EC4899",
+      violet: "#9333EA",
+      orange: "#F97316",
+      gris: "#6B7280",
+      beige: "#D4B896",
+      marron: "#92400E",
+    };
+
+    for (const [key, value] of Object.entries(fallbackColorMap)) {
+      if (normalizedName.includes(key)) {
+        return value;
+      }
+    }
+
+    return "#9CA3AF";
+  };
+
+  const isSizeAttribute = (name: string) => {
+    const nameLower = name.toLowerCase();
+    return nameLower.includes("taille") || nameLower.includes("size") || nameLower.includes("pointure");
+  };
+
+  const isUserSize = (option: string, attributeName: string): boolean => {
+    if (!profile || !profile.user_size || !isSizeAttribute(attributeName)) return false;
+
+    const optionStr = safeString(option);
+    const numericOption = parseInt(optionStr);
+
+    if (isNaN(numericOption)) return false;
+
+    return numericOption === profile.user_size;
   };
 
   return (
     <div className="space-y-6">
-      {attributes.map((attribute) => {
-        const isSizeAttribute = attribute.name.toLowerCase().includes('taille');
-        const isColorAttr = isColorAttribute(attribute.name);
-        const sortedOptions = isSizeAttribute ? sortSizes(attribute.options) : attribute.options;
+      {attributes.map((attribute) => (
+        <div key={attribute.name} className="space-y-3">
+          <Label className="text-base font-semibold">{attribute.name}</Label>
 
-        return (
-        <div key={attribute.name}>
-          <Label className="text-base font-semibold mb-3 block">
-            {formatDisplayName(attribute.name)}
-          </Label>
-          <div className="flex flex-wrap gap-2 items-center">
-            {sortedOptions.map((option) => {
-              const isSelected = selectedAttributes[attribute.name] === option;
-              const isAvailable = isAttributeValueAvailable(attribute.name, option);
+          {isColorAttribute(attribute.name) ? (
+            <div className="flex flex-wrap gap-4">
+              {sortOptions(attribute.options, attribute.name).map((option) => {
+                const displayValue = typeof option === 'object' && option !== null ? (option as any).name || String(option) : String(option);
+                const optionStr = safeString(option);
+                const isSelected = selectedAttributes[attribute.name] === optionStr;
+                const isAvailable = isOptionAvailable(attribute.name, option);
 
-              if (isColorAttr) {
+                const colorValue = getColorValue(option);
+                const normalizedName = safeString(option).toLowerCase().trim();
+                const hasColorCode = colorCodes[normalizedName];
+                const shouldShowLetter = !hasColorCode && colorValue === "#9CA3AF";
+
                 return (
-                  <div
-                    key={option}
-                    className={`relative ${!isAvailable ? 'opacity-40 cursor-not-allowed' : ''}`}
-                    title={!isAvailable ? 'Rupture de stock' : ''}
-                  >
-                    <ColorSwatch
-                      color={option}
-                      isSelected={isSelected}
-                      onClick={() => isAvailable && handleAttributeSelect(attribute.name, option)}
-                      size="md"
-                    />
-                    {!isAvailable && (
-                      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                        <div className="w-full h-[2px] bg-red-500 rotate-45 transform scale-110" />
+                  <div key={optionStr} className="flex flex-col items-center gap-1.5">
+                    <button
+                      onClick={() => handleAttributeSelect(attribute.name, optionStr)}
+                      disabled={!isAvailable}
+                      className={`relative w-12 h-12 rounded-full border-3 transition-all ${
+                        isSelected
+                          ? "border-[#D4AF37] ring-3 ring-[#D4AF37] ring-offset-2 shadow-lg"
+                          : "border-gray-300 hover:border-[#D4AF37] hover:shadow-md"
+                      } ${!isAvailable ? "opacity-40 cursor-not-allowed" : "cursor-pointer"}`}
+                      title={displayValue}
+                    >
+                      <div
+                        className="w-full h-full rounded-full flex items-center justify-center"
+                        style={{ backgroundColor: colorValue }}
+                      >
+                        {shouldShowLetter && (
+                          <span className="text-xs font-bold text-white uppercase">
+                            {displayValue.charAt(0)}
+                          </span>
+                        )}
+                        {isSelected && (
+                          <div className="absolute inset-0 flex items-center justify-center">
+                            <Check className="h-5 w-5 text-white drop-shadow-lg" style={{
+                              filter: 'drop-shadow(0 0 2px rgba(0,0,0,0.5))'
+                            }} />
+                          </div>
+                        )}
                       </div>
+                      {!isAvailable && (
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <div className="w-full h-0.5 bg-red-500 rotate-45" />
+                        </div>
+                      )}
+                    </button>
+                    <span className={`text-xs text-center max-w-[60px] leading-tight ${
+                      isSelected ? 'font-semibold text-[#D4AF37]' : 'text-gray-600'
+                    }`}>
+                      {displayValue}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              {sortOptions(attribute.options, attribute.name).map((option) => {
+                const displayValue = typeof option === 'object' && option !== null ? (option as any).name || String(option) : String(option);
+                const optionStr = safeString(option);
+                const isSelected = selectedAttributes[attribute.name] === optionStr;
+                const isAvailable = isOptionAvailable(attribute.name, option);
+                const matchesUserSize = isUserSize(option, attribute.name);
+
+                return (
+                  <div key={optionStr} className="relative">
+                    <Button
+                      onClick={() => handleAttributeSelect(attribute.name, optionStr)}
+                      disabled={!isAvailable}
+                      variant={isSelected ? "default" : "outline"}
+                      className={`min-w-[60px] ${
+                        isSelected
+                          ? "bg-[#b8933d] hover:bg-[#a07c2f] border-[#b8933d] text-white"
+                          : "border-gray-300 hover:border-[#b8933d]"
+                      } ${!isAvailable ? "opacity-50 line-through" : ""} ${
+                        matchesUserSize ? "border-green-500 border-2" : ""
+                      }`}
+                    >
+                      {displayValue}
+                      {matchesUserSize && (
+                        <Check className="h-3 w-3 ml-1 text-green-600" />
+                      )}
+                    </Button>
+                    {matchesUserSize && (
+                      <Badge className="absolute -top-2 -right-2 text-xs bg-green-500 hover:bg-green-600">
+                        Votre taille
+                      </Badge>
                     )}
                   </div>
                 );
-              }
-
-              return (
-                <Button
-                  key={option}
-                  type="button"
-                  variant={isSelected ? "default" : "outline"}
-                  className={`
-                    ${isSelected
-                      ? 'bg-[#b8933d] hover:bg-[#a07c2f] text-white border-[#b8933d]'
-                      : 'border-gray-300 hover:border-[#b8933d]'
-                    }
-                    ${!isAvailable ? 'opacity-40 cursor-not-allowed line-through decoration-2 decoration-red-500' : ''}
-                  `}
-                  onClick={() => handleAttributeSelect(attribute.name, option)}
-                  disabled={!isAvailable}
-                  title={!isAvailable ? 'Rupture de stock' : ''}
-                >
-                  {option}
-                </Button>
-              );
-            })}
-          </div>
+              })}
+            </div>
+          )}
         </div>
-        );
-      })}
-
-      {selectedVariation && (
-        <div className="pt-4 border-t border-gray-200">
-          <div className="flex items-center gap-2 mb-2">
-            <div
-              className={`h-3 w-3 rounded-full ${
-                isStockAvailable(selectedVariation.stockStatus, selectedVariation.stockQuantity) ? 'bg-[#B6914A]' : 'bg-[#DF30CF]'
-              }`}
-            />
-            <p className="text-sm font-medium">
-              {isStockAvailable(selectedVariation.stockStatus, selectedVariation.stockQuantity) ? (
-                <span className="text-[#B6914A]">
-                  Disponible
-                  {selectedVariation.stockQuantity !== null && selectedVariation.stockQuantity !== undefined && ` (${selectedVariation.stockQuantity} en stock)`}
-                </span>
-              ) : (
-                <span className="text-[#DF30CF]">Rupture de stock</span>
-              )}
-            </p>
-          </div>
-        </div>
-      )}
+      ))}
     </div>
   );
 }

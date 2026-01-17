@@ -1,65 +1,112 @@
-"use client";
+'use client';
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
-import AccountNav from '@/components/AccountNav';
-import { Loader2, Sparkles } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Loader2, User, Package, MapPin, Heart, LogOut, Shield, Settings, Ruler, Gift, Ticket, PackageOpen, CreditCard } from 'lucide-react';
+import { cn } from '@/lib/utils';
+
+const accountNavItems = [
+  { href: '/account', label: 'Mon profil', icon: User },
+  { href: '/account/orders', label: 'Mes commandes', icon: Package },
+  { href: '/account/coupons', label: 'Mes coupons', icon: Ticket },
+  { href: '/account/gift-cards', label: 'Mes cartes cadeaux', icon: CreditCard },
+  { href: '/account/my-packages', label: 'Mes colis ouverts', icon: PackageOpen },
+  { href: '/account/addresses', label: 'Mes adresses', icon: MapPin },
+  { href: '/account/measurements', label: 'Mes mensurations', icon: Ruler },
+  { href: '/account/referral', label: 'Code parrainage', icon: Gift },
+  { href: '/wishlist', label: 'Ma liste de souhaits', icon: Heart },
+];
 
 export default function AccountLayout({ children }: { children: React.ReactNode }) {
-  const { user, profile, loading } = useAuth();
+  const { user, profile, loading, signOut } = useAuth();
   const router = useRouter();
-
-  const getGreeting = () => {
-    const hour = new Date().getHours();
-    if (hour < 12) return 'Bonjour';
-    if (hour < 18) return 'Bon après-midi';
-    return 'Bonsoir';
-  };
+  const pathname = usePathname();
 
   useEffect(() => {
     if (!loading && !user) {
-      router.push('/auth/login');
+      router.push('/auth/login?redirect=/account');
     }
   }, [user, loading, router]);
+
+  const handleSignOut = async () => {
+    await signOut();
+    router.push('/');
+  };
 
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-[#b8933d]" />
+        <Loader2 className="h-8 w-8 animate-spin text-[#D4AF37]" />
       </div>
     );
   }
 
-  if (!user) {
+  if (!user || !profile) {
     return null;
   }
 
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="container mx-auto px-4 py-8">
-        <div className="mb-8 bg-gradient-to-r from-[#b8933d] to-[#d4a962] rounded-lg p-6 text-white shadow-lg">
-          <div className="flex items-center gap-3 mb-2">
-            <Sparkles className="h-6 w-6" />
-            <h1 className="text-3xl font-bold">
-              Bienvenue dans ton cocon, {profile?.first_name || 'chère cliente'} !
-            </h1>
-          </div>
-          <p className="text-lg text-white/90">
-            Ici, chaque visite, chaque échange en live et chaque coup de cœur te rapproche de ta prochaine pépite. Ta fidélité a de la valeur, et je suis ravie de la récompenser chaque jour.
-          </p>
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold mb-2">
+            Bienvenue, {profile.first_name || 'cher client'}!
+          </h1>
+          <p className="text-gray-600">Gérez votre compte et vos commandes</p>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
           <aside className="lg:col-span-1">
             <div className="bg-white rounded-lg shadow-sm p-6 sticky top-8">
-              <AccountNav />
+              <nav className="space-y-2">
+                {profile.is_admin && (
+                  <Link
+                    href="/admin"
+                    className="flex items-center gap-3 px-4 py-3 rounded-lg transition-colors bg-gradient-to-r from-[#b8933d] to-[#d4af37] text-white hover:from-[#9a7a2f] hover:to-[#b8933d]"
+                  >
+                    <Shield className="h-5 w-5" />
+                    <span className="font-medium">Administration</span>
+                  </Link>
+                )}
+
+                {accountNavItems.map((item) => {
+                  const Icon = item.icon;
+                  const isActive = pathname === item.href;
+
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      className={cn(
+                        'flex items-center gap-3 px-4 py-3 rounded-lg transition-colors',
+                        isActive
+                          ? 'bg-[#D4AF37] text-white'
+                          : 'text-gray-700 hover:bg-gray-100'
+                      )}
+                    >
+                      <Icon className="h-5 w-5" />
+                      <span className="font-medium">{item.label}</span>
+                    </Link>
+                  );
+                })}
+
+                <Button
+                  variant="ghost"
+                  onClick={handleSignOut}
+                  className="w-full justify-start gap-3 px-4 py-3 h-auto hover:bg-red-50 hover:text-red-600"
+                >
+                  <LogOut className="h-5 w-5" />
+                  <span className="font-medium">Déconnexion</span>
+                </Button>
+              </nav>
             </div>
           </aside>
 
-          <main className="lg:col-span-3">
-            {children}
-          </main>
+          <main className="lg:col-span-3">{children}</main>
         </div>
       </div>
     </div>

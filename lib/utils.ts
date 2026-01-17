@@ -5,80 +5,86 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-export function formatPrice(price: string | undefined | null): string {
-  if (!price) return '';
+export function decodeHtmlEntities(text: string | null | undefined): string {
+  if (!text) return '';
 
-  let decoded = price
-    .replace(/&nbsp;/g, ' ')
-    .replace(/&#8364;/g, '€')
-    .replace(/&euro;/g, '€')
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&#039;/g, "'");
+  const entities: Record<string, string> = {
+    '&amp;': '&',
+    '&lt;': '<',
+    '&gt;': '>',
+    '&quot;': '"',
+    '&#039;': "'",
+    '&#x27;': "'",
+    '&apos;': "'",
+    '&nbsp;': ' ',
+  };
 
-  decoded = decoded.trim();
+  return text.replace(/&[a-z0-9#]+;/gi, (match) => entities[match] || match);
+}
 
-  if (decoded.includes(' - ') || decoded.includes('-')) {
-    const parts = decoded.split(/\s*-\s*/);
-    if (parts.length === 2 && parts[0].includes('€') && parts[1].includes('€')) {
-      return `de ${parts[0].trim()} à ${parts[1].trim()}`;
+/**
+ * Formate les attributs de variation de manière robuste
+ * Gère les formats : string JSON, Array, Object
+ */
+export function formatAttributes(variationData: any): string {
+  if (!variationData) return '';
+
+  let parsedData = variationData;
+
+  // Si c'est une string JSON, la parser
+  if (typeof variationData === 'string') {
+    try {
+      parsedData = JSON.parse(variationData);
+    } catch (e) {
+      return '';
     }
   }
 
-  return decoded;
-}
-
-export function decodeHtmlEntities(text: string | undefined | null): string {
-  if (!text) return '';
-
-  const decoded = text
-    .replace(/&nbsp;/g, ' ')
-    .replace(/&#8364;/g, '€')
-    .replace(/&euro;/g, '€')
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&#039;/g, "'");
-
-  return decoded.trim();
-}
-
-export function formatAttributeName(name: string | undefined | null): string {
-  if (!name) return '';
-
-  let formatted = name;
-
-  if (formatted.startsWith('pa_')) {
-    formatted = formatted.substring(3);
+  // Si c'est un tableau [{name: 'Couleur', value: 'Bleu'}]
+  if (Array.isArray(parsedData)) {
+    return parsedData
+      .map((item: any) => {
+        if (typeof item === 'object' && item !== null) {
+          const name = item.name || item.key || '';
+          const value = item.value || item.option || item.val || '';
+          return name && value ? `${name}: ${value}` : '';
+        }
+        return String(item || '');
+      })
+      .filter(Boolean)
+      .join(', ');
   }
 
-  formatted = formatted.replace(/-/g, ' ');
+  // Si c'est un objet {"Couleur": "Bleu"} ou {couleur: {name: "Bleu"}}
+  if (typeof parsedData === 'object' && parsedData !== null) {
+    const attributes = Object.entries(parsedData)
+      .filter(([key]) => {
+        // Exclure les champs techniques
+        const excludedKeys = ['id', 'variation_id', 'sku', 'image_url', 'product_id', 'created_at', 'updated_at'];
+        return !excludedKeys.includes(key) && !key.startsWith('_');
+      })
+      .map(([key, value]) => {
+        // Extraire la valeur lisible
+        let displayValue = '';
+        if (typeof value === 'object' && value !== null) {
+          displayValue = (value as any)?.name || (value as any)?.value || (value as any)?.option || JSON.stringify(value);
+        } else {
+          displayValue = String(value || '');
+        }
 
-  formatted = formatted.split(' ')
-    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-    .join(' ');
+        // Nettoyer le nom de la clé
+        const cleanKey = key
+          .replace(/_/g, ' ')
+          .split(' ')
+          .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+          .join(' ');
 
-  return formatted;
-}
+        return displayValue ? `${cleanKey}: ${displayValue}` : '';
+      })
+      .filter(Boolean);
 
-export function parsePrice(priceString: string | undefined | null): number {
-  if (!priceString) return 0;
+    return attributes.join(', ');
+  }
 
-  const cleanPrice = priceString
-    .replace(/\s/g, '')
-    .replace(',', '.')
-    .replace(/[^0-9.-]/g, '');
-
-  return parseFloat(cleanPrice) || 0;
-}
-
-export function isStockAvailable(stockStatus: string | undefined | null, stockQuantity: number | null | undefined): boolean {
-  if (!stockStatus) return false;
-  const normalizedStatus = stockStatus.toUpperCase();
-  const isInStock = normalizedStatus === 'IN_STOCK' || normalizedStatus === 'INSTOCK';
-  const hasQuantity = stockQuantity === null || stockQuantity === undefined || stockQuantity > 0;
-  return isInStock && hasQuantity;
+  return '';
 }

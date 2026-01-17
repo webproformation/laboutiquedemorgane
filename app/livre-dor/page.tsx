@@ -1,410 +1,474 @@
-"use client";
+'use client'
 
-import { useEffect, useState } from "react";
-import { createClient } from "@/lib/supabase-client";
-import { useAuth } from "@/context/AuthContext";
-import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Gem, Heart, ShieldCheck, MessageCircle, ChevronDown, ChevronUp, Facebook, Crown } from "lucide-react";
-import { toast } from "sonner";
-import { format } from "date-fns";
-import { fr } from "date-fns/locale";
-import OptimizedImage from "@/components/OptimizedImage";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import dynamic from "next/dynamic";
-
-const GeneralReviewForm = dynamic(() => import("@/components/GeneralReviewForm"), { ssr: false });
-
-interface GuestbookEntry {
-  id: string;
-  customer_name: string;
-  rating: number;
-  message: string;
-  photo_url: string | null;
-  admin_response: string | null;
-  votes_count: number;
-  created_at: string;
-  approved_at: string;
-  source: 'site' | 'facebook' | 'website';
-  user_id: string | null;
-  profiles?: {
-    ambassador_badge: boolean;
-  };
-}
+import { useState } from 'react'
+import { useGuestbook, useAmbassador, useHearts, canUserReview, submitGuestbookEntry } from '@/hooks/use-guestbook'
+import { useAuth } from '@/context/AuthContext'
+import { Card, CardContent } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Textarea } from '@/components/ui/textarea'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Badge } from '@/components/ui/badge'
+import { Gem, Heart, Loader2, Crown, Upload, CheckCircle2, BookHeart } from 'lucide-react'
+import { toast } from 'sonner'
+import Image from 'next/image'
+import PageHeader from '@/components/PageHeader'
 
 export default function LivreDorPage() {
-  const { user, profile } = useAuth();
-  const [entries, setEntries] = useState<GuestbookEntry[]>([]);
-  const [votedEntries, setVotedEntries] = useState<Set<string>>(new Set());
-  const [isLoading, setIsLoading] = useState(true);
-  const [showCharter, setShowCharter] = useState(false);
+  const { entries, loading, refetch } = useGuestbook(50, 'approved')
+  const { currentAmbassador, loading: ambassadorLoading } = useAmbassador()
+  const { user } = useAuth()
+  const [showForm, setShowForm] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
+  const [uploading, setUploading] = useState(false)
+  const [formData, setFormData] = useState({
+    order_number: '',
+    rating: 5,
+    message: '',
+    customer_name: '',
+    customer_photo_url: '',
+    gdpr_consent: false
+  })
 
-  useEffect(() => {
-    fetchEntries();
-    if (user && profile) {
-      fetchUserVotes();
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    if (!file.type.startsWith('image/')) {
+      toast.error('Veuillez sélectionner une image')
+      return
     }
-  }, [user, profile]);
 
-  const fetchEntries = async () => {
+    setUploading(true)
     try {
-      const supabase = createClient();
+      const formData = new FormData()
+      formData.append('file', file)
 
-      const { data: guestbookData, error: guestbookError } = await supabase
-        .from("guestbook_entries")
-        .select(`
-          *,
-          profiles:user_id (
-            ambassador_badge
-          )
-        `)
-        .eq("status", "approved")
-        .order("approved_at", { ascending: false });
+      const response = await fetch('/api/storage/upload', {
+        method: 'POST',
+        body: formData
+      })
 
-      if (guestbookError) throw guestbookError;
+      if (!response.ok) throw new Error('Upload failed')
 
-      const { data: customerReviewsData, error: reviewsError } = await supabase
-        .from("customer_reviews")
-        .select(`
-          *,
-          profiles:user_id (
-            ambassador_badge
-          )
-        `)
-        .eq("is_approved", true)
-        .order("created_at", { ascending: false });
-
-      if (reviewsError) throw reviewsError;
-
-      const transformedReviews = (customerReviewsData || []).map(review => ({
-        id: review.id,
-        customer_name: review.customer_name,
-        rating: review.rating,
-        message: review.comment,
-        photo_url: null,
-        admin_response: null,
-        votes_count: 0,
-        created_at: review.created_at,
-        approved_at: review.created_at,
-        source: review.source as 'site' | 'facebook' | 'website',
-        user_id: review.user_id,
-        profiles: review.profiles,
-      }));
-
-      const allEntries = [...(guestbookData || []), ...transformedReviews];
-      allEntries.sort((a, b) => new Date(b.approved_at).getTime() - new Date(a.approved_at).getTime());
-
-      setEntries(allEntries);
+      const { url } = await response.json()
+      setFormData(prev => ({ ...prev, customer_photo_url: url }))
+      toast.success('Photo uploadée avec succès')
     } catch (error) {
-      console.error("Error fetching guestbook entries:", error);
+      console.error('Upload error:', error)
+      toast.error('Erreur lors de l\'upload de la photo')
     } finally {
-      setIsLoading(false);
+      setUploading(false)
     }
-  };
+  }
 
-  const fetchUserVotes = async () => {
-    if (!profile) return;
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
 
+    if (!user) {
+      toast.error('Vous devez être connectée pour signer le Livre d\'Or')
+      return
+    }
+
+    if (!formData.gdpr_consent) {
+      toast.error('Veuillez accepter les conditions de publication')
+      return
+    }
+
+    setSubmitting(true)
     try {
-      const supabase = createClient();
-      const { data, error } = await supabase
-        .from("guestbook_votes")
-        .select("guestbook_entry_id")
-        .eq("user_id", profile.id);
-
-      if (error) throw error;
-      if (data) {
-        setVotedEntries(new Set(data.map(v => v.guestbook_entry_id)));
-      }
-    } catch (error) {
-      console.error("Error fetching user votes:", error);
-    }
-  };
-
-  const handleVote = async (entryId: string) => {
-    if (!user || !profile) {
-      toast.error("Vous devez être connectée pour voter ❤️");
-      return;
-    }
-
-    if (votedEntries.has(entryId)) {
-      toast.error("Vous avez déjà voté pour cet avis");
-      return;
-    }
-
-    try {
-      const supabase = createClient();
-      const { error } = await supabase.from("guestbook_votes").insert({
-        guestbook_entry_id: entryId,
-        user_id: profile.id,
-      });
-
-      if (error) {
-        if (error.code === '23505') {
-          toast.error("Vous avez déjà voté pour cet avis");
-        } else {
-          throw error;
-        }
-        return;
+      const canReview = await canUserReview(user.id, formData.order_number)
+      if (!canReview) {
+        toast.error('Vous avez déjà signé le Livre d\'Or pour cette commande')
+        return
       }
 
-      const newVotedEntries = new Set(votedEntries);
-      newVotedEntries.add(entryId);
-      setVotedEntries(newVotedEntries);
+      const entry = await submitGuestbookEntry({
+        order_number: formData.order_number,
+        rating: formData.rating,
+        message: formData.message,
+        customer_name: formData.customer_name,
+        customer_photo_url: formData.customer_photo_url
+      })
 
-      setEntries((prev) =>
-        prev.map((entry) =>
-          entry.id === entryId ? { ...entry, votes_count: entry.votes_count + 1 } : entry
-        )
-      );
+      toast.success('Merci pour votre mot doux ! Il sera publié après validation (48-72h)', {
+        description: 'Bonus fidélité ajouté à votre cagnotte !'
+      })
 
-      toast.success("Merci pour votre cœur ❤️");
+      setFormData({
+        order_number: '',
+        rating: 5,
+        message: '',
+        customer_name: '',
+        customer_photo_url: '',
+        gdpr_consent: false
+      })
+      setShowForm(false)
+      refetch()
     } catch (error) {
-      console.error("Error voting:", error);
-      toast.error("Une erreur est survenue");
+      console.error('Submit error:', error)
+      toast.error('Erreur lors de l\'envoi')
+    } finally {
+      setSubmitting(false)
     }
-  };
+  }
 
-  if (isLoading) {
+  const renderPepites = (rating: number, interactive = false, onClick?: (r: number) => void) => {
     return (
-      <div className="container mx-auto px-4 py-12">
-        <div className="text-center">Chargement des mots doux...</div>
+      <div className="flex gap-1">
+        {[1, 2, 3, 4, 5].map((pepite) => (
+          <button
+            key={pepite}
+            type={interactive ? "button" : undefined}
+            onClick={() => interactive && onClick && onClick(pepite)}
+            disabled={!interactive}
+            className={interactive ? "focus:outline-none cursor-pointer" : undefined}
+          >
+            <Gem
+              className={`h-5 w-5 ${
+                pepite <= rating ? 'fill-[#C6A15B] text-[#C6A15B]' : 'text-gray-300'
+              } ${interactive ? 'hover:text-[#C6A15B]/50' : ''}`}
+            />
+          </button>
+        ))}
       </div>
-    );
+    )
   }
 
   return (
     <div className="container mx-auto px-4 py-12">
-      <div className="max-w-4xl mx-auto mb-12 text-center space-y-6">
-        <div className="flex justify-center mb-4">
-          <Crown className="h-12 w-12 text-amber-500" />
-        </div>
-        <h1 className="text-4xl font-bold">Devenez notre Ambassadrice de la Semaine !</h1>
-        <div className="prose prose-lg mx-auto text-left bg-gradient-to-br from-pink-50 to-purple-50 dark:from-pink-950/20 dark:to-purple-950/20 p-8 rounded-2xl border border-pink-200 dark:border-pink-800 space-y-4">
-          <p className="text-base leading-relaxed">
-            Vous aimez vos pépites ? Vous adorez partager vos looks ? Alors, préparez-vous à briller ! Chaque semaine, nous mettons l&apos;une d&apos;entre vous à l&apos;honneur sur la boutique. Plus qu&apos;un simple titre, c&apos;est notre façon de vous dire merci pour tout l&apos;amour que vous portez à nos collections.
-          </p>
+      <div className="max-w-6xl mx-auto">
+        <PageHeader
+          icon={BookHeart}
+          title="Livre d'Or"
+          description="Partagez votre expérience et devenez notre Ambassadrice de la Semaine !"
+        />
 
-          <div>
-            <p className="text-lg font-semibold mb-2">Comment participer ? C&apos;est tout simple :</p>
-            <ul className="list-disc list-inside space-y-1 ml-4">
-              <li><strong>Faites pétiller votre look :</strong> Prenez une jolie photo de vous portant vos pépites préférées.</li>
-              <li><strong>Signez le Livre d&apos;Or :</strong> Déposez votre photo et votre petit mot doux sur notre site.</li>
-              <li className="text-green-600 dark:text-green-400"><em>Pssst : En plus, vous gagnez immédiatement 0,20 € dans votre cagnotte (dès la validation de l&apos;avis) !</em></li>
-              <li><strong>Récoltez des cœurs :</strong> C&apos;est ici que la magie opère ! Invitez les autres visiteuses à cliquer sur le « Cœur ❤️ » sous votre avis.</li>
-            </ul>
+        <div className="bg-gradient-to-r from-[#C6A15B]/10 to-pink-50 rounded-3xl p-8 mb-12">
+          <div className="text-center mb-8">
+            <div className="inline-flex items-center justify-center w-20 h-20 bg-white rounded-full mb-4 shadow-lg">
+              <Crown className="h-10 w-10 text-[#C6A15B]" />
+            </div>
+            <h2 className="text-3xl font-bold mb-4">Challenge de la Semaine</h2>
           </div>
 
-          <div className="bg-gradient-to-r from-pink-100 to-purple-100 dark:from-pink-900/30 dark:to-purple-900/30 p-4 rounded-lg border-l-4 border-pink-500">
-            <p className="text-base font-semibold mb-2">💖 Comment gagner ?</p>
-            <p className="text-sm">
-              Chaque lundi matin, nous regardons quelle photo a fait battre le plus de cœurs sur les 7 derniers jours. La cliente qui a récolté le plus de votes devient officiellement notre Ambassadrice de la Semaine.
+          <div className="prose prose-lg max-w-4xl mx-auto text-gray-700 space-y-4">
+            <p>
+              Vous aimez vos pépites ? Vous adorez partager vos looks ? Alors, préparez-vous à briller !
+              Chaque semaine, nous mettons l&apos;une d&apos;entre vous à l&apos;honneur sur la boutique.
             </p>
-          </div>
 
-          <div className="bg-gradient-to-r from-amber-100 to-yellow-100 dark:from-amber-900/30 dark:to-yellow-900/30 p-4 rounded-lg border-l-4 border-amber-500">
-            <p className="text-base font-semibold mb-2">🎁 Votre couronne de cadeaux :</p>
-            <p className="text-sm mb-2">Si vous êtes élue, voici vos privilèges de Reine :</p>
-            <ul className="list-disc list-inside space-y-1 text-sm ml-4">
-              <li><strong>💰 5,00 € offerts immédiatement</strong> sur votre Cagnotte de la Boutique</li>
-              <li><strong>👑 Votre Badge &quot;Couronne Dorée&quot; :</strong> Il s&apos;affichera fièrement à côté de votre prénom sur tout le site pour montrer à tout le monde que vous êtes notre égérie !</li>
-              <li><strong>🌟 Votre moment de gloire :</strong> Votre photo et votre avis seront affichés en grand sur la page d&apos;accueil de la boutique pendant toute la semaine.</li>
-            </ul>
-          </div>
+            <div className="bg-white rounded-xl p-6 shadow-md">
+              <h3 className="text-xl font-bold text-[#C6A15B] mb-3 flex items-center gap-2">
+                <Gem className="h-6 w-6" /> Comment participer ?
+              </h3>
+              <ol className="list-decimal list-inside space-y-2">
+                <li>Faites pétiller votre look : Prenez une jolie photo de vous portant vos pépites préférées</li>
+                <li>Signez le Livre d&apos;Or : Déposez votre photo et votre petit mot doux (Bonus : 0,20 € immédiat dans votre cagnotte)</li>
+                <li>Récoltez des cœurs : Invitez les autres visiteuses à cliquer sur le Cœur sous votre avis</li>
+              </ol>
+            </div>
 
-          <div className="bg-white dark:bg-gray-900 p-4 rounded-lg border border-pink-200 dark:border-pink-800">
-            <p className="text-sm"><strong>🌸 Le petit conseil de Morgane :</strong></p>
-            <p className="text-sm">
-              Pour avoir un maximum de chances, partagez votre avis à vos amies et n&apos;hésitez pas à soigner votre photo (une belle lumière, un joli sourire, et le tour est joué !).
-            </p>
-          </div>
-
-          <p className="text-base font-semibold text-center text-pink-600 dark:text-pink-400">
-            Alors, qui sera notre prochaine Ambassadrice ? À vos pépites, prêtes... brillez !
-          </p>
-        </div>
-
-        <Collapsible open={showCharter} onOpenChange={setShowCharter} className="mt-8">
-          <CollapsibleTrigger asChild>
-            <Button
-              variant="outline"
-              className="w-full justify-between text-base font-semibold border-2 border-amber-200 hover:bg-amber-50 dark:border-amber-800 dark:hover:bg-amber-950/20"
-            >
-              Charte de Modération du Livre d&apos;Or
-              {showCharter ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
-            </Button>
-          </CollapsibleTrigger>
-          <CollapsibleContent className="mt-4">
-            <div className="prose prose-sm max-w-none bg-white dark:bg-gray-900 p-8 rounded-2xl border-2 border-amber-200 dark:border-amber-800 space-y-6">
-              <p className="text-base leading-relaxed">
-                Bienvenue dans l&apos;espace d&apos;expression de La Boutique de Morgane. Pour que ce lieu reste un espace d&apos;amour, de bienveillance et d&apos;authenticité, nous avons mis en place quelques règles simples.
-              </p>
-
-              <div>
-                <h3 className="text-lg font-bold mb-3">1. Authenticité avant tout</h3>
-                <p className="text-sm leading-relaxed">
-                  Le Livre d&apos;Or est strictement réservé aux clientes ayant effectué un achat sur notre boutique. Chaque avis est lié à une commande réelle et porte la mention « Achat Vérifié ✅ ». Cela vous garantit que chaque témoignage et chaque photo proviennent d&apos;une expérience vécue.
-                </p>
-              </div>
-
-              <div>
-                <h3 className="text-lg font-bold mb-3">2. Processus de Modération</h3>
-                <p className="text-sm leading-relaxed mb-2">
-                  Afin d&apos;éviter les messages publicitaires indésirables (spams) ou les contenus inappropriés, chaque signature est relue par notre équipe avant publication.
-                </p>
-                <ul className="list-disc list-inside text-sm space-y-1 ml-4">
-                  <li><strong>Délai :</strong> Votre avis apparaîtra sous 48h à 72h après sa validation technique.</li>
-                  <li><strong>Transparence :</strong> Nous ne sélectionnons pas les avis en fonction de leur note. Un avis moins positif sera publié dès lors qu&apos;il respecte les règles de politesse et de respect.</li>
-                </ul>
-              </div>
-
-              <div>
-                <h3 className="text-lg font-bold mb-3">3. Motifs de refus d&apos;un avis</h3>
-                <p className="text-sm leading-relaxed mb-2">
-                  Nous nous réservons le droit de ne pas publier (ou de supprimer) un avis si :
-                </p>
-                <ul className="list-disc list-inside text-sm space-y-1 ml-4">
-                  <li>Il contient des propos injurieux, diffamatoires, racistes ou haineux.</li>
-                  <li>Il comporte des données personnelles (numéro de téléphone, adresse e-mail, etc.).</li>
-                  <li>La photo jointe est de mauvaise qualité, n&apos;appartient pas à l&apos;auteur ou est jugée inappropriée.</li>
-                  <li>Le contenu est purement publicitaire ou comporte des liens vers d&apos;autres sites.</li>
-                </ul>
-              </div>
-
-              <div>
-                <h3 className="text-lg font-bold mb-3">4. Récompenses et Équité</h3>
-                <p className="text-sm leading-relaxed">
-                  La récompense créditée sur votre cagnotte (0,20€) est offerte en remerciement du temps accordé pour partager votre expérience. Elle n&apos;est en aucun cas conditionnée par l&apos;obtention d&apos;une note positive.
-                </p>
-              </div>
-
-              <div>
-                <h3 className="text-lg font-bold mb-3">5. Élection de l&apos;Ambassadrice</h3>
-                <p className="text-sm leading-relaxed">
-                  L&apos;élection de « L&apos;Ambassadrice de la Semaine » se base sur le nombre de « Cœurs ❤️ » reçus par les autres visiteuses. En cas d&apos;égalité ou de suspicion de fraude (utilisation de robots de vote), l&apos;administrateur de la boutique se réserve le droit de procéder à l&apos;arbitrage final pour désigner la gagnante.
-                </p>
-              </div>
-
-              <div>
-                <h3 className="text-lg font-bold mb-3">6. Vos Droits (RGPD)</h3>
-                <p className="text-sm leading-relaxed">
-                  En signant le Livre d&apos;Or, vous acceptez la publication de votre prénom et de votre photo sur notre site. Vous pouvez à tout moment demander la modification ou la suppression de votre avis en nous contactant via le formulaire de contact.
-                </p>
-              </div>
-
-              <p className="text-sm text-center font-semibold text-amber-700 dark:text-amber-500 mt-6">
-                Merci de contribuer à faire de notre Livre d&apos;Or un lieu bienveillant et authentique ! 💛
+            <div className="bg-white rounded-xl p-6 shadow-md">
+              <h3 className="text-xl font-bold text-pink-600 mb-3 flex items-center gap-2">
+                <Heart className="h-6 w-6" /> Comment gagner ?
+              </h3>
+              <p>
+                Chaque lundi matin, nous regardons quelle photo a fait battre le plus de cœurs sur les 7 derniers jours.
+                La cliente qui a récolté le plus de votes devient officiellement notre Ambassadrice de la Semaine.
               </p>
             </div>
-          </CollapsibleContent>
-        </Collapsible>
-      </div>
 
-      {entries.length === 0 ? (
-        <div className="text-center py-12">
-          <p className="text-muted-foreground">
-            Aucun avis pour le moment. Soyez la première à laisser un mot doux !
-          </p>
+            <div className="bg-[#C6A15B] text-white rounded-xl p-6 shadow-md">
+              <h3 className="text-xl font-bold mb-3 flex items-center gap-2">
+                <Crown className="h-6 w-6" /> Votre couronne de cadeaux
+              </h3>
+              <ul className="space-y-2">
+                <li className="flex items-start gap-2">
+                  <span className="text-2xl">💰</span>
+                  <span>5,00 € offerts immédiatement sur votre Cagnotte</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-2xl">👑</span>
+                  <span>Votre Badge &quot;Couronne Dorée&quot; affiché à côté de votre prénom</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-2xl">🌟</span>
+                  <span>Votre photo et avis affichés en grand sur la page d&apos;accueil pendant toute la semaine</span>
+                </li>
+              </ul>
+            </div>
+          </div>
+
+          {user && (
+            <div className="text-center mt-8">
+              <Button
+                onClick={() => setShowForm(!showForm)}
+                size="lg"
+                className="bg-[#C6A15B] hover:bg-[#B59149] text-white"
+              >
+                <Gem className="mr-2 h-5 w-5" />
+                Signer le Livre d&apos;Or
+              </Button>
+            </div>
+          )}
+
+          {!user && (
+            <p className="text-center mt-6 text-gray-600">
+              Connectez-vous pour signer le Livre d&apos;Or et participer au concours !
+            </p>
+          )}
         </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {entries.map((entry) => (
-            <Card
-              key={entry.id}
-              className="group hover:shadow-xl transition-all duration-300 overflow-hidden"
-            >
-              <CardContent className="p-0">
-                {entry.photo_url && (
-                  <div className="relative h-64 w-full overflow-hidden">
-                    <OptimizedImage
-                      src={entry.photo_url}
-                      alt={`Photo de ${entry.customer_name}`}
+
+        {!ambassadorLoading && currentAmbassador && currentAmbassador.entry && (
+          <Card className="mb-12 border-4 border-[#C6A15B] shadow-xl">
+            <CardContent className="p-8">
+              <div className="flex items-center gap-4 mb-6">
+                <Crown className="h-12 w-12 text-[#C6A15B] fill-[#C6A15B]" />
+                <div>
+                  <h2 className="text-2xl font-bold">Ambassadrice de la Semaine</h2>
+                  <p className="text-gray-600">Cette semaine, on met à l&apos;honneur...</p>
+                </div>
+              </div>
+              <div className="grid md:grid-cols-2 gap-8">
+                {currentAmbassador.entry.customer_photo_url && (
+                  <div className="relative h-96 rounded-xl overflow-hidden">
+                    <Image
+                      src={currentAmbassador.entry.customer_photo_url}
+                      alt={currentAmbassador.entry.customer_name}
                       fill
-                      className="object-cover group-hover:scale-105 transition-transform duration-300"
+                      className="object-cover"
                     />
                   </div>
                 )}
-                <div className="p-6 space-y-4">
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-center gap-2">
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <h3 className="font-semibold text-lg">{entry.customer_name}</h3>
-                          {entry.profiles?.ambassador_badge && (
-                            <span title="Ambassadrice de la Boutique">
-                              <Crown className="h-5 w-5 fill-amber-500 text-amber-500" />
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-xs text-muted-foreground flex items-center gap-1">
-                          {entry.source === 'facebook' ? (
-                            <>
-                              <Facebook className="h-3 w-3 text-blue-600" />
-                              <span className="text-blue-600">Avis Facebook</span>
-                            </>
-                          ) : (
-                            <>
-                              <ShieldCheck className="h-3 w-3" />
-                              {entry.source === 'website' ? 'Avis Certifié' : 'Achat Vérifié'}
-                            </>
-                          )}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex gap-0.5">
-                      {Array.from({ length: entry.rating }).map((_, i) => (
-                        <Gem key={i} className="h-4 w-4 fill-amber-500 text-amber-500" />
-                      ))}
-                    </div>
+                <div>
+                  <div className="flex items-center gap-2 mb-4">
+                    <h3 className="text-2xl font-bold">{currentAmbassador.entry.customer_name}</h3>
+                    <Crown className="h-6 w-6 text-[#C6A15B] fill-[#C6A15B]" />
                   </div>
-
-                  <p className="text-sm leading-relaxed">{entry.message}</p>
-
-                  {entry.admin_response && (
-                    <div className="bg-gradient-to-r from-amber-50 to-yellow-50 dark:from-amber-950/30 dark:to-yellow-950/30 p-4 rounded-lg border-l-4 border-amber-500">
-                      <div className="flex items-start gap-2">
-                        <MessageCircle className="h-4 w-4 text-amber-600 mt-0.5 flex-shrink-0" />
-                        <div>
-                          <p className="text-xs font-semibold text-amber-800 dark:text-amber-400 mb-1">
-                            Réponse de Morgane :
-                          </p>
-                          <p className="text-sm text-amber-900 dark:text-amber-300">
-                            {entry.admin_response}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="flex items-center justify-between pt-2 border-t">
-                    <p className="text-xs text-muted-foreground">
-                      {format(new Date(entry.approved_at), "MMMM yyyy", { locale: fr })}
-                    </p>
-                    <Button
-                      variant={votedEntries.has(entry.id) ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => handleVote(entry.id)}
-                      disabled={votedEntries.has(entry.id)}
-                      className={`gap-2 ${
-                        votedEntries.has(entry.id)
-                          ? "bg-pink-500 hover:bg-pink-600"
-                          : "hover:bg-pink-50 hover:border-pink-300"
-                      }`}
-                    >
-                      <Heart
-                        className={`h-4 w-4 ${votedEntries.has(entry.id) ? "fill-current" : ""}`}
-                      />
-                      {entry.votes_count}
-                    </Button>
+                  {renderPepites(currentAmbassador.entry.rating)}
+                  <p className="text-gray-700 mt-4 text-lg">{currentAmbassador.entry.message}</p>
+                  <div className="flex items-center gap-4 mt-6">
+                    <Heart className="h-6 w-6 text-pink-500 fill-pink-500" />
+                    <span className="font-bold text-xl">{currentAmbassador.hearts_count} cœurs</span>
                   </div>
                 </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {showForm && user && (
+          <Card className="mb-12">
+            <CardContent className="p-8">
+              <h2 className="text-2xl font-bold mb-6">Laissez votre mot doux</h2>
+              <form onSubmit={handleSubmit} className="space-y-6">
+                <div className="grid md:grid-cols-2 gap-6">
+                  <div>
+                    <Label htmlFor="customer_name">Votre prénom</Label>
+                    <Input
+                      id="customer_name"
+                      value={formData.customer_name}
+                      onChange={(e) => setFormData(prev => ({ ...prev, customer_name: e.target.value }))}
+                      required
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="order_number">Numéro de commande</Label>
+                    <Input
+                      id="order_number"
+                      value={formData.order_number}
+                      onChange={(e) => setFormData(prev => ({ ...prev, order_number: e.target.value }))}
+                      placeholder="#12345"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <Label>Note en Pépites</Label>
+                  <div className="mt-2">
+                    {renderPepites(formData.rating, true, (rating) => setFormData(prev => ({ ...prev, rating })))}
+                  </div>
+                </div>
+
+                <div>
+                  <Label htmlFor="message">Votre message (max 500 caractères)</Label>
+                  <Textarea
+                    id="message"
+                    value={formData.message}
+                    onChange={(e) => setFormData(prev => ({ ...prev, message: e.target.value.slice(0, 500) }))}
+                    placeholder="Partagez votre expérience..."
+                    rows={5}
+                    required
+                  />
+                  <p className="text-sm text-gray-500 mt-1">{formData.message.length}/500 caractères</p>
+                </div>
+
+                <div>
+                  <Label htmlFor="photo">Votre photo (optionnel)</Label>
+                  <div className="mt-2">
+                    {formData.customer_photo_url ? (
+                      <div className="relative w-40 h-40 rounded-lg overflow-hidden">
+                        <Image src={formData.customer_photo_url} alt="Preview" fill className="object-cover" />
+                        <button
+                          type="button"
+                          onClick={() => setFormData(prev => ({ ...prev, customer_photo_url: '' }))}
+                          className="absolute top-2 right-2 bg-red-500 text-white rounded-full p-1"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center">
+                        <Upload className="h-12 w-12 mx-auto mb-4 text-gray-400" />
+                        <Label htmlFor="photo-upload" className="cursor-pointer text-[#C6A15B] hover:underline">
+                          {uploading ? 'Upload en cours...' : 'Cliquez pour ajouter une photo'}
+                        </Label>
+                        <Input
+                          id="photo-upload"
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={handlePhotoUpload}
+                          disabled={uploading}
+                        />
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-2">
+                  <Checkbox
+                    id="gdpr"
+                    checked={formData.gdpr_consent}
+                    onCheckedChange={(checked) => setFormData(prev => ({ ...prev, gdpr_consent: checked as boolean }))}
+                  />
+                  <Label htmlFor="gdpr" className="text-sm cursor-pointer">
+                    J&apos;accepte que mon message et ma photo soient publiés sur le Livre d&apos;Or de la boutique.
+                  </Label>
+                </div>
+
+                <Button type="submit" disabled={submitting} className="w-full" size="lg">
+                  {submitting ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Envoi en cours...
+                    </>
+                  ) : (
+                    <>
+                      <Gem className="mr-2 h-5 w-5" />
+                      Publier mon mot doux
+                    </>
+                  )}
+                </Button>
+
+                <p className="text-sm text-gray-500 text-center">
+                  Pour garantir l&apos;authenticité du Livre d&apos;Or, votre message sera publié après une vérification
+                  anti-spam de notre équipe. Merci de votre patience !
+                </p>
+              </form>
+            </CardContent>
+          </Card>
+        )}
+
+        <div className="space-y-6">
+          <h2 className="text-3xl font-bold">Nos Mots Doux</h2>
+
+          {loading ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="h-8 w-8 animate-spin text-[#C6A15B]" />
+            </div>
+          ) : entries.length === 0 ? (
+            <Card>
+              <CardContent className="py-12 text-center text-gray-500">
+                Soyez la première à signer le Livre d&apos;Or !
               </CardContent>
             </Card>
-          ))}
+          ) : (
+            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {entries.map((entry) => (
+                <GuestbookCard key={entry.id} entry={entry} />
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function GuestbookCard({ entry }: { entry: any }) {
+  const { hasHearted, heartsCount, toggleHeart, loading } = useHearts(entry.id)
+  const { user } = useAuth()
+
+  return (
+    <Card className="overflow-hidden hover:shadow-lg transition-shadow">
+      {entry.customer_photo_url && (
+        <div className="relative h-64 w-full">
+          <Image
+            src={entry.customer_photo_url}
+            alt={entry.customer_name}
+            fill
+            className="object-cover"
+          />
         </div>
       )}
+      <CardContent className="p-6">
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <h3 className="font-bold text-lg">{entry.customer_name}</h3>
+            <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+              <CheckCircle2 className="h-3 w-3 mr-1" />
+              Achat Vérifié
+            </Badge>
+            {entry.is_ambassador && (
+              <Crown className="h-5 w-5 text-[#C6A15B] fill-[#C6A15B]" />
+            )}
+          </div>
+        </div>
 
-      <GeneralReviewForm />
-    </div>
-  );
+        <div className="flex gap-1 mb-3">
+          {[1, 2, 3, 4, 5].map((pepite) => (
+            <Gem
+              key={pepite}
+              className={`h-4 w-4 ${
+                pepite <= entry.rating ? 'fill-[#C6A15B] text-[#C6A15B]' : 'text-gray-300'
+              }`}
+            />
+          ))}
+        </div>
+
+        <p className="text-gray-700 text-sm mb-4 line-clamp-4">{entry.message}</p>
+
+        {entry.admin_response && (
+          <div className="bg-[#C6A15B]/5 rounded-lg p-3 mb-4 border-l-4 border-[#C6A15B]">
+            <p className="text-xs font-semibold text-[#C6A15B] mb-1">Réponse de Morgane</p>
+            <p className="text-sm text-gray-700">{entry.admin_response}</p>
+          </div>
+        )}
+
+        <div className="flex items-center justify-between pt-4 border-t">
+          <span className="text-xs text-gray-500">
+            {new Date(entry.created_at).toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })}
+          </span>
+          {user && (
+            <button
+              onClick={toggleHeart}
+              disabled={loading}
+              className="flex items-center gap-2 hover:scale-110 transition-transform"
+            >
+              <Heart
+                className={`h-5 w-5 ${
+                  hasHearted ? 'fill-pink-500 text-pink-500' : 'text-gray-400'
+                }`}
+              />
+              <span className="text-sm font-medium">{heartsCount}</span>
+            </button>
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  )
 }

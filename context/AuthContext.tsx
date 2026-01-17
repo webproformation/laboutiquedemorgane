@@ -1,11 +1,11 @@
-"use client";
+'use client';
 
-import { createContext, useContext, useEffect, useState } from 'react';
+import { createContext, useContext, useEffect, useState, useRef } from 'react';
 import { User, AuthError } from '@supabase/supabase-js';
-import { supabase } from '@/lib/supabase-client';
-import { clearSupabaseAuth, isAuthError } from '@/lib/auth-cleanup';
+import { supabase } from '@/lib/supabase';
+import { toast } from 'sonner';
 
-interface Profile {
+export interface Profile {
   id: string;
   email: string;
   first_name: string;
@@ -13,23 +13,39 @@ interface Profile {
   phone: string;
   avatar_url: string;
   birth_date: string | null;
-  wordpress_user_id: number | null;
+  user_size: number | null;
+  wallet_balance: number;
+  loyalty_points: number;
+  loyalty_euros: number;
+  current_tier: number;
+  tier_multiplier: number;
+  is_admin: boolean;
   blocked: boolean;
   blocked_reason: string | null;
   blocked_at: string | null;
   cancelled_orders_count: number;
+  created_at: string;
+  updated_at: string;
 }
 
 interface AuthContextType {
   user: User | null;
   profile: Profile | null;
   loading: boolean;
-  signUp: (email: string, password: string, firstName: string, lastName: string, birthDate?: string | null, referralCode?: string) => Promise<{ error: AuthError | null }>;
+  signUp: (
+    email: string,
+    password: string,
+    firstName: string,
+    lastName: string,
+    phone?: string,
+    birthDate?: string | null
+  ) => Promise<{ error: AuthError | null }>;
   signIn: (email: string, password: string) => Promise<{ error: AuthError | null }>;
   signOut: () => Promise<void>;
   updateProfile: (data: Partial<Profile>) => Promise<{ error: any }>;
   resetPassword: (email: string) => Promise<{ error: AuthError | null }>;
   updatePassword: (newPassword: string) => Promise<{ error: AuthError | null }>;
+  refreshProfile: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -38,296 +54,228 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
+  const loadingProfileRef = useRef(false);
+  const initializedRef = useRef(false);
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const { data: { session }, error } = await supabase.auth.getSession();
+  const checkDailyLogin = async (userId: string) => {
+    const today = new Date().toISOString().split('T')[0];
+    const lastLoginKey = `daily_login_${userId}`;
+    const lastLogin = localStorage.getItem(lastLoginKey);
 
-        if (error) {
-          console.error('Session error:', error);
+    if (lastLogin === today) {
+      return;
+    }
 
-          if (isAuthError(error)) {
-            console.log('Auth error detected, clearing localStorage');
-            clearSupabaseAuth();
+    try {
+      const { data, error } = await supabase.rpc('add_loyalty_gain', {
+        p_user_id: userId,
+        p_type: 'daily_login',
+        p_base_amount: 0.10,
+        p_description: 'Connexion quotidienne'
+      });
+
+      if (error) throw error;
+
+      if (data) {
+        const result = typeof data === 'string' ? JSON.parse(data) : data;
+        const multiplierText = result.multiplier > 1 ? ` (x${result.multiplier})` : '';
+
+        toast.success(result.message + multiplierText, {
+          position: 'bottom-right',
+          duration: 5000,
+        });
+
+        localStorage.setItem(lastLoginKey, today);
+      }
+    } catch (error) {
+      console.error('Error checking daily login:', error);
+    }
+  };
+
+  const loadProfile = async (userId: string, force = false) => {
+    if (loadingProfileRef.current && !force) {
+      return;
+    }
+
+    loadingProfileRef.current = true;
+    try {
+      const { data: profileData, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .maybeSingle();
+
+      if (error) throw error;
+
+      if (profileData) {
+        setProfile(profileData);
+
+        if (profileData.blocked) {
+          let message = 'Votre compte a été suspendu.';
+          if (profileData.blocked_reason) {
+            message += ` Raison: ${profileData.blocked_reason}`;
           }
-
-          await supabase.auth.signOut();
-          setUser(null);
-          setProfile(null);
-          setLoading(false);
+          message += ' Contactez le service client.';
+          toast.error(message);
+          await signOut();
           return;
         }
 
-        if (session?.user) {
-          setUser(session.user);
-          await loadProfile(session.user.id);
-        } else {
-          setUser(null);
-          setProfile(null);
-        }
-      } catch (error) {
-        console.error('Error getting session:', error);
-        setUser(null);
-        setProfile(null);
-      } finally {
-        setLoading(false);
+        await checkDailyLogin(userId);
       }
-    })();
+    } catch (error) {
+      console.error('Error loading profile:', error);
+    } finally {
+      loadingProfileRef.current = false;
+    }
+  };
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      (async () => {
-        if (event === 'TOKEN_REFRESHED') {
-          console.log('Token refreshed successfully');
-        } else if (event === 'SIGNED_OUT') {
-          console.log('User signed out');
-          setUser(null);
-          setProfile(null);
-        } else if (event === 'USER_UPDATED') {
-          if (session?.user) {
-            setUser(session.user);
-            await loadProfile(session.user.id);
-          }
-        }
+  useEffect(() => {
+    const initAuth = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      setUser(session?.user ?? null);
+
+      if (session?.user) {
+        await loadProfile(session.user.id);
+      }
+
+      initializedRef.current = true;
+      setLoading(false);
+    };
+
+    initAuth();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (event, session) => {
+        if (!initializedRef.current) return;
+
+        setUser(session?.user ?? null);
 
         if (session?.user) {
-          setUser(session.user);
-          await loadProfile(session.user.id);
+          if (event === 'SIGNED_IN' || event === 'USER_UPDATED') {
+            loadProfile(session.user.id);
+          }
         } else {
-          setUser(null);
           setProfile(null);
         }
-      })();
-    });
+      }
+    );
 
     return () => subscription.unsubscribe();
   }, []);
 
-  const loadProfile = async (userId: string) => {
-    const { data } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', userId)
-      .maybeSingle();
-
-    if (data) {
-      setProfile(data);
-    }
-  };
-
-  const claimPendingPrize = async (userId: string) => {
-    const sessionId = localStorage.getItem('scratch_game_session_id');
-    const pendingPrize = localStorage.getItem('pending_prize');
-
-    if (!sessionId || !pendingPrize) return;
-
+  const signUp = async (
+    email: string,
+    password: string,
+    firstName: string,
+    lastName: string,
+    phone?: string,
+    birthDate?: string | null
+  ): Promise<{ error: AuthError | null }> => {
     try {
-      const { prize } = JSON.parse(pendingPrize);
-
-      const { data: pendingPrizeData } = await supabase
-        .from('pending_prizes')
-        .select('*')
-        .eq('session_id', sessionId)
-        .eq('claimed', false)
-        .maybeSingle();
-
-      if (pendingPrizeData && pendingPrizeData.result === 'win' && pendingPrizeData.prize_type_id) {
-        const uniqueCode = `${prize.code}-${userId.substring(0, 8)}-${Date.now()}`;
-
-        await supabase
-          .from('user_coupons')
-          .insert({
-            user_id: userId,
-            coupon_type_id: pendingPrizeData.prize_type_id,
-            code: uniqueCode,
-            source: 'scratch_game',
-            valid_until: prize.valid_until || '2026-02-01 23:59:59+00',
-          });
-
-        await supabase
-          .from('pending_prizes')
-          .update({
-            claimed: true,
-            claimed_by: userId,
-            claimed_at: new Date().toISOString(),
-          })
-          .eq('id', pendingPrizeData.id);
-
-        localStorage.removeItem('pending_prize');
+      if (!email || !password || !firstName || !lastName) {
+        return { error: { message: 'Tous les champs obligatoires doivent être remplis' } as AuthError };
       }
-    } catch (error) {
-      console.error('Error claiming pending prize:', error);
-    }
-  };
 
-  const signUp = async (email: string, password: string, firstName: string, lastName: string, birthDate?: string | null, referralCode?: string) => {
-    try {
-      // Step 1: Create Supabase auth user
-      const { data, error } = await supabase.auth.signUp({
+      if (password.length < 8) {
+        return { error: { message: 'Le mot de passe doit contenir au moins 8 caractères' } as AuthError };
+      }
+
+      const fullName = `${firstName.trim()} ${lastName.trim()}`;
+
+      const { data: authData, error: authError } = await supabase.auth.signUp({
         email,
         password,
         options: {
           data: {
-            first_name: firstName,
-            last_name: lastName,
+            full_name: fullName,
+            first_name: firstName.trim(),
+            last_name: lastName.trim(),
+            phone: phone || '',
             birth_date: birthDate || null,
           },
         },
       });
 
-      if (error) {
-        return { error };
-      }
+      if (authError) return { error: authError };
+      if (!authData.user) return { error: { message: 'Erreur lors de la création du compte' } as AuthError };
 
-      if (!data.user) {
-        return { error: { message: 'User creation failed' } as AuthError };
-      }
-
-      // Step 2: Set user in context immediately
-      setUser(data.user);
-
-      // Step 3: Wait a moment for auth to settle
       await new Promise(resolve => setTimeout(resolve, 1000));
 
-      // Step 4: Explicitly create user profile using our robust function
-      try {
-        const { data: profileResult, error: profileError } = await supabase.rpc(
-          'create_user_profile_manually',
-          {
-            p_user_id: data.user.id,
-            p_email: email,
-            p_first_name: firstName,
-            p_last_name: lastName,
-            p_birth_date: birthDate || null,
-            p_wordpress_user_id: null,
-          }
-        );
+      await loadProfile(authData.user.id);
 
-        if (profileError) {
-          console.error('Error creating profile:', profileError);
-        } else if (profileResult && !profileResult.success) {
-          console.error('Profile creation failed:', profileResult.error);
-        } else {
-          // Load the newly created profile into context
-          await loadProfile(data.user.id);
-        }
-      } catch (profileErr) {
-        console.error('Exception creating profile:', profileErr);
-      }
-
-      // Step 5: Create WordPress user (non-blocking)
-      let wordpressUserId = null;
-      try {
-        const wpUserResponse = await fetch('/api/wordpress/create-user', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            email: email,
-            firstName: firstName,
-            lastName: lastName,
-            password: password,
-          }),
-        });
-
-        const wpUserResult = await wpUserResponse.json();
-
-        if (wpUserResult.success && wpUserResult.userId) {
-          wordpressUserId = wpUserResult.userId;
-
-          // Update profile with WordPress user ID
-          await supabase.from('profiles').update({
-            wordpress_user_id: wordpressUserId,
-          }).eq('id', data.user.id);
-
-          // Reload profile to get the updated wordpress_user_id
-          await loadProfile(data.user.id);
-        }
-      } catch (wpError) {
-        console.error('Error creating WordPress user:', wpError);
-      }
-
-      // Step 6: Sync with WooCommerce (non-blocking)
-      try {
-        await fetch('/api/woocommerce/sync-customer', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            email: email,
-            first_name: firstName,
-            last_name: lastName,
-          }),
-        });
-      } catch (syncError) {
-        console.error('Error syncing with WooCommerce:', syncError);
-      }
-
-      // Step 7: Process pending prize
-      await claimPendingPrize(data.user.id);
-
-      // Step 8: Process referral code
-      if (referralCode && referralCode.trim()) {
-        try {
-          await supabase.rpc('process_referral', {
-            p_referral_code: referralCode.trim(),
-            p_referred_id: data.user.id
-          });
-        } catch (referralError) {
-          console.error('Error processing referral:', referralError);
-        }
-      }
+      toast.success('Bienvenue ! 5€ ont été crédités sur votre cagnotte.', {
+        position: 'bottom-right',
+        duration: 5000,
+      });
 
       return { error: null };
-    } catch (err) {
-      console.error('Signup error:', err);
-      return { error: { message: 'An unexpected error occurred' } as AuthError };
+    } catch (error) {
+      console.error('Signup error:', error);
+      return { error: error as AuthError };
     }
   };
 
-  const signIn = async (email: string, password: string) => {
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
+  const signIn = async (email: string, password: string): Promise<{ error: AuthError | null }> => {
+    try {
+      console.log('[AuthContext] Appel signInWithPassword...');
+      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
 
-    if (!error && data.user) {
-      await claimPendingPrize(data.user.id);
+      if (authError) {
+        console.error('[AuthContext] Erreur Supabase Auth:', {
+          message: authError.message,
+          status: (authError as any).status,
+          code: (authError as any).code
+        });
+        return { error: authError };
+      }
 
-      const { data: userProfile } = await supabase
+      if (!authData.user) {
+        console.error('[AuthContext] Pas de user retourné');
+        return { error: { message: 'Erreur lors de la connexion' } as AuthError };
+      }
+
+      console.log('[AuthContext] Authentification réussie, ID:', authData.user.id);
+
+      const { data: profileData, error: profileError } = await supabase
         .from('profiles')
-        .select('first_name, last_name, phone')
-        .eq('id', data.user.id)
+        .select('*')
+        .eq('id', authData.user.id)
         .maybeSingle();
 
-      if (userProfile?.phone && userProfile.phone.trim() !== '') {
-        try {
-          const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-          const { data: { session } } = await supabase.auth.getSession();
-
-          if (session?.access_token) {
-            await fetch(`${supabaseUrl}/functions/v1/send-login-sms`, {
-              method: 'POST',
-              headers: {
-                'Authorization': `Bearer ${session.access_token}`,
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({
-                phoneNumber: userProfile.phone,
-                firstName: userProfile.first_name || 'Client',
-                lastName: userProfile.last_name || '',
-              }),
-            });
-          }
-        } catch (smsError) {
-          console.error('Erreur lors de l\'envoi du SMS de connexion:', smsError);
-        }
+      if (profileError) {
+        console.error('Error loading profile:', profileError);
       }
-    }
 
-    return { error };
+      if (profileData) {
+        setProfile(profileData);
+
+        if (profileData.blocked) {
+          let message = 'Votre compte a été suspendu.';
+          if (profileData.blocked_reason) {
+            message += ` Raison: ${profileData.blocked_reason}`;
+          }
+          message += ' Contactez le service client.';
+          toast.error(message);
+          await signOut();
+          return { error: { message } as AuthError };
+        }
+      } else {
+        await loadProfile(authData.user.id);
+      }
+
+      toast.success('Bienvenue !', {
+        position: 'bottom-right',
+      });
+
+      return { error: null };
+    } catch (error) {
+      console.error('Signin error:', error);
+      return { error: error as AuthError };
+    }
   };
 
   const signOut = async () => {
@@ -336,58 +284,96 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setProfile(null);
   };
 
-  const updateProfile = async (data: Partial<Profile>) => {
+  const updateProfile = async (data: Partial<Profile>): Promise<{ error: any }> => {
     if (!user) return { error: new Error('No user logged in') };
 
-    const { error } = await supabase
-      .from('profiles')
-      .update({ ...data, updated_at: new Date().toISOString() })
-      .eq('id', user.id);
+    try {
+      // Ne garder que les champs modifiables par l'utilisateur
+      const allowedFields: (keyof Profile)[] = [
+        'first_name',
+        'last_name',
+        'phone',
+        'avatar_url',
+        'birth_date'
+      ];
 
-    if (!error) {
+      const updateData: any = {};
+
+      // Filtrer pour ne garder que les champs autorisés
+      allowedFields.forEach(field => {
+        if (field in data) {
+          updateData[field] = data[field];
+        }
+      });
+
+      console.log('📦 PAYLOAD ENVOYÉ À SUPABASE:', JSON.stringify(updateData, null, 2));
+
+      const { error } = await supabase
+        .from('profiles')
+        .update(updateData)
+        .eq('id', user.id);
+
+      if (error) {
+        console.error('❌ ERREUR SUPABASE:', error);
+        return { error };
+      }
+
       await loadProfile(user.id);
 
-      if (profile?.wordpress_user_id) {
-        try {
-          await fetch('/api/wordpress/update-user', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              wordpressUserId: profile.wordpress_user_id,
-              firstName: data.first_name,
-              lastName: data.last_name,
-              phone: data.phone,
-            }),
-          });
-        } catch (wpError) {
-          console.error('Error updating WordPress user:', wpError);
-        }
-      }
+      return { error: null };
+    } catch (error) {
+      console.error('Update profile error:', error);
+      return { error };
     }
-
-    return { error };
   };
 
-  const resetPassword = async (email: string) => {
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/auth/reset-password`,
-    });
+  const resetPassword = async (email: string): Promise<{ error: AuthError | null }> => {
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/auth/reset-password`,
+      });
 
-    return { error };
+      return { error };
+    } catch (error) {
+      console.error('Reset password error:', error);
+      return { error: error as AuthError };
+    }
   };
 
-  const updatePassword = async (newPassword: string) => {
-    const { error } = await supabase.auth.updateUser({
-      password: newPassword,
-    });
+  const updatePassword = async (newPassword: string): Promise<{ error: AuthError | null }> => {
+    try {
+      const { error } = await supabase.auth.updateUser({
+        password: newPassword,
+      });
 
-    return { error };
+      return { error };
+    } catch (error) {
+      console.error('Update password error:', error);
+      return { error: error as AuthError };
+    }
+  };
+
+  const refreshProfile = async () => {
+    if (user) {
+      await loadProfile(user.id, true);
+    }
   };
 
   return (
-    <AuthContext.Provider value={{ user, profile, loading, signUp, signIn, signOut, updateProfile, resetPassword, updatePassword }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        profile,
+        loading,
+        signUp,
+        signIn,
+        signOut,
+        updateProfile,
+        resetPassword,
+        updatePassword,
+        refreshProfile,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );

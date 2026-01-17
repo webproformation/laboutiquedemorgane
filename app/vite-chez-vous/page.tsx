@@ -1,112 +1,145 @@
-import { Metadata } from 'next';
-import { Package, Clock, Gift } from 'lucide-react';
-
-export const metadata: Metadata = {
-  title: "Livraison Rapide - La Boutique de Morgane",
-  description: "Votre colis, préparé avec amour",
-};
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Truck, Package, Clock, Gift, MapPin } from 'lucide-react';
+import PageHeader from '@/components/PageHeader';
 
 export default function ViteChezVousPage() {
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gradient-to-b from-white to-[#F2F2E8]">
       <div className="container mx-auto px-4 py-12">
-        <div className="max-w-4xl mx-auto">
-          <div className="text-center mb-12">
-            <img
-              src="https://wp.laboutiquedemorgane.com/wp-content/uploads/2025/12/La-boutique-de-Morgane-Vite-chez-vous.png"
-              alt="Vite chez vous"
-              className="w-20 h-20 mx-auto mb-6 object-contain"
-            />
-            <h1 className="text-4xl font-bold text-gray-900 mb-4">
-              Votre colis, préparé avec amour
-            </h1>
-          </div>
+        <div className="max-w-4xl mx-auto space-y-8">
+          <PageHeader
+            icon={Truck}
+            title="Vite chez Vous"
+            description="Chez nous, chaque commande est traitée avec soin. Découvrez nos modes de livraison et nos délais pour recevoir vos pépites rapidement."
+          />
 
-          <div className="bg-white rounded-lg shadow-sm p-8 md:p-12 space-y-8">
-            <div>
-              <p className="text-lg text-gray-700 leading-relaxed">
-                Chez Morgane, l'expérience commence dès l'ouverture du paquet. On ne se contente pas d'expédier des vêtements : on t'envoie un cadeau que tu te fais à toi-même.
-              </p>
-            </div>
+          <div className="space-y-6">
+            <h2 className="text-2xl font-bold text-gray-900">Nos modes de livraison</h2>
 
-            <div>
-              <div className="flex items-center gap-3 mb-6">
-                <Package className="w-8 h-8 text-[#C6A15B]" />
-                <h2 className="text-2xl font-semibold text-gray-900">
-                  Nos modes de livraison
-                </h2>
-              </div>
-              <p className="text-gray-700 mb-6">
-                Nous avons négocié pour vous les meilleurs tarifs pour une livraison fiable et suivie.
-              </p>
-              <div className="space-y-6">
-                <div className="border-l-4 border-[#C6A15B] pl-6 py-4 bg-[#C6A15B]/5">
-                  <h3 className="text-xl font-semibold text-gray-900 mb-2">
-                    Chronopost Shop to Shop (3,90€)
-                  </h3>
-                  <p className="text-gray-700">
-                    La solution ultra-rapide et économique ! Votre colis arrive en 1 à 2 jours ouvrés dans le point relais de votre choix.
+            <div className="grid md:grid-cols-3 gap-6">
+              <Card className="border-[#C6A15B] border-2">
+                <CardHeader>
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <Truck className="h-5 w-5 text-[#C6A15B]" />
+                    Chronopost Shop to Shop
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="text-2xl font-bold text-[#C6A15B]">3,90€</div>
+                  <p className="text-sm text-gray-700">
+                    <strong>Ultra-rapide et économique</strong>
                   </p>
-                </div>
+                  <div className="flex items-center gap-2 text-sm text-gray-600">
+                    <Clock className="h-4 w-4" />
+                    <span>1 à 2 jours ouvrés</span>
+                  </div>
+                </CardContent>
+              </Card>
 
-                <div className="border-l-4 border-gray-300 pl-6 py-4 bg-gray-50">
-                  <h3 className="text-xl font-semibold text-gray-900 mb-2">
-                    Points Relais (Mondial Relay & GLS - 5,90€)
-                  </h3>
-                  <p className="text-gray-700">
-                    La solution écologique. Votre colis vous attend près de chez vous ou de votre bureau. Idéal si vous n'êtes pas souvent à la maison !
-                    <strong className="block mt-1">Mondial Relay gratuit dès 80€ d'achat.</strong>
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <MapPin className="h-5 w-5 text-[#C6A15B]" />
+                    Points Relais
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="text-2xl font-bold text-gray-700">5,90€</div>
+                  <p className="text-sm text-gray-700">
+                    Mondial Relay & GLS<br/>
+                    <strong className="text-green-600">Mondial Relay gratuit dès 80€</strong>
                   </p>
-                </div>
+                  <div className="flex items-center gap-2 text-sm text-gray-600">
+                    <Clock className="h-4 w-4" />
+                    <span>3 à 5 jours ouvrés</span>
+                  </div>
+                  <p className="text-xs text-gray-600 italic">Solution écologique</p>
+                </CardContent>
+              </Card>
 
-                <div className="border-l-4 border-gray-300 pl-6 py-4 bg-gray-50">
-                  <h3 className="text-xl font-semibold text-gray-900 mb-2">
-                    Livraison à Domicile (GLS 7,90€ / Colissimo 8,90€)
-                  </h3>
-                  <p className="text-gray-700">
-                    Pour celles qui préfèrent le confort de recevoir leur shopping directement dans leur boîte aux lettres ou remis en main propre.
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <Package className="h-5 w-5 text-[#C6A15B]" />
+                    Livraison à Domicile
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div>
+                    <div className="text-xl font-bold text-gray-700">GLS : 7,90€</div>
+                    <div className="text-xl font-bold text-gray-700">Colissimo : 8,90€</div>
+                  </div>
+                  <p className="text-sm text-gray-700">
+                    <strong>Le confort de recevoir directement chez vous</strong>
                   </p>
-                </div>
-              </div>
-            </div>
-
-            <div>
-              <div className="flex items-center gap-3 mb-6">
-                <Clock className="w-8 h-8 text-[#C6A15B]" />
-                <h2 className="text-2xl font-semibold text-gray-900">
-                  Délais d'expédition
-                </h2>
-              </div>
-              <div className="grid md:grid-cols-2 gap-6">
-                <div className="bg-[#C6A15B]/5 rounded-lg p-6">
-                  <h3 className="font-semibold text-gray-900 mb-2">Préparation</h3>
-                  <p className="text-gray-700">
-                    Toute commande passée avant 12h est généralement préparée le jour même ou le lendemain.
-                  </p>
-                </div>
-                <div className="bg-[#C6A15B]/5 rounded-lg p-6">
-                  <h3 className="font-semibold text-gray-900 mb-2">Réception</h3>
-                  <p className="text-gray-700">
-                    Comptez 1 à 5 jours ouvrés pour recevoir vos pépites.
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <div>
-              <div className="flex items-center gap-3 mb-6">
-                <Gift className="w-8 h-8 text-[#C6A15B]" />
-                <h2 className="text-2xl font-semibold text-gray-900">
-                  L'emballage signé Morgane
-                </h2>
-              </div>
-              <div className="bg-gradient-to-br from-[#C6A15B]/10 to-[#C6A15B]/5 rounded-lg p-8 text-center">
-                <p className="text-lg text-gray-700 leading-relaxed">
-                  Chaque commande est emballée avec soin dans du papier de soie, parfumée délicatement et accompagnée d'un petit mot. Parce que vous méritez cette attention.
-                </p>
-              </div>
+                  <div className="flex items-center gap-2 text-sm text-gray-600">
+                    <Clock className="h-4 w-4" />
+                    <span>2 à 4 jours ouvrés</span>
+                  </div>
+                </CardContent>
+              </Card>
             </div>
           </div>
+
+          <div className="space-y-6">
+            <h2 className="text-2xl font-bold text-gray-900">Délais d'expédition</h2>
+
+            <div className="grid md:grid-cols-2 gap-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Package className="h-6 w-6 text-[#C6A15B]" />
+                    Préparation de votre commande
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-gray-700">
+                    Toute commande passée avant <strong className="text-[#C6A15B]">12h</strong> est préparée
+                    le jour même ou le lendemain maximum (hors week-ends et jours fériés).
+                  </p>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Truck className="h-6 w-6 text-[#C6A15B]" />
+                    Réception de votre colis
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-gray-700">
+                    Selon le mode de livraison choisi, comptez entre <strong>1 à 5 jours ouvrés</strong> pour
+                    recevoir votre commande après expédition.
+                  </p>
+                </CardContent>
+              </Card>
+            </div>
+          </div>
+
+          <Card className="bg-gradient-to-br from-[#D4AF37] to-[#b8933d] text-white">
+            <CardContent className="p-8 text-center space-y-4">
+              <Gift className="h-12 w-12 mx-auto mb-4" />
+              <h3 className="text-2xl font-bold">L'emballage signé Morgane</h3>
+              <p className="text-lg leading-relaxed">
+                Chaque commande est emballée avec soin dans du papier de soie, parfumée délicatement
+                et accompagnée d'un petit mot.
+              </p>
+              <p className="text-lg italic">
+                Parce que vous méritez cette attention.
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-blue-50">
+            <CardContent className="p-6">
+              <h3 className="text-lg font-semibold mb-3">📦 Suivi de votre commande</h3>
+              <p className="text-gray-700">
+                Dès l'expédition, vous recevrez un email avec votre numéro de suivi pour suivre votre colis
+                en temps réel jusqu'à sa livraison.
+              </p>
+            </CardContent>
+          </Card>
         </div>
       </div>
     </div>

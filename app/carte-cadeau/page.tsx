@@ -1,281 +1,269 @@
 "use client";
 
-import { useState } from 'react';
-import Image from 'next/image';
-import Link from 'next/link';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { Card, CardContent } from '@/components/ui/card';
-import { Home, ShoppingCart, Heart, Gift } from 'lucide-react';
-import { useCart } from '@/context/CartContext';
-import { toast } from 'sonner';
-import { Slider } from '@/components/ui/slider';
+import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Gift, ShoppingCart, Mail, Calendar } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Slider } from "@/components/ui/slider";
+import { toast } from "sonner";
+import { useCart } from "@/context/CartContext";
 
-export default function CarteCodeauPage() {
+export default function CartesCadeauxPage() {
   const { addToCart } = useCart();
-  const [amount, setAmount] = useState(100);
-  const [fromName, setFromName] = useState('');
-  const [toName, setToName] = useState('');
-  const [message, setMessage] = useState('');
-  const [deliveryMethod, setDeliveryMethod] = useState('my-email');
-  const [recipientEmail, setRecipientEmail] = useState('');
+  const [amount, setAmount] = useState(50);
+  const [fromName, setFromName] = useState("");
+  const [toName, setToName] = useState("");
+  const [message, setMessage] = useState("");
+  const [deliveryMethod, setDeliveryMethod] = useState("my-email");
+  const [recipientEmail, setRecipientEmail] = useState("");
 
   const handleAddToCart = () => {
-    const giftCard = {
-      id: `gift-card-${amount}`,
-      slug: `carte-cadeau-${amount}`,
+    if (deliveryMethod === "recipient-email" && !recipientEmail) {
+      toast.error("Veuillez entrer l'email du destinataire");
+      return;
+    }
+
+    const giftCardProduct = {
+      id: `gift-card-${Date.now()}`,
       name: `Carte Cadeau ${amount}€`,
-      price: `${amount},00€`,
-      image: { sourceUrl: 'https://images.pexels.com/photos/264787/pexels-photo-264787.jpeg' },
-      stockQuantity: 999,
+      slug: 'carte-cadeau',
+      price: amount.toString(),
+      image: { sourceUrl: '/lbdm-logobdc.png' },
+      giftCardData: {
+        amount,
+        fromName,
+        toName,
+        message,
+        deliveryMethod,
+        recipientEmail: deliveryMethod === "recipient-email" ? recipientEmail : null
+      }
     };
 
-    addToCart(giftCard, 1);
-    toast.success(`Carte cadeau de ${amount}€ ajoutée au panier !`);
+    addToCart(giftCardProduct, 1);
   };
 
   return (
-    <div className="bg-gray-50 min-h-screen">
-      <div className="container mx-auto px-4 py-6">
-        <nav className="flex items-center gap-2 text-sm text-gray-600 mb-6">
-          <Link href="/" className="hover:text-[#b8933d] flex items-center gap-1">
-            <Home className="h-4 w-4" />
-            Accueil
-          </Link>
-          <span>/</span>
-          <span className="text-gray-900">Carte Cadeau</span>
-        </nav>
+    <div className="min-h-screen bg-white">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+        <div className="text-center mb-12">
+          <Gift className="h-16 w-16 text-[#b8933d] mx-auto mb-4" />
+          <h1 className="text-4xl md:text-5xl font-bold mb-4">Carte Cadeau</h1>
+          <p className="text-lg text-gray-600 max-w-2xl mx-auto">
+            Offrez le plaisir de choisir avec notre carte cadeau personnalisable
+          </p>
+        </div>
 
-        <div className="bg-white rounded-lg overflow-hidden shadow-sm">
-          <div className="grid lg:grid-cols-2 gap-8 p-6 lg:p-10">
-            <div className="space-y-6">
-              <div className="relative aspect-[4/5] overflow-hidden rounded-lg bg-gradient-to-br from-[#b8933d] to-[#8b6f2d]">
-                <div className="absolute inset-0 flex flex-col items-center justify-center text-white p-8">
-                  <Gift className="h-24 w-24 mb-6 opacity-90" />
-                  <div className="text-center">
-                    <p className="text-5xl font-bold mb-2">{amount}€</p>
-                    <p className="text-lg opacity-90">Carte Cadeau</p>
-                  </div>
-                  {fromName && (
-                    <div className="absolute bottom-8 left-8 text-left">
-                      <p className="text-sm opacity-75">De la part de:</p>
-                      <p className="font-semibold">{fromName}</p>
-                    </div>
-                  )}
-                  {toName && (
-                    <div className="absolute top-8 right-8 text-right">
-                      <p className="text-sm opacity-75">Pour:</p>
-                      <p className="font-semibold">{toName}</p>
-                    </div>
-                  )}
-                </div>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 mb-16">
+          <div className="space-y-6">
+            <div className="relative aspect-[4/5] bg-gradient-to-br from-[#b8933d] to-[#8b6f2d] rounded-2xl shadow-2xl p-8 flex flex-col items-center justify-center text-white overflow-hidden">
+              <div className="absolute top-0 left-0 w-full h-full opacity-10">
+                <div className="absolute top-10 right-10 w-32 h-32 border-4 border-white rounded-full" />
+                <div className="absolute bottom-10 left-10 w-24 h-24 border-4 border-white rounded-full" />
               </div>
 
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                <p className="text-sm text-blue-900">
-                  <strong>Valable 1 an</strong> à compter de la date de réception
-                  <br />
-                  Utilisable en une ou plusieurs fois
+              <div className="relative z-10 text-center space-y-6">
+                <Gift className="h-24 w-24 text-white opacity-90 mx-auto" />
+                <p className="text-5xl font-bold">{amount}€</p>
+                <p className="text-lg opacity-90">Carte Cadeau</p>
+                <p className="text-sm opacity-75">La Boutique de Morgane</p>
+              </div>
+
+              {fromName && (
+                <div className="absolute bottom-8 left-8 text-left">
+                  <p className="text-sm opacity-75">De la part de :</p>
+                  <p className="font-semibold text-lg">{fromName}</p>
+                </div>
+              )}
+
+              {toName && (
+                <div className="absolute top-8 right-8 text-right">
+                  <p className="text-sm opacity-75">Pour :</p>
+                  <p className="font-semibold text-lg">{toName}</p>
+                </div>
+              )}
+            </div>
+
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 flex items-start gap-3">
+              <Calendar className="h-5 w-5 text-blue-600 mt-0.5 flex-shrink-0" />
+              <div className="text-sm text-blue-900">
+                <p className="font-semibold mb-1">Validité : 1 an</p>
+                <p>
+                  Valable 1 an à compter de la date de réception. Utilisable en une ou plusieurs
+                  fois sur l'ensemble de la boutique.
                 </p>
               </div>
             </div>
+          </div>
 
-            <div className="space-y-6">
-              <div>
-                <h1 className="text-3xl lg:text-4xl font-bold text-gray-900 mb-2">
-                  Carte Cadeau
-                </h1>
-                <p className="text-lg text-gray-600">
-                  Faites-lui plaisir en lui offrant une carte cadeau !
-                </p>
-              </div>
-
-              <div className="space-y-6 border-t pt-6">
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <Label className="text-base font-semibold">
-                      1. Choisissez le montant
-                    </Label>
-                    <span className="text-2xl font-bold text-[#b8933d]">{amount}€</span>
-                  </div>
-                  <div className="space-y-3">
-                    <Slider
-                      value={[amount]}
-                      onValueChange={(value) => setAmount(value[0])}
-                      min={10}
-                      max={1500}
-                      step={10}
-                      className="w-full"
-                    />
-                    <div className="flex justify-between text-xs text-gray-500">
-                      <span>10€</span>
-                      <span>1500€</span>
-                    </div>
-                  </div>
-                  <div className="flex gap-2">
+          <div className="space-y-8">
+            <Card>
+              <CardHeader>
+                <CardTitle>Personnalisez votre carte cadeau</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="space-y-3">
+                  <Label className="text-base font-semibold">Montant de la carte</Label>
+                  <Slider
+                    value={[amount]}
+                    onValueChange={(value) => setAmount(value[0])}
+                    min={10}
+                    max={1500}
+                    step={10}
+                    className="py-4"
+                  />
+                  <div className="flex items-center gap-4">
                     <Input
                       type="number"
                       value={amount}
-                      onChange={(e) => setAmount(Math.max(10, Math.min(1500, parseInt(e.target.value) || 10)))}
+                      onChange={(e) => {
+                        const val = parseInt(e.target.value);
+                        if (val >= 10 && val <= 1500) {
+                          setAmount(val);
+                        }
+                      }}
                       min={10}
                       max={1500}
-                      className="flex-1"
+                      className="w-32"
                     />
-                    <span className="flex items-center text-gray-600 font-medium">€</span>
+                    <span className="text-2xl font-bold text-[#b8933d]">{amount}€</span>
                   </div>
+                  <p className="text-sm text-gray-600">Montant entre 10€ et 1500€</p>
                 </div>
 
                 <div className="space-y-3">
-                  <Label className="text-base font-semibold">
-                    2. Personnalisez votre carte
-                  </Label>
-                  <div className="space-y-3">
-                    <div>
-                      <Label htmlFor="from">De la part de</Label>
-                      <Input
-                        id="from"
-                        placeholder="Votre nom"
-                        value={fromName}
-                        onChange={(e) => setFromName(e.target.value)}
-                        className="mt-1"
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="to">Pour</Label>
-                      <Input
-                        id="to"
-                        placeholder="Nom du destinataire"
-                        value={toName}
-                        onChange={(e) => setToName(e.target.value)}
-                        className="mt-1"
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="message">Message personnalisé</Label>
-                      <Textarea
-                        id="message"
-                        placeholder="Votre message..."
-                        value={message}
-                        onChange={(e) => setMessage(e.target.value)}
-                        className="mt-1 resize-none"
-                        rows={4}
-                      />
-                    </div>
-                  </div>
+                  <Label htmlFor="fromName">De la part de (optionnel)</Label>
+                  <Input
+                    id="fromName"
+                    type="text"
+                    placeholder="Votre nom"
+                    value={fromName}
+                    onChange={(e) => setFromName(e.target.value)}
+                  />
                 </div>
 
                 <div className="space-y-3">
-                  <Label className="text-base font-semibold">
-                    3. Choisissez le mode d&apos;envoi
-                  </Label>
+                  <Label htmlFor="toName">Pour (optionnel)</Label>
+                  <Input
+                    id="toName"
+                    type="text"
+                    placeholder="Nom du destinataire"
+                    value={toName}
+                    onChange={(e) => setToName(e.target.value)}
+                  />
+                </div>
+
+                <div className="space-y-3">
+                  <Label htmlFor="message">Message personnalisé (optionnel)</Label>
+                  <Textarea
+                    id="message"
+                    placeholder="Ajoutez un message personnel..."
+                    value={message}
+                    onChange={(e) => setMessage(e.target.value)}
+                    rows={4}
+                  />
+                </div>
+
+                <div className="space-y-3">
+                  <Label className="text-base font-semibold">Mode d'envoi</Label>
                   <RadioGroup value={deliveryMethod} onValueChange={setDeliveryMethod}>
-                    <div className="flex items-start space-x-3 p-4 border rounded-lg hover:border-[#b8933d] transition-colors">
-                      <RadioGroupItem value="my-email" id="my-email" className="mt-0.5" />
-                      <Label htmlFor="my-email" className="cursor-pointer flex-1">
-                        <p className="font-medium">À votre adresse mail</p>
-                        <p className="text-sm text-gray-500">
+                    <div className="flex items-start space-x-3 p-4 border-2 rounded-lg hover:border-[#b8933d] transition-colors">
+                      <RadioGroupItem value="my-email" id="my-email" />
+                      <div className="flex-1">
+                        <Label htmlFor="my-email" className="font-semibold cursor-pointer">
+                          À votre adresse mail
+                        </Label>
+                        <p className="text-sm text-gray-500 mt-1">
                           Vous recevrez la carte cadeau puis la remettrez au destinataire
                         </p>
-                      </Label>
+                      </div>
                     </div>
-                    <div className="flex items-start space-x-3 p-4 border rounded-lg hover:border-[#b8933d] transition-colors">
-                      <RadioGroupItem value="recipient-email" id="recipient-email" className="mt-0.5" />
-                      <Label htmlFor="recipient-email" className="cursor-pointer flex-1">
-                        <p className="font-medium">Directement au destinataire</p>
-                        <p className="text-sm text-gray-500">
+
+                    <div className="flex items-start space-x-3 p-4 border-2 rounded-lg hover:border-[#b8933d] transition-colors">
+                      <RadioGroupItem value="recipient-email" id="recipient-email" />
+                      <div className="flex-1">
+                        <Label htmlFor="recipient-email" className="font-semibold cursor-pointer">
+                          Directement au destinataire
+                        </Label>
+                        <p className="text-sm text-gray-500 mt-1">
                           La carte sera envoyée par email au destinataire
                         </p>
-                      </Label>
+                      </div>
                     </div>
                   </RadioGroup>
 
-                  {deliveryMethod === 'recipient-email' && (
-                    <div className="mt-3 pl-4">
-                      <Label htmlFor="recipient-email-input">Email du destinataire</Label>
+                  {deliveryMethod === "recipient-email" && (
+                    <div className="space-y-2 mt-4">
+                      <Label htmlFor="recipientEmail">Email du destinataire</Label>
                       <Input
-                        id="recipient-email-input"
+                        id="recipientEmail"
                         type="email"
                         placeholder="email@exemple.com"
                         value={recipientEmail}
                         onChange={(e) => setRecipientEmail(e.target.value)}
-                        className="mt-1"
                       />
                     </div>
                   )}
                 </div>
 
-                <div className="pt-4 space-y-3">
-                  <Button
-                    onClick={handleAddToCart}
-                    className="w-full bg-[#b8933d] hover:bg-[#a07c2f] text-white h-12 text-lg font-semibold"
-                  >
-                    <ShoppingCart className="mr-2 h-5 w-5" />
-                    Ajouter au panier
-                  </Button>
-                  <Button
-                    variant="outline"
-                    className="w-full border-gray-300 h-12"
-                    onClick={() => toast.info('Ajouté à la wishlist')}
-                  >
-                    <Heart className="mr-2 h-4 w-4" />
-                    Ajouter à la wishlist
-                  </Button>
-                </div>
-              </div>
-            </div>
+                <Button
+                  onClick={handleAddToCart}
+                  className="w-full bg-[#b8933d] hover:bg-[#a07c2f] text-white text-lg py-6"
+                  size="lg"
+                >
+                  <ShoppingCart className="h-5 w-5 mr-2" />
+                  Ajouter au panier
+                </Button>
+              </CardContent>
+            </Card>
           </div>
         </div>
 
-        <div className="mt-8 bg-white rounded-lg p-6 shadow-sm">
-          <h2 className="text-2xl font-bold text-gray-900 mb-4">
-            Comment utiliser votre carte cadeau ?
-          </h2>
-          <div className="grid md:grid-cols-3 gap-6">
-            <Card>
-              <CardContent className="pt-6">
-                <div className="flex flex-col items-center text-center">
-                  <div className="w-12 h-12 bg-[#b8933d] rounded-full flex items-center justify-center text-white font-bold text-xl mb-3">
-                    1
-                  </div>
-                  <h3 className="font-semibold mb-2">Recevez votre carte</h3>
-                  <p className="text-sm text-gray-600">
-                    Vous recevrez votre carte cadeau par email après validation de votre commande
-                  </p>
+        <div className="mb-12">
+          <h2 className="text-3xl font-bold text-center mb-8">Comment ça fonctionne ?</h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <Card className="text-center">
+              <CardContent className="pt-8">
+                <div className="w-12 h-12 bg-[#b8933d] text-white rounded-full flex items-center justify-center text-xl font-bold mx-auto mb-4">
+                  1
                 </div>
+                <h3 className="text-xl font-bold mb-2">Recevez votre carte</h3>
+                <p className="text-gray-600">
+                  Vous recevrez votre carte cadeau par email immédiatement après validation du
+                  paiement
+                </p>
               </CardContent>
             </Card>
-            <Card>
-              <CardContent className="pt-6">
-                <div className="flex flex-col items-center text-center">
-                  <div className="w-12 h-12 bg-[#b8933d] rounded-full flex items-center justify-center text-white font-bold text-xl mb-3">
-                    2
-                  </div>
-                  <h3 className="font-semibold mb-2">Offrez-la</h3>
-                  <p className="text-sm text-gray-600">
-                    Imprimez-la ou envoyez-la directement par email au destinataire
-                  </p>
+
+            <Card className="text-center">
+              <CardContent className="pt-8">
+                <div className="w-12 h-12 bg-[#b8933d] text-white rounded-full flex items-center justify-center text-xl font-bold mx-auto mb-4">
+                  2
                 </div>
+                <h3 className="text-xl font-bold mb-2">Offrez-la</h3>
+                <p className="text-gray-600">
+                  Imprimez-la ou transférez-la directement par email au destinataire
+                </p>
               </CardContent>
             </Card>
-            <Card>
-              <CardContent className="pt-6">
-                <div className="flex flex-col items-center text-center">
-                  <div className="w-12 h-12 bg-[#b8933d] rounded-full flex items-center justify-center text-white font-bold text-xl mb-3">
-                    3
-                  </div>
-                  <h3 className="font-semibold mb-2">Utilisez-la</h3>
-                  <p className="text-sm text-gray-600">
-                    Valable 1 an, utilisable en ligne en une ou plusieurs fois
-                  </p>
+
+            <Card className="text-center">
+              <CardContent className="pt-8">
+                <div className="w-12 h-12 bg-[#b8933d] text-white rounded-full flex items-center justify-center text-xl font-bold mx-auto mb-4">
+                  3
                 </div>
+                <h3 className="text-xl font-bold mb-2">Utilisez-la</h3>
+                <p className="text-gray-600">
+                  Valable 1 an, utilisable en ligne en une ou plusieurs fois
+                </p>
               </CardContent>
             </Card>
           </div>
         </div>
-      </div>
+      </main>
     </div>
   );
 }

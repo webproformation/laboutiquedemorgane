@@ -1,438 +1,326 @@
-"use client";
+'use client'
 
-import { useEffect, useState } from "react";
-import { createClient } from "@/lib/supabase-client";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
-import { Badge } from "@/components/ui/badge";
-import { toast } from "sonner";
-import {
-  Gem,
-  Heart,
-  Check,
-  X,
-  MessageCircle,
-  Image as ImageIcon,
-  Calendar,
-  Facebook,
-  ShieldCheck,
-} from "lucide-react";
-import OptimizedImage from "@/components/OptimizedImage";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Label } from "@/components/ui/label";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-
-interface GuestbookEntry {
-  id: string;
-  user_id: string | null;
-  order_id: string | null;
-  order_number: string;
-  customer_name: string;
-  rating: number;
-  message: string;
-  photo_url: string | null;
-  status: string;
-  admin_response: string | null;
-  likes_count: number;
-  reward_amount: number;
-  reward_applied: boolean;
-  rgpd_consent: boolean;
-  created_at: string;
-  approved_at: string | null;
-  source: 'site' | 'facebook';
-}
+import { useGuestbook } from '@/hooks/use-guestbook'
+import { supabase } from '@/lib/supabase'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import { Textarea } from '@/components/ui/textarea'
+import { Label } from '@/components/ui/label'
+import { CheckCircle2, XCircle, Crown, Gem, Heart, Loader2 } from 'lucide-react'
+import { toast } from 'sonner'
+import Image from 'next/image'
+import { useState } from 'react'
 
 export default function AdminGuestbookPage() {
-  const [entries, setEntries] = useState<GuestbookEntry[]>([]);
-  const [filteredEntries, setFilteredEntries] = useState<GuestbookEntry[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [selectedEntry, setSelectedEntry] = useState<GuestbookEntry | null>(null);
-  const [adminResponse, setAdminResponse] = useState("");
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState("pending");
-  const [sourceFilter, setSourceFilter] = useState<'all' | 'site' | 'facebook'>('all');
+  const { entries, loading, refetch } = useGuestbook(100, 'all')
+  const [responses, setResponses] = useState<Record<string, string>>({})
 
-  useEffect(() => {
-    fetchEntries();
-  }, []);
+  const handleApprove = async (id: string) => {
+    const { error } = await supabase
+      .from('guestbook_entries')
+      .update({ status: 'approved' })
+      .eq('id', id)
 
-  useEffect(() => {
-    filterEntries();
-  }, [entries, activeTab, sourceFilter]);
-
-  const fetchEntries = async () => {
-    try {
-      const supabase = createClient();
-      const { data, error } = await supabase
-        .from("guestbook_entries")
-        .select("*")
-        .order("created_at", { ascending: false });
-
-      if (error) throw error;
-      setEntries(data || []);
-    } catch (error) {
-      console.error("Error fetching entries:", error);
-      toast.error("Erreur lors du chargement des avis");
-    } finally {
-      setIsLoading(false);
+    if (error) {
+      toast.error('Erreur lors de l\'approbation')
+      console.error(error)
+      return
     }
-  };
 
-  const filterEntries = () => {
-    let filtered = entries;
-    if (activeTab !== "all") {
-      filtered = filtered.filter((entry) => entry.status === activeTab);
+    toast.success('Avis approuvé')
+    refetch()
+  }
+
+  const handleReject = async (id: string) => {
+    const { error } = await supabase
+      .from('guestbook_entries')
+      .update({ status: 'rejected' })
+      .eq('id', id)
+
+    if (error) {
+      toast.error('Erreur lors du rejet')
+      console.error(error)
+      return
     }
-    if (sourceFilter !== "all") {
-      filtered = filtered.filter((entry) => entry.source === sourceFilter);
+
+    toast.success('Avis rejeté')
+    refetch()
+  }
+
+  const handleResponse = async (id: string) => {
+    const response = responses[id]
+    if (!response || !response.trim()) {
+      toast.error('Veuillez saisir une réponse')
+      return
     }
-    setFilteredEntries(filtered);
-  };
 
-  const handleApprove = async (entry: GuestbookEntry) => {
-    try {
-      const supabase = createClient();
-      const { error } = await supabase
-        .from("guestbook_entries")
-        .update({
-          status: "approved",
-          approved_at: new Date().toISOString(),
-        })
-        .eq("id", entry.id);
+    const { error } = await supabase
+      .from('guestbook_entries')
+      .update({ admin_response: response })
+      .eq('id', id)
 
-      if (error) throw error;
-
-      // Ne créditer des points de fidélité que pour les avis du site (avec user_id)
-      if (entry.source === 'site' && entry.user_id && !entry.reward_applied) {
-        const { error: loyaltyError } = await supabase.from("loyalty_transactions").insert({
-          user_id: entry.user_id,
-          amount: entry.reward_amount,
-          type: "review_reward",
-          description: `Récompense pour l'avis sur la commande ${entry.order_number}`,
-          reference_id: entry.id,
-        });
-
-        if (!loyaltyError) {
-          await supabase
-            .from("guestbook_entries")
-            .update({ reward_applied: true })
-            .eq("id", entry.id);
-        }
-      }
-
-      const message = entry.source === 'facebook'
-        ? "Avis Facebook approuvé !"
-        : "Avis approuvé et récompense créditée !";
-      toast.success(message);
-      fetchEntries();
-    } catch (error) {
-      console.error("Error approving entry:", error);
-      toast.error("Erreur lors de l'approbation");
+    if (error) {
+      toast.error('Erreur lors de l\'ajout de la réponse')
+      console.error(error)
+      return
     }
-  };
 
-  const handleReject = async (entryId: string) => {
-    try {
-      const supabase = createClient();
-      const { error } = await supabase
-        .from("guestbook_entries")
-        .update({ status: "rejected" })
-        .eq("id", entryId);
+    toast.success('Réponse ajoutée')
+    setResponses(prev => ({ ...prev, [id]: '' }))
+    refetch()
+  }
 
-      if (error) throw error;
+  const electAmbassador = async (entry: any) => {
+    const today = new Date()
+    const dayOfWeek = today.getDay()
+    const daysToMonday = dayOfWeek === 0 ? 1 : 8 - dayOfWeek
+    const nextMonday = new Date(today)
+    nextMonday.setDate(today.getDate() + daysToMonday)
+    nextMonday.setHours(0, 0, 0, 0)
 
-      toast.success("Avis refusé");
-      fetchEntries();
-    } catch (error) {
-      console.error("Error rejecting entry:", error);
-      toast.error("Erreur lors du refus");
+    const weekEnd = new Date(nextMonday)
+    weekEnd.setDate(nextMonday.getDate() + 6)
+    weekEnd.setHours(23, 59, 59, 999)
+
+    const { error: ambassadorError } = await supabase
+      .from('ambassador_weekly')
+      .insert({
+        user_id: entry.user_id,
+        entry_id: entry.id,
+        week_start: nextMonday.toISOString().split('T')[0],
+        week_end: weekEnd.toISOString().split('T')[0],
+        hearts_count: entry.hearts_count,
+        reward_amount: 5.00,
+        reward_credited: false
+      })
+
+    if (ambassadorError) {
+      toast.error('Erreur lors de l\'élection')
+      console.error(ambassadorError)
+      return
     }
-  };
 
-  const handleAddResponse = (entry: GuestbookEntry) => {
-    setSelectedEntry(entry);
-    setAdminResponse(entry.admin_response || "");
-    setIsDialogOpen(true);
-  };
+    const { error: updateError } = await supabase
+      .from('guestbook_entries')
+      .update({
+        is_ambassador: true,
+        ambassador_week: nextMonday.toISOString().split('T')[0]
+      })
+      .eq('id', entry.id)
 
-  const saveResponse = async () => {
-    if (!selectedEntry) return;
-
-    try {
-      const supabase = createClient();
-      const { error } = await supabase
-        .from("guestbook_entries")
-        .update({ admin_response: adminResponse.trim() || null })
-        .eq("id", selectedEntry.id);
-
-      if (error) throw error;
-
-      toast.success("Réponse enregistrée !");
-      setIsDialogOpen(false);
-      setSelectedEntry(null);
-      setAdminResponse("");
-      fetchEntries();
-    } catch (error) {
-      console.error("Error saving response:", error);
-      toast.error("Erreur lors de l'enregistrement");
+    if (updateError) {
+      toast.error('Erreur lors de la mise à jour')
+      console.error(updateError)
+      return
     }
-  };
+
+    const { error: walletError } = await supabase.rpc('credit_wallet', {
+      p_user_id: entry.user_id,
+      p_amount: 5.00,
+      p_transaction_type: 'ambassador_reward',
+      p_description: 'Récompense Ambassadrice de la Semaine'
+    })
+
+    if (walletError) {
+      console.error('Wallet credit error:', walletError)
+    }
+
+    toast.success('Ambassadrice élue ! 5€ crédités sur sa cagnotte')
+    refetch()
+  }
 
   const getStatusBadge = (status: string) => {
     switch (status) {
-      case "pending":
-        return <Badge variant="secondary">En attente</Badge>;
-      case "approved":
-        return <Badge className="bg-green-500">Approuvé</Badge>;
-      case "rejected":
-        return <Badge variant="destructive">Refusé</Badge>;
+      case 'approved':
+        return <Badge className="bg-green-500">Approuvé</Badge>
+      case 'rejected':
+        return <Badge variant="destructive">Rejeté</Badge>
       default:
-        return null;
+        return <Badge variant="secondary">En attente</Badge>
     }
-  };
+  }
 
-  const pendingCount = entries.filter((e) => e.status === "pending").length;
-  const approvedCount = entries.filter((e) => e.status === "approved").length;
-  const rejectedCount = entries.filter((e) => e.status === "rejected").length;
-  const facebookCount = entries.filter((e) => e.source === "facebook").length;
-  const siteCount = entries.filter((e) => e.source === "site").length;
-
-  if (isLoading) {
+  if (loading) {
     return (
-      <div className="container mx-auto px-4 py-12">
-        <div className="text-center">Chargement...</div>
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="h-8 w-8 animate-spin text-[#C6A15B]" />
       </div>
-    );
+    )
   }
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold mb-2 flex items-center gap-2">
-          <Gem className="h-8 w-8 text-amber-500" />
-          Modération du Livre d&apos;Or
-        </h1>
-        <p className="text-muted-foreground">
-          Gérez les avis laissés par vos clientes
-        </p>
-      </div>
-
-      <div className="mb-6 flex items-center gap-3">
-        <span className="text-sm font-medium">Source des avis :</span>
-        <div className="flex gap-2">
-          <Button
-            variant={sourceFilter === 'all' ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => setSourceFilter('all')}
-          >
-            Tous ({entries.length})
-          </Button>
-          <Button
-            variant={sourceFilter === 'site' ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => setSourceFilter('site')}
-            className="gap-2"
-          >
-            <ShieldCheck className="h-4 w-4" />
-            Avis Site ({siteCount})
-          </Button>
-          <Button
-            variant={sourceFilter === 'facebook' ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => setSourceFilter('facebook')}
-            className="gap-2"
-            style={sourceFilter === 'facebook' ? { backgroundColor: '#1877f2' } : {}}
-          >
-            <Facebook className="h-4 w-4" />
-            Avis Facebook ({facebookCount})
-          </Button>
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <div>
+          <h1 className="text-3xl font-bold">Gestion Livre d&apos;Or</h1>
+          <p className="text-gray-600 mt-2">
+            {entries.filter(e => e.status === 'pending').length} avis en attente de validation
+          </p>
         </div>
+        <Button onClick={refetch}>
+          Actualiser
+        </Button>
       </div>
 
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList className="grid w-full max-w-2xl grid-cols-4">
-          <TabsTrigger value="pending" className="relative">
-            En attente
-            {pendingCount > 0 && (
-              <Badge className="ml-2 bg-red-500 text-white">{pendingCount}</Badge>
-            )}
-          </TabsTrigger>
-          <TabsTrigger value="approved">
-            Approuvés
-            <Badge className="ml-2" variant="outline">{approvedCount}</Badge>
-          </TabsTrigger>
-          <TabsTrigger value="rejected">
-            Refusés
-            <Badge className="ml-2" variant="outline">{rejectedCount}</Badge>
-          </TabsTrigger>
-          <TabsTrigger value="all">
-            Tous
-            <Badge className="ml-2" variant="outline">{entries.length}</Badge>
-          </TabsTrigger>
-        </TabsList>
-
-        <TabsContent value={activeTab} className="space-y-4">
-          {filteredEntries.length === 0 ? (
-            <Card>
-              <CardContent className="py-12 text-center text-muted-foreground">
-                Aucun avis dans cette catégorie
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="grid gap-4">
-              {filteredEntries.map((entry) => (
-                <Card key={entry.id}>
-                  <CardHeader>
-                    <div className="flex items-start justify-between">
-                      <div className="space-y-1">
-                        <CardTitle className="flex items-center gap-2">
-                          {entry.customer_name}
-                          {getStatusBadge(entry.status)}
-                          {entry.source === 'facebook' ? (
-                            <Badge className="bg-blue-600 hover:bg-blue-700 gap-1">
-                              <Facebook className="h-3 w-3" />
-                              Facebook
-                            </Badge>
-                          ) : (
-                            <Badge variant="outline" className="gap-1">
-                              <ShieldCheck className="h-3 w-3" />
-                              Achat Vérifié
-                            </Badge>
-                          )}
-                        </CardTitle>
-                        <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                          <span className="flex items-center gap-1">
-                            <Calendar className="h-3 w-3" />
-                            {new Date(entry.created_at).toLocaleDateString("fr-FR")}
-                          </span>
-                          <span>Commande #{entry.order_number}</span>
-                          {entry.source === 'site' && (
-                            <span className="flex items-center gap-1">
-                              Récompense: {entry.reward_amount} €
-                              {entry.reward_applied && " (créditée)"}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                      <div className="flex gap-1">
-                        {Array.from({ length: entry.rating }).map((_, i) => (
-                          <Gem key={i} className="h-5 w-5 fill-amber-500 text-amber-500" />
-                        ))}
-                      </div>
+      <div className="grid gap-6">
+        {entries.map((entry) => (
+          <Card key={entry.id}>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle className="flex items-center gap-3">
+                  <span>{entry.customer_name}</span>
+                  {entry.is_ambassador && (
+                    <Crown className="h-5 w-5 text-[#C6A15B] fill-[#C6A15B]" />
+                  )}
+                  {getStatusBadge(entry.status)}
+                </CardTitle>
+                <div className="text-sm text-gray-500">
+                  {new Date(entry.created_at).toLocaleDateString('fr-FR')}
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="grid md:grid-cols-3 gap-6">
+                {entry.customer_photo_url && (
+                  <div className="md:col-span-1">
+                    <div className="relative w-full aspect-square rounded-lg overflow-hidden">
+                      <Image
+                        src={entry.customer_photo_url}
+                        alt={entry.customer_name}
+                        fill
+                        className="object-cover"
+                      />
                     </div>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="flex gap-4">
-                      {entry.photo_url && (
-                        <div className="relative w-48 h-48 flex-shrink-0 rounded-lg overflow-hidden border">
-                          <OptimizedImage
-                            src={entry.photo_url}
-                            alt={`Photo de ${entry.customer_name}`}
-                            fill
-                            className="object-cover"
-                          />
-                        </div>
-                      )}
-                      <div className="flex-1 space-y-3">
-                        <div>
-                          <p className="text-sm font-medium mb-1">Message :</p>
-                          <p className="text-sm leading-relaxed">{entry.message}</p>
-                        </div>
+                  </div>
+                )}
 
-                        {entry.admin_response && (
-                          <div className="bg-amber-50 dark:bg-amber-950/30 p-3 rounded-lg border-l-4 border-amber-500">
-                            <p className="text-xs font-semibold mb-1 text-amber-800 dark:text-amber-400">
-                              Votre réponse :
-                            </p>
-                            <p className="text-sm">{entry.admin_response}</p>
-                          </div>
-                        )}
-
-                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                          <Heart className="h-4 w-4" />
-                          {entry.likes_count} j&apos;aime
+                <div className={entry.customer_photo_url ? "md:col-span-2" : "md:col-span-3"}>
+                  <div className="space-y-4">
+                    <div>
+                      <p className="text-sm text-gray-600">Commande : {entry.order_number}</p>
+                      <div className="flex items-center gap-2 mt-2">
+                        <div className="flex gap-1">
+                          {[1, 2, 3, 4, 5].map((p) => (
+                            <Gem
+                              key={p}
+                              className={`h-4 w-4 ${
+                                p <= entry.rating ? 'fill-[#C6A15B] text-[#C6A15B]' : 'text-gray-300'
+                              }`}
+                            />
+                          ))}
                         </div>
+                        <span className="text-sm text-gray-600">
+                          ({entry.rating}/5)
+                        </span>
                       </div>
                     </div>
 
-                    <div className="flex gap-2 pt-4 border-t">
-                      {entry.status === "pending" && (
+                    <div>
+                      <p className="text-gray-700 whitespace-pre-wrap">{entry.message}</p>
+                    </div>
+
+                    <div className="flex items-center gap-4 text-sm">
+                      <div className="flex items-center gap-2">
+                        <Heart className="h-4 w-4 text-pink-500" />
+                        <span className="font-medium">{entry.hearts_count} cœurs</span>
+                      </div>
+                      <div className="text-gray-500">
+                        User ID: {entry.user_id.substring(0, 8)}...
+                      </div>
+                    </div>
+
+                    {entry.admin_response && (
+                      <div className="bg-[#C6A15B]/10 rounded-lg p-4 border-l-4 border-[#C6A15B]">
+                        <p className="text-sm font-semibold text-[#C6A15B] mb-2">
+                          Votre réponse :
+                        </p>
+                        <p className="text-sm text-gray-700">{entry.admin_response}</p>
+                      </div>
+                    )}
+
+                    {entry.status === 'approved' && !entry.admin_response && (
+                      <div className="space-y-2">
+                        <Label htmlFor={`response-${entry.id}`}>
+                          Ajouter une réponse (optionnel)
+                        </Label>
+                        <Textarea
+                          id={`response-${entry.id}`}
+                          value={responses[entry.id] || ''}
+                          onChange={(e) => setResponses(prev => ({
+                            ...prev,
+                            [entry.id]: e.target.value
+                          }))}
+                          placeholder="Merci pour votre retour..."
+                          rows={3}
+                        />
+                        <Button
+                          size="sm"
+                          onClick={() => handleResponse(entry.id)}
+                        >
+                          Ajouter la réponse
+                        </Button>
+                      </div>
+                    )}
+
+                    <div className="flex flex-wrap gap-2 pt-4 border-t">
+                      {entry.status === 'pending' && (
                         <>
                           <Button
-                            variant="default"
                             size="sm"
-                            onClick={() => handleApprove(entry)}
-                            className="gap-2"
+                            onClick={() => handleApprove(entry.id)}
+                            className="bg-green-600 hover:bg-green-700"
                           >
-                            <Check className="h-4 w-4" />
+                            <CheckCircle2 className="h-4 w-4 mr-2" />
                             Approuver
                           </Button>
                           <Button
-                            variant="destructive"
                             size="sm"
+                            variant="destructive"
                             onClick={() => handleReject(entry.id)}
-                            className="gap-2"
                           >
-                            <X className="h-4 w-4" />
-                            Refuser
+                            <XCircle className="h-4 w-4 mr-2" />
+                            Rejeter
                           </Button>
                         </>
                       )}
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleAddResponse(entry)}
-                        className="gap-2"
-                      >
-                        <MessageCircle className="h-4 w-4" />
-                        {entry.admin_response ? "Modifier" : "Ajouter"} une réponse
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          )}
-        </TabsContent>
-      </Tabs>
 
-      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Réponse de Morgane</DialogTitle>
-            <DialogDescription>
-              Ajoutez une réponse personnelle à cet avis
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div>
-              <Label htmlFor="admin-response">Votre message</Label>
-              <Textarea
-                id="admin-response"
-                value={adminResponse}
-                onChange={(e) => setAdminResponse(e.target.value)}
-                placeholder="Merci pour votre adorable message ! 💗"
-                rows={4}
-                className="mt-2"
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
-              Annuler
-            </Button>
-            <Button onClick={saveResponse}>Enregistrer</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+                      {entry.status === 'approved' && !entry.is_ambassador && entry.hearts_count >= 5 && (
+                        <Button
+                          size="sm"
+                          onClick={() => electAmbassador(entry)}
+                          className="bg-[#C6A15B] hover:bg-[#B59149]"
+                        >
+                          <Crown className="h-4 w-4 mr-2" />
+                          Élire Ambassadrice
+                        </Button>
+                      )}
+
+                      {entry.status === 'rejected' && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleApprove(entry.id)}
+                        >
+                          Réactiver
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+
+        {entries.length === 0 && (
+          <Card>
+            <CardContent className="py-12 text-center text-gray-500">
+              Aucun avis dans le Livre d&apos;Or pour le moment
+            </CardContent>
+          </Card>
+        )}
+      </div>
     </div>
-  );
+  )
 }

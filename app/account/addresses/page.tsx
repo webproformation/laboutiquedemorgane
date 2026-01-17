@@ -1,27 +1,29 @@
-"use client";
+'use client';
 
-import { useEffect, useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
-import { supabase } from '@/lib/supabase-client';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Loader2, MapPin, Plus, Edit, Trash2, Home } from 'lucide-react';
+import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
-import { MapPin, Plus, Trash2, Edit, Loader2, Check } from 'lucide-react';
 
 interface Address {
   id: string;
-  label: string;
+  address_type: string;
   first_name: string;
   last_name: string;
+  street: string;
   address_line1: string;
-  address_line2: string;
+  address_line2?: string;
   city: string;
   postal_code: string;
   country: string;
   phone: string;
+  label?: string;
   is_default: boolean;
 }
 
@@ -31,18 +33,19 @@ export default function AddressesPage() {
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingAddress, setEditingAddress] = useState<Address | null>(null);
-  const [formData, setFormData] = useState({
-    label: '',
-    first_name: '',
-    last_name: '',
-    address_line1: '',
-    address_line2: '',
-    city: '',
-    postal_code: '',
-    country: 'France',
-    phone: '',
-    is_default: false,
-  });
+
+  const [addressType, setAddressType] = useState('shipping');
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
+  const [street, setStreet] = useState('');
+  const [addressLine2, setAddressLine2] = useState('');
+  const [city, setCity] = useState('');
+  const [postalCode, setPostalCode] = useState('');
+  const [country, setCountry] = useState('France');
+  const [phone, setPhone] = useState('');
+  const [label, setLabel] = useState('');
+  const [isDefault, setIsDefault] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -51,373 +54,403 @@ export default function AddressesPage() {
   }, [user]);
 
   const loadAddresses = async () => {
-    if (!user) return;
+    try {
+      const { data, error } = await supabase
+        .from('addresses')
+        .select('*')
+        .eq('user_id', user?.id)
+        .order('is_default', { ascending: false })
+        .order('created_at', { ascending: false });
 
-    const { data } = await supabase
-      .from('addresses')
-      .select('*')
-      .eq('user_id', user.id)
-      .order('is_default', { ascending: false })
-      .order('created_at', { ascending: false });
+      if (error) throw error;
 
-    if (data) {
-      setAddresses(data);
+      setAddresses(data || []);
+    } catch (error) {
+      console.error('Error loading addresses:', error);
+    } finally {
+      setLoading(false);
     }
-
-    setLoading(false);
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const resetForm = () => {
+    setAddressType('shipping');
+    setFirstName('');
+    setLastName('');
+    setStreet('');
+    setAddressLine2('');
+    setCity('');
+    setPostalCode('');
+    setCountry('France');
+    setPhone('');
+    setLabel('');
+    setIsDefault(false);
+    setEditingAddress(null);
+  };
+
+  const handleOpenDialog = (address?: Address) => {
+    if (address) {
+      setEditingAddress(address);
+      setAddressType(address.address_type);
+      setFirstName(address.first_name || '');
+      setLastName(address.last_name || '');
+      setStreet(address.street || address.address_line1 || '');
+      setAddressLine2(address.address_line2 || '');
+      setCity(address.city);
+      setPostalCode(address.postal_code);
+      setCountry(address.country);
+      setPhone(address.phone || '');
+      setLabel(address.label || '');
+      setIsDefault(address.is_default);
+    } else {
+      resetForm();
+    }
+    setDialogOpen(true);
+  };
+
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (formData.is_default) {
-      await supabase
-        .from('addresses')
-        .update({ is_default: false })
-        .eq('user_id', user!.id);
+    if (!firstName || !lastName || !street || !city || !postalCode || !phone) {
+      toast.error('Veuillez remplir tous les champs obligatoires');
+      return;
     }
 
-    if (editingAddress) {
-      const { error } = await supabase
-        .from('addresses')
-        .update({ ...formData, updated_at: new Date().toISOString() })
-        .eq('id', editingAddress.id);
+    setSaving(true);
 
-      if (error) {
-        toast.error('Erreur lors de la mise à jour de l\'adresse');
-      } else {
-        toast.success('Adresse mise à jour avec succès !');
-        setDialogOpen(false);
-        loadAddresses();
-        resetForm();
-      }
-    } else {
-      const { error } = await supabase
-        .from('addresses')
-        .insert({ ...formData, user_id: user!.id });
+    try {
+      const addressData = {
+        address_type: addressType,
+        first_name: firstName,
+        last_name: lastName,
+        street,
+        address_line1: street,
+        address_line2: addressLine2 || null,
+        city,
+        postal_code: postalCode,
+        country,
+        phone,
+        label: label || `${firstName} ${lastName}`,
+        is_default: isDefault,
+      };
 
-      if (error) {
-        toast.error('Erreur lors de l\'ajout de l\'adresse');
+      if (editingAddress) {
+        const { error } = await supabase
+          .from('addresses')
+          .update(addressData)
+          .eq('id', editingAddress.id);
+
+        if (error) throw error;
+
+        toast.success('Adresse mise à jour', {
+          position: 'bottom-right'
+        });
       } else {
-        toast.success('Adresse ajoutée avec succès !');
-        setDialogOpen(false);
-        loadAddresses();
-        resetForm();
+        const newAddressId = `addr_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+
+        const { error } = await supabase.from('addresses').insert({
+          id: newAddressId,
+          user_id: user?.id,
+          ...addressData,
+        });
+
+        if (error) throw error;
+
+        toast.success('Adresse ajoutée', {
+          position: 'bottom-right'
+        });
       }
+
+      await loadAddresses();
+      setDialogOpen(false);
+      resetForm();
+      loadAddresses();
+    } catch (error) {
+      console.error('Error saving address:', error);
+      toast.error('Erreur lors de l\'enregistrement');
+    } finally {
+      setSaving(false);
     }
   };
 
   const handleDelete = async (id: string) => {
-    const { error } = await supabase
-      .from('addresses')
-      .delete()
-      .eq('id', id);
-
-    if (error) {
-      toast.error('Erreur lors de la suppression de l\'adresse');
-    } else {
-      toast.success('Adresse supprimée avec succès !');
-      loadAddresses();
+    if (!confirm('Êtes-vous sûr de vouloir supprimer cette adresse?')) {
+      return;
     }
-  };
 
-  const handleSetDefault = async (id: string) => {
-    await supabase
-      .from('addresses')
-      .update({ is_default: false })
-      .eq('user_id', user!.id);
+    try {
+      const { error } = await supabase.from('addresses').delete().eq('id', id);
 
-    const { error } = await supabase
-      .from('addresses')
-      .update({ is_default: true })
-      .eq('id', id);
+      if (error) throw error;
 
-    if (error) {
-      toast.error('Erreur lors de la mise à jour de l\'adresse');
-    } else {
-      toast.success('Adresse par défaut mise à jour !');
+      toast.success('Adresse supprimée', {
+        position: 'bottom-right'
+      });
       loadAddresses();
+    } catch (error) {
+      console.error('Error deleting address:', error);
+      toast.error('Erreur lors de la suppression');
     }
-  };
-
-  const openEditDialog = (address: Address) => {
-    setEditingAddress(address);
-    setFormData(address);
-    setDialogOpen(true);
-  };
-
-  const resetForm = () => {
-    setEditingAddress(null);
-    setFormData({
-      label: '',
-      first_name: '',
-      last_name: '',
-      address_line1: '',
-      address_line2: '',
-      city: '',
-      postal_code: '',
-      country: 'France',
-      phone: '',
-      is_default: false,
-    });
   };
 
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
-        <Loader2 className="h-8 w-8 animate-spin text-[#b8933d]" />
+        <Loader2 className="h-8 w-8 animate-spin text-[#D4AF37]" />
       </div>
     );
   }
 
   return (
     <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="p-3 bg-[#b8933d] rounded-full">
-                <MapPin className="h-6 w-6 text-white" />
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-3xl font-bold mb-2">Mes adresses</h2>
+          <p className="text-gray-600">Gérez vos adresses de livraison et de facturation</p>
+        </div>
+        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+          <DialogTrigger asChild>
+            <Button
+              onClick={() => handleOpenDialog()}
+              className="bg-gradient-to-r from-[#b8933d] to-[#d4af37] hover:from-[#9a7a2f] hover:to-[#b8933d] text-white gap-2"
+            >
+              <Plus className="h-4 w-4" />
+              Ajouter une adresse
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="max-h-[85vh] overflow-hidden flex flex-col">
+            <DialogHeader className="flex-shrink-0">
+              <DialogTitle>
+                {editingAddress ? 'Modifier l\'adresse' : 'Nouvelle adresse'}
+              </DialogTitle>
+              <DialogDescription>
+                Remplissez les informations de votre adresse
+              </DialogDescription>
+            </DialogHeader>
+            <form id="address-form" onSubmit={handleSave} className="space-y-4 overflow-y-auto flex-1 pr-2">
+              <div className="space-y-2">
+                <Label htmlFor="label">
+                  Nom de l'adresse
+                </Label>
+                <Input
+                  id="label"
+                  value={label}
+                  onChange={(e) => setLabel(e.target.value)}
+                  placeholder="Domicile, Travail, etc."
+                />
               </div>
-              <div>
-                <CardTitle>Mes adresses</CardTitle>
-                <p className="text-sm text-gray-600 mt-1">
-                  {addresses.length} adresse{addresses.length > 1 ? 's' : ''}
-                </p>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="firstName">
+                    Prénom <span className="text-red-500">*</span>
+                  </Label>
+                  <Input
+                    id="firstName"
+                    value={firstName}
+                    onChange={(e) => setFirstName(e.target.value)}
+                    placeholder="Jean"
+                    required
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="lastName">
+                    Nom <span className="text-red-500">*</span>
+                  </Label>
+                  <Input
+                    id="lastName"
+                    value={lastName}
+                    onChange={(e) => setLastName(e.target.value)}
+                    placeholder="Dupont"
+                    required
+                  />
+                </div>
               </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="street">
+                  Adresse <span className="text-red-500">*</span>
+                </Label>
+                <Input
+                  id="street"
+                  value={street}
+                  onChange={(e) => setStreet(e.target.value)}
+                  placeholder="27, rue de l'abbé Doudermy"
+                  required
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="addressLine2">
+                  Complément d'adresse
+                </Label>
+                <Input
+                  id="addressLine2"
+                  value={addressLine2}
+                  onChange={(e) => setAddressLine2(e.target.value)}
+                  placeholder="Appartement, bâtiment, étage..."
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="postalCode">
+                    Code postal <span className="text-red-500">*</span>
+                  </Label>
+                  <Input
+                    id="postalCode"
+                    value={postalCode}
+                    onChange={(e) => setPostalCode(e.target.value)}
+                    placeholder="75001"
+                    required
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="city">
+                    Ville <span className="text-red-500">*</span>
+                  </Label>
+                  <Input
+                    id="city"
+                    value={city}
+                    onChange={(e) => setCity(e.target.value)}
+                    placeholder="Paris"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="country">
+                  Pays <span className="text-red-500">*</span>
+                </Label>
+                <Input
+                  id="country"
+                  value={country}
+                  onChange={(e) => setCountry(e.target.value)}
+                  placeholder="France"
+                  required
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="phone">
+                  Téléphone <span className="text-red-500">*</span>
+                </Label>
+                <Input
+                  id="phone"
+                  type="tel"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  placeholder="06 12 34 56 78"
+                  required
+                />
+              </div>
+
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="isDefault"
+                  checked={isDefault}
+                  onChange={(e) => setIsDefault(e.target.checked)}
+                  className="rounded border-gray-300"
+                />
+                <Label htmlFor="isDefault" className="cursor-pointer">
+                  Définir comme adresse par défaut
+                </Label>
+              </div>
+
+            </form>
+            <div className="flex gap-2 mt-4 flex-shrink-0 border-t pt-4">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setDialogOpen(false)}
+                className="flex-1"
+              >
+                Annuler
+              </Button>
+              <Button
+                type="submit"
+                form="address-form"
+                disabled={saving}
+                className="flex-1 bg-gradient-to-r from-[#b8933d] to-[#d4af37] hover:from-[#9a7a2f] hover:to-[#b8933d] text-white"
+                onClick={(e) => {
+                  e.preventDefault();
+                  const form = document.getElementById('address-form') as HTMLFormElement;
+                  if (form) form.requestSubmit();
+                }}
+              >
+                {saving ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Enregistrement...
+                  </>
+                ) : (
+                  'Enregistrer'
+                )}
+              </Button>
             </div>
-            <Dialog open={dialogOpen} onOpenChange={(open) => {
-              setDialogOpen(open);
-              if (!open) resetForm();
-            }}>
-              <DialogTrigger asChild>
-                <Button className="bg-[#b8933d] hover:bg-[#a07c2f]">
-                  <Plus className="h-4 w-4 mr-2" />
-                  Ajouter une adresse
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-                <DialogHeader>
-                  <DialogTitle>
-                    {editingAddress ? 'Modifier l\'adresse' : 'Nouvelle adresse'}
-                  </DialogTitle>
-                  <DialogDescription>
-                    Remplissez les informations de votre adresse
-                  </DialogDescription>
-                </DialogHeader>
-                <form onSubmit={handleSubmit}>
-                  <div className="space-y-4 py-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="label">Libellé</Label>
-                      <Input
-                        id="label"
-                        placeholder="Domicile, Travail..."
-                        value={formData.label}
-                        onChange={(e) =>
-                          setFormData({ ...formData, label: e.target.value })
-                        }
-                      />
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="first_name">Prénom</Label>
-                        <Input
-                          id="first_name"
-                          value={formData.first_name}
-                          onChange={(e) =>
-                            setFormData({ ...formData, first_name: e.target.value })
-                          }
-                          required
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="last_name">Nom</Label>
-                        <Input
-                          id="last_name"
-                          value={formData.last_name}
-                          onChange={(e) =>
-                            setFormData({ ...formData, last_name: e.target.value })
-                          }
-                          required
-                        />
-                      </div>
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="address_line1">Adresse</Label>
-                      <Input
-                        id="address_line1"
-                        value={formData.address_line1}
-                        onChange={(e) =>
-                          setFormData({ ...formData, address_line1: e.target.value })
-                        }
-                        required
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="address_line2">Complément d'adresse</Label>
-                      <Input
-                        id="address_line2"
-                        placeholder="Appartement, bâtiment..."
-                        value={formData.address_line2}
-                        onChange={(e) =>
-                          setFormData({ ...formData, address_line2: e.target.value })
-                        }
-                      />
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="postal_code">Code postal</Label>
-                        <Input
-                          id="postal_code"
-                          value={formData.postal_code}
-                          onChange={(e) =>
-                            setFormData({ ...formData, postal_code: e.target.value })
-                          }
-                          required
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="city">Ville</Label>
-                        <Input
-                          id="city"
-                          value={formData.city}
-                          onChange={(e) =>
-                            setFormData({ ...formData, city: e.target.value })
-                          }
-                          required
-                        />
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="country">Pays</Label>
-                        <Input
-                          id="country"
-                          value={formData.country}
-                          onChange={(e) =>
-                            setFormData({ ...formData, country: e.target.value })
-                          }
-                          required
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="phone">Téléphone</Label>
-                        <Input
-                          id="phone"
-                          type="tel"
-                          value={formData.phone}
-                          onChange={(e) =>
-                            setFormData({ ...formData, phone: e.target.value })
-                          }
-                          required
-                        />
-                      </div>
-                    </div>
-
-                    <div className="flex items-center space-x-2">
-                      <input
-                        type="checkbox"
-                        id="is_default"
-                        checked={formData.is_default}
-                        onChange={(e) =>
-                          setFormData({ ...formData, is_default: e.target.checked })
-                        }
-                        className="rounded border-gray-300 text-[#b8933d] focus:ring-[#b8933d]"
-                      />
-                      <Label htmlFor="is_default" className="cursor-pointer">
-                        Définir comme adresse par défaut
-                      </Label>
-                    </div>
-                  </div>
-                  <DialogFooter>
-                    <Button type="submit" className="bg-[#b8933d] hover:bg-[#a07c2f]">
-                      {editingAddress ? 'Enregistrer' : 'Ajouter'}
-                    </Button>
-                  </DialogFooter>
-                </form>
-              </DialogContent>
-            </Dialog>
-          </div>
-        </CardHeader>
-      </Card>
+          </DialogContent>
+        </Dialog>
+      </div>
 
       {addresses.length === 0 ? (
         <Card>
-          <CardContent className="py-12">
-            <div className="text-center">
-              <MapPin className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                Aucune adresse
-              </h3>
-              <p className="text-gray-600">
-                Ajoutez une adresse de livraison
-              </p>
-            </div>
+          <CardContent className="py-12 text-center">
+            <MapPin className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+            <h3 className="text-lg font-semibold mb-2">Aucune adresse</h3>
+            <p className="text-gray-600 mb-6">Ajoutez une adresse pour faciliter vos commandes</p>
           </CardContent>
         </Card>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {addresses.map((address) => (
-            <Card key={address.id} className="relative">
-              {address.is_default && (
-                <div className="absolute top-4 right-4">
-                  <span className="inline-flex items-center gap-1 px-3 py-1 bg-green-100 text-green-800 text-xs font-medium rounded-full">
-                    <Check className="h-3 w-3" />
-                    Par défaut
-                  </span>
-                </div>
-              )}
-              <CardContent className="pt-6">
-                <div className="space-y-3">
-                  {address.label && (
-                    <h3 className="font-semibold text-gray-900">{address.label}</h3>
+            <Card key={address.id} className={address.is_default ? 'border-[#D4AF37] border-2' : ''}>
+              <CardHeader>
+                <div className="flex items-start justify-between">
+                  <div className="flex items-center gap-2">
+                    <Home className="h-5 w-5 text-[#D4AF37]" />
+                    <CardTitle className="text-lg">
+                      {address.label || `${address.first_name} ${address.last_name}`}
+                    </CardTitle>
+                  </div>
+                  {address.is_default && (
+                    <span className="text-xs bg-[#D4AF37] text-white px-2 py-1 rounded">
+                      Par défaut
+                    </span>
                   )}
-                  <div className="text-sm text-gray-600 space-y-1">
-                    <p className="font-medium text-gray-900">
-                      {address.first_name} {address.last_name}
-                    </p>
-                    <p>{address.address_line1}</p>
-                    {address.address_line2 && <p>{address.address_line2}</p>}
-                    <p>
-                      {address.postal_code} {address.city}
-                    </p>
-                    <p>{address.country}</p>
-                    <p>{address.phone}</p>
-                  </div>
-                  <div className="flex items-center gap-2 pt-4">
-                    {!address.is_default && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleSetDefault(address.id)}
-                      >
-                        <Check className="h-4 w-4 mr-1" />
-                        Par défaut
-                      </Button>
-                    )}
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => openEditDialog(address)}
-                    >
-                      <Edit className="h-4 w-4 mr-1" />
-                      Modifier
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleDelete(address.id)}
-                      className="text-[#DF30CF] hover:text-[#c82bb7] hover:bg-pink-50"
-                    >
-                      <Trash2 className="h-4 w-4 mr-1" />
-                      Supprimer
-                    </Button>
-                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-1 mb-4">
+                  <p className="font-medium text-sm">{address.first_name} {address.last_name}</p>
+                  <p className="text-sm">{address.street || address.address_line1}</p>
+                  {address.address_line2 && <p className="text-sm">{address.address_line2}</p>}
+                  <p className="text-sm">
+                    {address.postal_code} {address.city}
+                  </p>
+                  <p className="text-sm">{address.country}</p>
+                  <p className="text-sm text-gray-600">Tél: {address.phone}</p>
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleOpenDialog(address)}
+                    className="flex-1 gap-2"
+                  >
+                    <Edit className="h-4 w-4" />
+                    Modifier
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleDelete(address.id)}
+                    className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
                 </div>
               </CardContent>
             </Card>

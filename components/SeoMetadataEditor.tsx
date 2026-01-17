@@ -1,159 +1,156 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { supabase } from '@/lib/supabase-client';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { supabase } from '@/lib/supabase';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Switch } from '@/components/ui/switch';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Globe, Save, AlertCircle } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import MediaLibrary from '@/components/MediaLibrary';
+import { Save, Loader2, Image as ImageIcon, Wand2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-
-interface SeoMetadata {
-  seo_title: string;
-  meta_description: string;
-  meta_keywords: string;
-  og_title: string;
-  og_description: string;
-  og_image: string;
-  canonical_url: string;
-  robots_meta: string;
-  is_active: boolean;
-}
 
 interface SeoMetadataEditorProps {
-  entityType: 'page' | 'category' | 'post' | 'product_cat';
+  entityType: 'product' | 'category' | 'page';
   entityIdentifier: string;
-  onSave?: (metadata: SeoMetadata) => void;
-  autoSave?: boolean;
+  entityName?: string;
+  entityDescription?: string;
+  entityImageUrl?: string;
+  onGenerateAuto?: () => void;
 }
 
 export default function SeoMetadataEditor({
   entityType,
   entityIdentifier,
-  onSave,
-  autoSave = false,
+  entityName,
+  entityDescription,
+  entityImageUrl,
+  onGenerateAuto,
 }: SeoMetadataEditorProps) {
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [metadata, setMetadata] = useState<SeoMetadata>({
+  const [formData, setFormData] = useState({
     seo_title: '',
     meta_description: '',
-    meta_keywords: '',
+    og_image: '',
     og_title: '',
     og_description: '',
-    og_image: '',
-    canonical_url: '',
-    robots_meta: 'index, follow',
-    is_active: true,
   });
-  const [hasExistingData, setHasExistingData] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [ogImageDialogOpen, setOgImageDialogOpen] = useState(false);
 
   useEffect(() => {
-    if (entityIdentifier) {
-      loadMetadata();
-    }
+    loadSeoData();
   }, [entityType, entityIdentifier]);
 
-  const loadMetadata = async () => {
+  const loadSeoData = async () => {
     try {
-      const { data, error } = await supabase
+      const { data } = await supabase
         .from('seo_metadata')
         .select('*')
         .eq('entity_type', entityType)
         .eq('entity_identifier', entityIdentifier)
         .maybeSingle();
 
-      if (error && error.code !== 'PGRST116') {
-        throw error;
-      }
-
       if (data) {
-        setMetadata({
+        setFormData({
           seo_title: data.seo_title || '',
           meta_description: data.meta_description || '',
-          meta_keywords: data.meta_keywords || '',
+          og_image: data.og_image || '',
           og_title: data.og_title || '',
           og_description: data.og_description || '',
-          og_image: data.og_image || '',
-          canonical_url: data.canonical_url || '',
-          robots_meta: data.robots_meta || 'index, follow',
-          is_active: data.is_active ?? true,
         });
-        setHasExistingData(true);
-      } else {
-        setHasExistingData(false);
       }
     } catch (error) {
-      console.error('Error loading SEO metadata:', error);
+      console.error('Error loading SEO data:', error);
     } finally {
       setLoading(false);
     }
   };
 
   const handleSave = async () => {
-    if (!entityIdentifier) {
-      toast.error('Identifiant de l\'entité manquant');
-      return;
-    }
-
     setSaving(true);
     try {
-      const dataToSave = {
-        entity_type: entityType,
-        entity_identifier: entityIdentifier,
-        ...metadata,
-      };
+      const { error } = await supabase
+        .from('seo_metadata')
+        .upsert({
+          entity_type: entityType,
+          entity_identifier: entityIdentifier,
+          seo_title: formData.seo_title || null,
+          meta_description: formData.meta_description || null,
+          og_image: formData.og_image || null,
+          og_title: formData.og_title || null,
+          og_description: formData.og_description || null,
+          is_active: true,
+          updated_at: new Date().toISOString(),
+        }, {
+          onConflict: 'entity_type,entity_identifier',
+        });
 
-      if (hasExistingData) {
-        const { error } = await supabase
-          .from('seo_metadata')
-          .update(dataToSave)
-          .eq('entity_type', entityType)
-          .eq('entity_identifier', entityIdentifier);
-
-        if (error) throw error;
-      } else {
-        const { error } = await supabase
-          .from('seo_metadata')
-          .insert([dataToSave]);
-
-        if (error) throw error;
-        setHasExistingData(true);
-      }
+      if (error) throw error;
 
       toast.success('Métadonnées SEO enregistrées');
-      if (onSave) {
-        onSave(metadata);
-      }
-    } catch (error: any) {
-      console.error('Error saving SEO metadata:', error);
-      toast.error(error.message || 'Erreur lors de l\'enregistrement');
+    } catch (error) {
+      console.error('Error saving SEO:', error);
+      toast.error('Erreur lors de l\'enregistrement');
     } finally {
       setSaving(false);
     }
   };
 
-  const updateField = (field: keyof SeoMetadata, value: string | boolean) => {
-    setMetadata(prev => ({ ...prev, [field]: value }));
+  const handleGenerateAuto = () => {
+    const truncate = (str: string, length: number) => {
+      return str.length > length ? str.substring(0, length - 3) + '...' : str;
+    };
+
+    if (entityName && !formData.seo_title) {
+      setFormData(prev => ({
+        ...prev,
+        seo_title: truncate(entityName, 60),
+      }));
+    }
+
+    if (entityDescription && !formData.meta_description) {
+      const cleanDescription = entityDescription.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim();
+      setFormData(prev => ({
+        ...prev,
+        meta_description: truncate(cleanDescription, 160),
+      }));
+    }
+
+    if (entityImageUrl && !formData.og_image) {
+      setFormData(prev => ({
+        ...prev,
+        og_image: entityImageUrl,
+      }));
+    }
+
+    if (entityName && !formData.og_title) {
+      setFormData(prev => ({
+        ...prev,
+        og_title: truncate(entityName, 70),
+      }));
+    }
+
+    if (entityDescription && !formData.og_description) {
+      const cleanDescription = entityDescription.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim();
+      setFormData(prev => ({
+        ...prev,
+        og_description: truncate(cleanDescription, 200),
+      }));
+    }
+
+    toast.success('Métadonnées générées automatiquement');
   };
 
   if (loading) {
     return (
       <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Globe className="h-5 w-5" />
-            Optimisation SEO
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-sm text-gray-500">Chargement...</p>
+        <CardContent className="py-12">
+          <div className="flex items-center justify-center">
+            <Loader2 className="w-6 h-6 animate-spin text-[#b8933d]" />
+          </div>
         </CardContent>
       </Card>
     );
@@ -163,191 +160,151 @@ export default function SeoMetadataEditor({
     <Card>
       <CardHeader>
         <div className="flex items-center justify-between">
-          <div>
-            <CardTitle className="flex items-center gap-2">
-              <Globe className="h-5 w-5 text-[#b8933d]" />
-              Optimisation SEO
-            </CardTitle>
-            <CardDescription>
-              Optimisez le référencement de cette {entityType === 'page' ? 'page' : entityType === 'category' ? 'catégorie' : 'actualité'}
-            </CardDescription>
-          </div>
-          {!autoSave && (
+          <CardTitle>Optimisation SEO</CardTitle>
+          {(entityName || entityDescription) && (
             <Button
-              onClick={handleSave}
-              disabled={saving}
-              className="bg-[#b8933d] hover:bg-[#a07c2f]"
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleGenerateAuto}
+              className="gap-2"
             >
-              <Save className="h-4 w-4 mr-2" />
-              {saving ? 'Enregistrement...' : 'Enregistrer SEO'}
+              <Wand2 className="w-4 h-4" />
+              Générer automatiquement
             </Button>
           )}
         </div>
       </CardHeader>
-      <CardContent>
-        {!hasExistingData && (
-          <Alert className="mb-4">
-            <AlertCircle className="h-4 w-4" />
-            <AlertDescription>
-              Aucune métadonnée SEO définie pour cet élément. Remplissez les champs ci-dessous pour améliorer le référencement.
-            </AlertDescription>
-          </Alert>
-        )}
+      <CardContent className="space-y-4">
+        <div className="space-y-2">
+          <Label htmlFor="seo_title">
+            Meta Title <span className="text-gray-500">({formData.seo_title.length}/60)</span>
+          </Label>
+          <Input
+            id="seo_title"
+            value={formData.seo_title}
+            onChange={(e) => setFormData({ ...formData, seo_title: e.target.value })}
+            maxLength={70}
+            placeholder="Titre optimisé pour les moteurs de recherche"
+          />
+          <p className="text-xs text-gray-500">
+            Recommandé: 50-60 caractères. Apparaît dans les résultats de recherche Google.
+          </p>
+        </div>
 
-        <Tabs defaultValue="basic" className="w-full">
-          <TabsList className="grid w-full grid-cols-3">
-            <TabsTrigger value="basic">Basique</TabsTrigger>
-            <TabsTrigger value="opengraph">Open Graph</TabsTrigger>
-            <TabsTrigger value="advanced">Avancé</TabsTrigger>
-          </TabsList>
+        <div className="space-y-2">
+          <Label htmlFor="meta_description">
+            Meta Description <span className="text-gray-500">({formData.meta_description.length}/160)</span>
+          </Label>
+          <Textarea
+            id="meta_description"
+            value={formData.meta_description}
+            onChange={(e) => setFormData({ ...formData, meta_description: e.target.value })}
+            maxLength={200}
+            rows={3}
+            placeholder="Description courte et attrayante pour les résultats de recherche"
+          />
+          <p className="text-xs text-gray-500">
+            Recommandé: 150-160 caractères. Apparaît sous le titre dans les résultats de recherche.
+          </p>
+        </div>
 
-          <TabsContent value="basic" className="space-y-4 mt-4">
-            <div>
-              <Label htmlFor="seo_title">Titre SEO</Label>
-              <Input
-                id="seo_title"
-                value={metadata.seo_title}
-                onChange={(e) => updateField('seo_title', e.target.value)}
-                placeholder="Titre optimisé pour les moteurs de recherche (60-70 caractères)"
-              />
-              <p className="text-xs text-gray-500 mt-1">
-                {metadata.seo_title.length} / 70 caractères
-                {metadata.seo_title.length > 70 && (
-                  <span className="text-orange-600 ml-2">Titre trop long</span>
-                )}
-              </p>
-            </div>
-
-            <div>
-              <Label htmlFor="meta_description">Meta Description</Label>
-              <Textarea
-                id="meta_description"
-                value={metadata.meta_description}
-                onChange={(e) => updateField('meta_description', e.target.value)}
-                placeholder="Description pour les résultats de recherche (150-160 caractères)"
-                rows={3}
-              />
-              <p className="text-xs text-gray-500 mt-1">
-                {metadata.meta_description.length} / 160 caractères
-                {metadata.meta_description.length > 160 && (
-                  <span className="text-orange-600 ml-2">Description trop longue</span>
-                )}
-              </p>
-            </div>
-
-            <div>
-              <Label htmlFor="meta_keywords">Mots-clés</Label>
-              <Input
-                id="meta_keywords"
-                value={metadata.meta_keywords}
-                onChange={(e) => updateField('meta_keywords', e.target.value)}
-                placeholder="mot-clé 1, mot-clé 2, mot-clé 3"
-              />
-              <p className="text-xs text-gray-500 mt-1">
-                Séparez les mots-clés par des virgules
-              </p>
-            </div>
-          </TabsContent>
-
-          <TabsContent value="opengraph" className="space-y-4 mt-4">
-            <div>
-              <Label htmlFor="og_title">Titre Open Graph</Label>
-              <Input
-                id="og_title"
-                value={metadata.og_title}
-                onChange={(e) => updateField('og_title', e.target.value)}
-                placeholder="Titre pour les partages sur réseaux sociaux"
-              />
-              <p className="text-xs text-gray-500 mt-1">
-                Affiché lors des partages sur Facebook, Twitter, etc.
-              </p>
-            </div>
-
-            <div>
-              <Label htmlFor="og_description">Description Open Graph</Label>
-              <Textarea
-                id="og_description"
-                value={metadata.og_description}
-                onChange={(e) => updateField('og_description', e.target.value)}
-                placeholder="Description pour les partages sur réseaux sociaux"
-                rows={3}
-              />
-            </div>
-
-            <div>
-              <Label htmlFor="og_image">Image Open Graph (URL)</Label>
-              <Input
-                id="og_image"
-                value={metadata.og_image}
-                onChange={(e) => updateField('og_image', e.target.value)}
-                placeholder="https://exemple.com/image.jpg"
-              />
-              <p className="text-xs text-gray-500 mt-1">
-                Dimensions recommandées : 1200x630 pixels
-              </p>
-            </div>
-          </TabsContent>
-
-          <TabsContent value="advanced" className="space-y-4 mt-4">
-            <div>
-              <Label htmlFor="canonical_url">URL Canonique</Label>
-              <Input
-                id="canonical_url"
-                value={metadata.canonical_url}
-                onChange={(e) => updateField('canonical_url', e.target.value)}
-                placeholder="https://laboutiquemorgane.fr/page"
-              />
-              <p className="text-xs text-gray-500 mt-1">
-                URL principale pour éviter le contenu dupliqué
-              </p>
-            </div>
-
-            <div>
-              <Label htmlFor="robots_meta">Directives Robots</Label>
-              <Select
-                value={metadata.robots_meta}
-                onValueChange={(value) => updateField('robots_meta', value)}
-              >
-                <SelectTrigger id="robots_meta">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="index, follow">Index, Follow (Recommandé)</SelectItem>
-                  <SelectItem value="noindex, follow">NoIndex, Follow</SelectItem>
-                  <SelectItem value="index, nofollow">Index, NoFollow</SelectItem>
-                  <SelectItem value="noindex, nofollow">NoIndex, NoFollow</SelectItem>
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-gray-500 mt-1">
-                Contrôle l'indexation par les moteurs de recherche
-              </p>
-            </div>
-
-            <div className="flex items-center space-x-2">
-              <Switch
-                id="is_active"
-                checked={metadata.is_active}
-                onCheckedChange={(checked) => updateField('is_active', checked)}
-              />
-              <Label htmlFor="is_active" className="cursor-pointer">
-                Activer les métadonnées SEO
-              </Label>
-            </div>
-          </TabsContent>
-        </Tabs>
-
-        {autoSave && (
-          <div className="mt-4 pt-4 border-t">
-            <Button
-              onClick={handleSave}
-              disabled={saving}
-              className="bg-[#b8933d] hover:bg-[#a07c2f] w-full"
-            >
-              <Save className="h-4 w-4 mr-2" />
-              {saving ? 'Enregistrement...' : 'Enregistrer les métadonnées SEO'}
-            </Button>
+        <div className="space-y-2">
+          <Label htmlFor="og_image">Image Open Graph</Label>
+          <div className="flex gap-2">
+            <Input
+              id="og_image"
+              value={formData.og_image}
+              onChange={(e) => setFormData({ ...formData, og_image: e.target.value })}
+              placeholder="URL de l'image pour les réseaux sociaux"
+            />
+            <Dialog open={ogImageDialogOpen} onOpenChange={setOgImageDialogOpen}>
+              <DialogTrigger asChild>
+                <Button type="button" variant="outline" className="gap-2 shrink-0">
+                  <ImageIcon className="w-4 h-4" />
+                  Choisir
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-6xl max-h-[90vh] overflow-hidden flex flex-col p-0">
+                <DialogHeader className="p-6 pb-0 shrink-0">
+                  <DialogTitle>Choisir une image Open Graph</DialogTitle>
+                </DialogHeader>
+                <div className="p-6 pt-4 overflow-y-auto flex-1">
+                  <MediaLibrary
+                    bucket="media"
+                    selectedUrl={formData.og_image}
+                    onSelect={(url) => {
+                      setFormData({ ...formData, og_image: url });
+                      setOgImageDialogOpen(false);
+                    }}
+                    onClose={() => setOgImageDialogOpen(false)}
+                  />
+                </div>
+              </DialogContent>
+            </Dialog>
           </div>
-        )}
+          {formData.og_image && (
+            <img
+              src={formData.og_image}
+              alt="Preview OG Image"
+              className="w-full max-w-md h-auto rounded border mt-2"
+            />
+          )}
+          <p className="text-xs text-gray-500">
+            Dimension recommandée: 1200x630px. Utilisée lors du partage sur les réseaux sociaux.
+          </p>
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="og_title">
+            Titre Open Graph <span className="text-gray-500">({formData.og_title.length}/70)</span>
+          </Label>
+          <Input
+            id="og_title"
+            value={formData.og_title}
+            onChange={(e) => setFormData({ ...formData, og_title: e.target.value })}
+            maxLength={90}
+            placeholder="Titre pour les réseaux sociaux (optionnel)"
+          />
+          <p className="text-xs text-gray-500">
+            Si vide, le Meta Title sera utilisé. Affiché lors du partage sur Facebook, LinkedIn, etc.
+          </p>
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="og_description">
+            Description Open Graph <span className="text-gray-500">({formData.og_description.length}/200)</span>
+          </Label>
+          <Textarea
+            id="og_description"
+            value={formData.og_description}
+            onChange={(e) => setFormData({ ...formData, og_description: e.target.value })}
+            maxLength={300}
+            rows={3}
+            placeholder="Description pour les réseaux sociaux (optionnel)"
+          />
+          <p className="text-xs text-gray-500">
+            Si vide, la Meta Description sera utilisée. Affichée lors du partage sur les réseaux sociaux.
+          </p>
+        </div>
+
+        <Button
+          onClick={handleSave}
+          disabled={saving}
+          className="w-full bg-[#b8933d] hover:bg-[#a07c2f] gap-2"
+        >
+          {saving ? (
+            <>
+              <Loader2 className="w-4 h-4 animate-spin" />
+              Enregistrement...
+            </>
+          ) : (
+            <>
+              <Save className="w-4 h-4" />
+              Enregistrer les métadonnées SEO
+            </>
+          )}
+        </Button>
       </CardContent>
     </Card>
   );

@@ -1,383 +1,204 @@
-'use client';
+"use client";
 
-import { useEffect, useState, useRef } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { useState, useEffect, useRef } from 'react';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { MapPin, Loader as Loader2, CircleCheck as CheckCircle2, Clock, Navigation, Search, Package } from 'lucide-react';
-import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { MapPin, Search, Loader2, CheckCircle2, Clock, Navigation, Package } from 'lucide-react';
+import { supabase } from '@/lib/supabase';
+
 interface RelayPoint {
   Id: string;
   Name: string;
   Address1: string;
-  Address2?: string;
-  City: string;
   PostCode: string;
+  City: string;
   Country: string;
   Latitude: number;
   Longitude: number;
   Distance?: number;
-  OpeningHours?: {
-    Monday?: string;
-    Tuesday?: string;
-    Wednesday?: string;
-    Thursday?: string;
-    Friday?: string;
-    Saturday?: string;
-    Sunday?: string;
-  };
-  LocalizationHints?: string[];
-  Num?: string;
-  LgAdr1?: string;
-  LgAdr2?: string;
-  CP?: string;
-  Ville?: string;
-  Pays?: string;
+  OpeningHours?: string;
 }
 
 interface MondialRelaySelectorProps {
   postalCode: string;
   country?: string;
-  onRelaySelected: (relay: RelayPoint) => void;
+  onRelaySelected: (relay: RelayPoint | null) => void;
   selectedRelay?: RelayPoint | null;
   deliveryMode: '24R' | '24L';
 }
 
-const formatOpeningHours = (hours?: string): string => {
-  if (!hours) return 'Fermé';
-  return hours.replace(/(\d{2})(\d{2})-(\d{2})(\d{2})/, '$1:$2 - $3:$4');
-};
-
-const getDaySchedule = (hours: any): string[] => {
-  if (!hours) return [];
-  const days = [
-    { name: 'Lundi', value: hours.Monday },
-    { name: 'Mardi', value: hours.Tuesday },
-    { name: 'Mercredi', value: hours.Wednesday },
-    { name: 'Jeudi', value: hours.Thursday },
-    { name: 'Vendredi', value: hours.Friday },
-    { name: 'Samedi', value: hours.Saturday },
-    { name: 'Dimanche', value: hours.Sunday },
-  ];
-  return days.map(day => `${day.name}: ${formatOpeningHours(day.value)}`);
-};
-
-const normalizeCountryCode = (country: string): string => {
-  if (!country) return 'FR';
-
-  const normalized = country.toUpperCase().trim();
-
-  if (normalized.length === 2) {
-    return normalized;
-  }
-
-  const countryMap: Record<string, string> = {
-    'FRANCE': 'FR',
-    'BELGIQUE': 'BE',
-    'BELGIUM': 'BE',
-    'LUXEMBOURG': 'LU',
-    'ESPAGNE': 'ES',
-    'SPAIN': 'ES',
-    'PAYS-BAS': 'NL',
-    'NETHERLANDS': 'NL',
-    'ALLEMAGNE': 'DE',
-    'GERMANY': 'DE',
-    'ITALIE': 'IT',
-    'ITALY': 'IT',
-    'PORTUGAL': 'PT',
-    'SUISSE': 'CH',
-    'SWITZERLAND': 'CH',
-  };
-
-  return countryMap[normalized] || 'FR';
-};
-
-declare global {
-  interface Window {
-    google: any;
-    initMap: () => void;
-  }
-}
-
-export default function MondialRelaySelector({
-  postalCode: initialPostalCode,
+export function MondialRelaySelector({
+  postalCode,
   country = 'FR',
   onRelaySelected,
   selectedRelay,
   deliveryMode,
 }: MondialRelaySelectorProps) {
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [searchPostalCode, setSearchPostalCode] = useState(postalCode);
   const [relayPoints, setRelayPoints] = useState<RelayPoint[]>([]);
-  const [searchPostalCode, setSearchPostalCode] = useState(initialPostalCode);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [expandedRelay, setExpandedRelay] = useState<string | null>(null);
   const [mapLoaded, setMapLoaded] = useState(false);
+
   const mapRef = useRef<HTMLDivElement>(null);
   const googleMapRef = useRef<any>(null);
   const markersRef = useRef<any[]>([]);
 
-  const normalizedCountry = normalizeCountryCode(country);
+  useEffect(() => {
+    if (typeof window !== 'undefined' && !(window as any).google) {
+      const script = document.createElement('script');
+      const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+      script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places,marker&loading=async`;
+      script.async = true;
+      script.onload = () => setMapLoaded(true);
+      document.head.appendChild(script);
+    } else if ((window as any).google) {
+      setMapLoaded(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (postalCode && postalCode !== searchPostalCode) {
+      setSearchPostalCode(postalCode);
+      handleSearch(postalCode);
+    }
+  }, [postalCode]);
 
   const initializeMap = (points: RelayPoint[]) => {
-    if (!mapRef.current || !window.google || !window.google.maps || points.length === 0) return;
+    if (!mapRef.current || !(window as any).google || points.length === 0) return;
 
-    const bounds = new window.google.maps.LatLngBounds();
-    const centerLat = points.reduce((sum, p) => sum + parseFloat(String(p.Latitude)), 0) / points.length;
-    const centerLng = points.reduce((sum, p) => sum + parseFloat(String(p.Longitude)), 0) / points.length;
+    markersRef.current.forEach((marker: any) => marker.map = null);
+    markersRef.current = [];
+
+    const google = (window as any).google;
+    const bounds = new google.maps.LatLngBounds();
+    const centerLat = points.reduce((sum, p) => sum + p.Latitude, 0) / points.length;
+    const centerLng = points.reduce((sum, p) => sum + p.Longitude, 0) / points.length;
 
     if (!googleMapRef.current) {
-      googleMapRef.current = new window.google.maps.Map(mapRef.current, {
+      googleMapRef.current = new google.maps.Map(mapRef.current, {
         center: { lat: centerLat, lng: centerLng },
         zoom: 12,
-        mapTypeControl: true,
-        streetViewControl: false,
-        mapId: 'mondial-relay-map', // Required for AdvancedMarkerElement
+        mapId: 'mondial-relay-map',
       });
     }
 
-    markersRef.current.forEach(marker => {
-      if (marker.map) {
-        marker.map = null;
-      }
-    });
-    markersRef.current = [];
+    points.forEach((point, index) => {
+      const markerContent = document.createElement('div');
+      markerContent.innerHTML = `
+        <div style="
+          background-color: ${deliveryMode === '24R' ? '#b8933d' : '#2563eb'};
+          color: white;
+          padding: 8px 12px;
+          border-radius: 20px;
+          font-weight: bold;
+          font-size: 12px;
+          box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+          cursor: pointer;
+        ">
+          ${index + 1}
+        </div>
+      `;
 
-    points.forEach((point) => {
-      const lat = parseFloat(String(point.Latitude));
-      const lng = parseFloat(String(point.Longitude));
-
-      if (isNaN(lat) || isNaN(lng)) return;
-
-      const position = { lat, lng };
-      bounds.extend(position);
-
-      // Use AdvancedMarkerElement if available, fallback to legacy Marker
-      let marker;
-      if (window.google.maps.marker && window.google.maps.marker.AdvancedMarkerElement) {
-        // Create a custom pin element
-        const pinElement = document.createElement('div');
-        pinElement.innerHTML = `
-          <div style="
-            width: 30px;
-            height: 30px;
-            background: ${deliveryMode === '24R' ? '#dc2626' : '#2563eb'};
-            border-radius: 50% 50% 50% 0;
-            transform: rotate(-45deg);
-            border: 2px solid white;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.3);
-          ">
-            <div style="
-              width: 100%;
-              height: 100%;
-              display: flex;
-              align-items: center;
-              justify-content: center;
-              transform: rotate(45deg);
-              color: white;
-              font-size: 16px;
-              font-weight: bold;
-            ">📍</div>
-          </div>
-        `;
-
-        marker = new window.google.maps.marker.AdvancedMarkerElement({
-          position,
-          map: googleMapRef.current,
-          title: point.Name,
-          content: pinElement,
-        });
-      } else {
-        // Fallback to legacy Marker
-        marker = new window.google.maps.Marker({
-          position,
-          map: googleMapRef.current,
-          title: point.Name,
-          icon: {
-            url: deliveryMode === '24R'
-              ? 'https://maps.google.com/mapfiles/ms/icons/red-dot.png'
-              : 'https://maps.google.com/mapfiles/ms/icons/blue-dot.png',
-          },
-        });
-      }
-
-      const infoWindow = new window.google.maps.InfoWindow({
-        content: `
-          <div style="padding: 8px; max-width: 250px;">
-            <h3 style="margin: 0 0 8px 0; font-weight: 600;">${point.Name}</h3>
-            <p style="margin: 4px 0; font-size: 14px;">${point.Address1}</p>
-            <p style="margin: 4px 0; font-size: 14px;">${point.PostCode} ${point.City}</p>
-            ${point.Distance ? `<p style="margin: 4px 0; font-size: 12px; color: #666;">Distance: ${(point.Distance / 1000).toFixed(1)} km</p>` : ''}
-          </div>
-        `,
+      const marker = new google.maps.marker.AdvancedMarkerElement({
+        position: { lat: point.Latitude, lng: point.Longitude },
+        map: googleMapRef.current,
+        title: point.Name,
+        content: markerContent,
       });
 
-      // AdvancedMarkerElement uses different event listener syntax
-      if (marker.addListener) {
-        marker.addListener('click', () => {
-          infoWindow.open(googleMapRef.current, marker);
-        });
-      } else if (marker.addEventListener) {
-        marker.addEventListener('click', () => {
-          infoWindow.open({ map: googleMapRef.current, anchor: marker });
-        });
-      }
+      marker.addListener('click', () => {
+        handleSelectRelay(point);
+      });
 
       markersRef.current.push(marker);
+      bounds.extend({ lat: point.Latitude, lng: point.Longitude });
     });
 
-    if (points.length > 0) {
+    if (googleMapRef.current) {
       googleMapRef.current.fitBounds(bounds);
     }
   };
 
-  const searchRelayPoints = async (postcode: string, mode: '24R' | '24L' = deliveryMode) => {
-    if (!postcode || postcode.length < 4) {
-      setError('Veuillez saisir un code postal valide (minimum 4 caractères)');
+  const handleSearch = async (searchCode?: string) => {
+    const codeToSearch = searchCode || searchPostalCode;
+
+    if (!codeToSearch || codeToSearch.length < 3) {
+      setError('Veuillez entrer un code postal valide');
       return;
     }
 
     setLoading(true);
-    setError('');
+    setError(null);
 
     try {
-      const apiUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/mondial-relay-api/pickup-points`;
-      // Request more results for lockers since they are less common
-      const numResults = mode === '24L' ? '30' : '20';
-      const fullUrl = `${apiUrl}?postcode=${postcode}&country=${normalizedCountry}&deliveryMode=${mode}&numResults=${numResults}&radius=20000`;
-
-      console.log('Fetching from URL:', fullUrl);
-
-      const response = await fetch(fullUrl, {
-        headers: {
-          'Authorization': `Bearer ${process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY}`,
+      const { data, error: functionError } = await supabase.functions.invoke('mondial-relay-search', {
+        body: {
+          postalCode: codeToSearch,
+          country,
+          deliveryMode,
         },
       });
 
-      console.log('Response status:', response.status);
-      console.log('Response headers:', Object.fromEntries(response.headers.entries()));
-
-      if (!response.ok) {
-        const responseText = await response.text();
-        console.error('API Error Response (text):', responseText);
-
-        let errorData;
-        try {
-          errorData = JSON.parse(responseText);
-        } catch {
-          errorData = { error: responseText || 'Unknown error' };
-        }
-
-        console.error('API Error Response (parsed):', errorData);
-        const errorMessage = errorData.error || errorData.details || 'Erreur lors de la recherche des points relais';
-        throw new Error(errorMessage);
+      if (functionError) {
+        throw new Error(functionError.message || 'Erreur lors de la recherche');
       }
 
-      const data = await response.json();
-      console.log('API Success Response:', data);
+      if (data?.error) {
+        throw new Error(data.error);
+      }
 
-      if (data.PickupPoints && Array.isArray(data.PickupPoints)) {
-        setRelayPoints(data.PickupPoints);
-        if (data.PickupPoints.length === 0) {
-          const pointType = mode === '24R' ? 'points relais' : 'lockers';
-          setError(`Aucun ${pointType} trouvé pour ce code postal. Essayez un code postal voisin.`);
-        } else {
-          setTimeout(() => initializeMap(data.PickupPoints), 100);
+      if (data?.relayPoints && data.relayPoints.length > 0) {
+        setRelayPoints(data.relayPoints);
+        if (mapLoaded) {
+          setTimeout(() => initializeMap(data.relayPoints), 100);
         }
       } else {
-        const pointType = mode === '24R' ? 'points relais' : 'lockers';
-        setError(`Aucun ${pointType} trouvé pour ce code postal.`);
+        setError('Aucun point relais trouvé pour ce code postal');
         setRelayPoints([]);
       }
-    } catch (err) {
-      console.error('Error searching relay points:', err);
-      const pointType = mode === '24R' ? 'points relais' : 'lockers';
-      setError(`Erreur lors de la recherche des ${pointType}. Veuillez réessayer.`);
+    } catch (err: any) {
+      setError(err.message || 'Une erreur est survenue');
       setRelayPoints([]);
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => {
-    let intervalId: NodeJS.Timeout | null = null;
-
-    const loadScript = () => {
-      const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
-      if (!apiKey) {
-        console.warn('Google Maps API key not found. Map will not be displayed.');
-        return;
-      }
-
-      // Check if Google Maps is already loaded
-      if (window.google && window.google.maps) {
-        setMapLoaded(true);
-        return;
-      }
-
-      // Check if script is already in the document
-      const existingScript = document.querySelector('script[src*="maps.googleapis.com"]');
-      if (existingScript) {
-        // If script exists, wait for it to load
-        intervalId = setInterval(() => {
-          if (window.google && window.google.maps) {
-            setMapLoaded(true);
-            if (intervalId) clearInterval(intervalId);
-          }
-        }, 100);
-        return;
-      }
-
-      // Create global callback function
-      (window as any).initGoogleMaps = () => {
-        setMapLoaded(true);
-        delete (window as any).initGoogleMaps;
-      };
-
-      // Create and add the script with callback
-      const script = document.createElement('script');
-      script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places,marker&loading=async&callback=initGoogleMaps`;
-      script.async = true;
-      script.defer = true;
-      script.onerror = () => console.error('Failed to load Google Maps script');
-      document.head.appendChild(script);
-    };
-
-    loadScript();
-
-    return () => {
-      if (intervalId) clearInterval(intervalId);
-    };
-  }, []);
-
-  useEffect(() => {
-    if (initialPostalCode && initialPostalCode.length >= 4) {
-      searchRelayPoints(initialPostalCode, deliveryMode);
-    }
-  }, [initialPostalCode, normalizedCountry, deliveryMode]);
-
-  useEffect(() => {
-    if (mapLoaded && relayPoints.length > 0) {
-      initializeMap(relayPoints);
-    }
-  }, [mapLoaded, relayPoints, deliveryMode]);
-
-  const handleSearch = () => {
-    searchRelayPoints(searchPostalCode);
+  const handleSelectRelay = (relay: RelayPoint) => {
+    onRelaySelected(relay);
   };
 
-  const handleSelectRelay = (relay: RelayPoint) => {
-    const formattedRelay = {
-      ...relay,
-      Num: relay.Id,
-      LgAdr1: relay.Name,
-      LgAdr2: relay.Address1,
-      CP: relay.PostCode,
-      Ville: relay.City,
-      Pays: relay.Country,
-    };
-    onRelaySelected(formattedRelay);
+  const getDaySchedule = (openingHours: string): string[] => {
+    if (!openingHours) return [];
+
+    const days = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
+    const scheduleArray = openingHours.split('#').filter(s => s.trim());
+
+    return days.map((day, index) => {
+      const schedule = scheduleArray[index] || '';
+      if (!schedule || schedule === '0000') {
+        return `${day}: Fermé`;
+      }
+
+      const morning = schedule.substring(0, 4);
+      const afternoon = schedule.substring(4);
+
+      let timeStr = '';
+      if (morning && morning !== '0000') {
+        timeStr += `${morning.substring(0, 2)}:${morning.substring(2)} - `;
+      }
+      if (afternoon && afternoon !== '0000') {
+        timeStr += `${afternoon.substring(0, 2)}:${afternoon.substring(2)}`;
+      }
+
+      return `${day}: ${timeStr || 'Fermé'}`;
+    });
   };
 
   return (
@@ -397,11 +218,12 @@ export default function MondialRelaySelector({
           )}
         </CardTitle>
         <CardDescription>
-          Recherchez et choisissez le point le plus proche de chez vous
+          {deliveryMode === '24R'
+            ? 'Recherchez et choisissez le point relais le plus proche de chez vous'
+            : 'Consignes automatiques accessibles 24h/24, 7j/7'}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-
         <div className="flex gap-2">
           <Input
             type="text"
@@ -409,118 +231,54 @@ export default function MondialRelaySelector({
             value={searchPostalCode}
             onChange={(e) => setSearchPostalCode(e.target.value)}
             onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
-            className="flex-1"
+            disabled={loading}
           />
           <Button
-            onClick={handleSearch}
+            onClick={() => handleSearch()}
             disabled={loading}
-            className="bg-[#b8933d] hover:bg-[#9a7a32]"
+            className={deliveryMode === '24R' ? 'bg-[#b8933d] hover:bg-[#a07c2f]' : 'bg-blue-600 hover:bg-blue-700'}
           >
-            {loading ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Search className="h-4 w-4" />
-            )}
+            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
           </Button>
         </div>
+
+        {error && (
+          <Alert variant="destructive">
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
 
         {selectedRelay && (
           <Alert className="bg-green-50 border-green-200">
             <CheckCircle2 className="h-4 w-4 text-green-600" />
             <AlertDescription className="text-green-800">
-              <div className="space-y-1">
-                <p className="font-semibold">Point relais sélectionné</p>
-                <p className="text-sm">{selectedRelay.LgAdr1 || selectedRelay.Name}</p>
-                <p className="text-sm">
-                  {selectedRelay.CP || selectedRelay.PostCode} {selectedRelay.Ville || selectedRelay.City}
-                </p>
-              </div>
+              <p className="font-semibold">Point relais sélectionné</p>
+              <p className="text-sm">{selectedRelay.Name}</p>
+              <p className="text-sm">{selectedRelay.Address1}</p>
+              <p className="text-sm">{selectedRelay.PostCode} {selectedRelay.City}</p>
             </AlertDescription>
           </Alert>
-        )}
-
-        {error && (
-          <Alert className="bg-red-50 border-red-200">
-            <AlertDescription className="text-red-800">{error}</AlertDescription>
-          </Alert>
-        )}
-
-        {loading && (
-          <div className="flex items-center justify-center py-8">
-            <Loader2 className="h-8 w-8 animate-spin text-[#b8933d]" />
-            <span className="ml-3 text-gray-600">Recherche en cours...</span>
-          </div>
         )}
 
         {relayPoints.length > 0 && mapLoaded && (
-          <div className="border rounded-lg overflow-hidden relative">
-            {loading && (
-              <div className="absolute inset-0 bg-white/70 flex items-center justify-center z-10">
-                <div className="flex items-center gap-2 bg-white px-4 py-2 rounded-lg shadow-lg">
-                  <Loader2 className="h-5 w-5 animate-spin text-[#b8933d]" />
-                  <span className="text-sm font-medium">Mise à jour...</span>
-                </div>
-              </div>
-            )}
-            <div
-              ref={mapRef}
-              className="w-full h-[400px]"
-              style={{ minHeight: '400px' }}
-            />
+          <div className="border rounded-lg overflow-hidden">
+            <div ref={mapRef} className="w-full h-[400px]" />
           </div>
         )}
 
-        {relayPoints.length > 0 && !mapLoaded && process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY && (
-          <Alert>
-            <AlertDescription>
-              <div className="flex items-center gap-2">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                <span>Chargement de la carte...</span>
-              </div>
-            </AlertDescription>
-          </Alert>
-        )}
-
-        {relayPoints.length > 0 && !process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY && (
-          <Alert>
-            <AlertDescription>
-              Carte non disponible - Clé API Google Maps manquante
-            </AlertDescription>
-          </Alert>
-        )}
-
-        {!loading && relayPoints.length === 0 && searchPostalCode && (
-          <Alert>
-            <AlertDescription>
-              Aucun {deliveryMode === '24R' ? 'point relais' : 'locker'} trouvé pour ce code postal.
-              {deliveryMode === '24L' && (
-                <span className="block mt-2 text-sm">
-                  Note : Les lockers 24/7 ne sont pas disponibles partout. Essayez les Points Relais.
-                </span>
-              )}
-            </AlertDescription>
-          </Alert>
-        )}
-
         {!loading && relayPoints.length > 0 && (
-          <div className="space-y-3">
-            <div className="flex items-center justify-between px-1">
-              <p className="text-sm text-gray-600">
-                <span className="font-semibold text-[#b8933d]">{relayPoints.length}</span> {deliveryMode === '24R' ? 'point(s) relais' : 'locker(s)'} trouvé(s)
-              </p>
-            </div>
-            <ScrollArea className="h-[500px] w-full rounded-md border">
+          <ScrollArea className="h-[500px] w-full rounded-md border">
             <div className="space-y-3 p-4">
-              {relayPoints.map((relay) => {
-                const isSelected = selectedRelay?.Id === relay.Id || selectedRelay?.Num === relay.Id;
+              {relayPoints.map((relay, index) => {
+                const isSelected = selectedRelay?.Id === relay.Id;
                 const isExpanded = expandedRelay === relay.Id;
 
                 return (
                   <Card
                     key={relay.Id}
                     className={`cursor-pointer transition-all hover:shadow-md ${
-                      isSelected ? 'border-[#b8933d] border-2 bg-amber-50' : ''
-                    }`}
+                      isSelected ? 'border-2 bg-amber-50' : ''
+                    } ${deliveryMode === '24R' ? 'border-[#b8933d]' : 'border-blue-600'}`}
                   >
                     <CardContent className="p-4">
                       <div className="space-y-3">
@@ -534,15 +292,18 @@ export default function MondialRelaySelector({
                               )}
                               <div className="flex-1">
                                 <div className="flex items-center gap-2 flex-wrap">
-                                  <h3 className="font-semibold text-lg leading-tight">{relay.Name}</h3>
-                                  <Badge variant={deliveryMode === '24R' ? 'default' : 'secondary'} className={deliveryMode === '24R' ? 'bg-[#b8933d]' : 'bg-blue-600'}>
+                                  <Badge className="text-xs bg-gray-700 text-white">
+                                    #{index + 1}
+                                  </Badge>
+                                  <h3 className="font-semibold text-base">{relay.Name}</h3>
+                                  <Badge
+                                    variant={deliveryMode === '24R' ? 'default' : 'secondary'}
+                                    className={deliveryMode === '24R' ? 'bg-[#b8933d]' : 'bg-blue-600'}
+                                  >
                                     {deliveryMode === '24R' ? 'Point Relais' : 'Locker 24/7'}
                                   </Badge>
                                 </div>
                                 <p className="text-sm text-gray-600 mt-1">{relay.Address1}</p>
-                                {relay.Address2 && (
-                                  <p className="text-sm text-gray-600">{relay.Address2}</p>
-                                )}
                                 <p className="text-sm text-gray-600">
                                   {relay.PostCode} {relay.City}
                                 </p>
@@ -555,12 +316,6 @@ export default function MondialRelaySelector({
                                 <span>{(relay.Distance / 1000).toFixed(1)} km</span>
                               </div>
                             )}
-
-                            {relay.LocalizationHints && relay.LocalizationHints.length > 0 && (
-                              <p className="text-sm text-gray-500 italic">
-                                {relay.LocalizationHints.join(', ')}
-                              </p>
-                            )}
                           </div>
 
                           <Button
@@ -569,7 +324,9 @@ export default function MondialRelaySelector({
                             className={
                               isSelected
                                 ? 'bg-green-600 hover:bg-green-700'
-                                : 'bg-[#b8933d] hover:bg-[#9a7a32]'
+                                : deliveryMode === '24R'
+                                ? 'bg-[#b8933d] hover:bg-[#a07c2f]'
+                                : 'bg-blue-600 hover:bg-blue-700'
                             }
                           >
                             {isSelected ? (
@@ -583,7 +340,7 @@ export default function MondialRelaySelector({
                           </Button>
                         </div>
 
-                        {relay.OpeningHours && (
+                        {relay.OpeningHours && deliveryMode === '24R' && (
                           <div className="pt-2 border-t">
                             <Button
                               variant="ghost"
@@ -592,12 +349,11 @@ export default function MondialRelaySelector({
                                 e.stopPropagation();
                                 setExpandedRelay(isExpanded ? null : relay.Id);
                               }}
-                              className="text-sm text-gray-600 hover:text-[#b8933d] p-0 h-auto"
+                              className="text-sm text-gray-600 hover:text-gray-900"
                             >
                               <Clock className="h-4 w-4 mr-1" />
                               {isExpanded ? 'Masquer les horaires' : 'Voir les horaires'}
                             </Button>
-
                             {isExpanded && (
                               <div className="mt-3 space-y-1 text-sm">
                                 {getDaySchedule(relay.OpeningHours).map((schedule, idx) => (
@@ -624,13 +380,13 @@ export default function MondialRelaySelector({
               })}
             </div>
           </ScrollArea>
-          </div>
         )}
 
-        {!loading && relayPoints.length === 0 && !error && searchPostalCode && (
+        {!loading && relayPoints.length === 0 && searchPostalCode && (
           <div className="text-center py-8 text-gray-500">
-            <MapPin className="h-12 w-12 mx-auto mb-3 text-gray-300" />
-            <p>Effectuez une recherche pour trouver des points relais</p>
+            <MapPin className="h-12 w-12 mx-auto mb-2 opacity-30" />
+            <p>Aucun point relais trouvé</p>
+            <p className="text-sm">Essayez un autre code postal</p>
           </div>
         )}
       </CardContent>

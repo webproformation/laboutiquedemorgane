@@ -9,9 +9,6 @@ const config: Config = {
   ],
   theme: {
     extend: {
-      fontFamily: {
-        sans: ['var(--font-pangolin)', 'system-ui', 'sans-serif'],
-      },
       backgroundImage: {
         'gradient-radial': 'radial-gradient(var(--tw-gradient-stops))',
         'gradient-conic':
@@ -62,6 +59,11 @@ const config: Config = {
           '3': 'hsl(var(--chart-3))',
           '4': 'hsl(var(--chart-4))',
           '5': 'hsl(var(--chart-5))',
+        },
+        gold: {
+          DEFAULT: '#D4AF37',
+          dark: '#b8933d',
+          light: '#C6A15B',
         },
       },
       keyframes: {

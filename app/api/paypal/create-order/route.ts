@@ -1,110 +1,83 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-const PAYPAL_CLIENT_ID = process.env.PAYPAL_CLIENT_ID;
-const PAYPAL_CLIENT_SECRET = process.env.PAYPAL_CLIENT_SECRET;
-const PAYPAL_API_BASE = "https://api-m.paypal.com";
+const PAYPAL_CLIENT_ID = process.env.PAYPAL_CLIENT_ID!;
+const PAYPAL_CLIENT_SECRET = process.env.PAYPAL_CLIENT_SECRET!;
+const PAYPAL_API_BASE = process.env.PAYPAL_API_BASE || 'https://api-m.paypal.com';
 
-interface PayPalOrderRequest {
-  amount: number;
-  currency: string;
-  description: string;
-  returnUrl: string;
-  cancelUrl: string;
-}
-
-async function getPayPalAccessToken(): Promise<string> {
+async function generateAccessToken() {
   const auth = Buffer.from(`${PAYPAL_CLIENT_ID}:${PAYPAL_CLIENT_SECRET}`).toString('base64');
 
   const response = await fetch(`${PAYPAL_API_BASE}/v1/oauth2/token`, {
-    method: "POST",
+    method: 'POST',
     headers: {
-      "Authorization": `Basic ${auth}`,
-      "Content-Type": "application/x-www-form-urlencoded",
+      'Authorization': `Basic ${auth}`,
+      'Content-Type': 'application/x-www-form-urlencoded',
     },
-    body: "grant_type=client_credentials",
+    body: 'grant_type=client_credentials',
   });
-
-  if (!response.ok) {
-    const error = await response.text();
-    throw new Error(`Failed to get PayPal access token: ${error}`);
-  }
 
   const data = await response.json();
   return data.access_token;
 }
 
-async function createPayPalOrder(accessToken: string, orderData: PayPalOrderRequest) {
-  const response = await fetch(`${PAYPAL_API_BASE}/v2/checkout/orders`, {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${accessToken}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      intent: "CAPTURE",
-      purchase_units: [
-        {
-          amount: {
-            currency_code: orderData.currency,
-            value: orderData.amount.toFixed(2),
-          },
-          description: orderData.description,
-        },
-      ],
-      application_context: {
-        return_url: orderData.returnUrl,
-        cancel_url: orderData.cancelUrl,
-        brand_name: "La Boutique de Morgane",
-        landing_page: "BILLING",
-        user_action: "PAY_NOW",
-      },
-    }),
-  });
-
-  if (!response.ok) {
-    const error = await response.text();
-    throw new Error(`Failed to create PayPal order: ${error}`);
-  }
-
-  return await response.json();
-}
-
 export async function POST(request: NextRequest) {
   try {
-    if (!PAYPAL_CLIENT_ID || !PAYPAL_CLIENT_SECRET) {
-      return NextResponse.json(
-        { error: "PayPal credentials not configured" },
-        { status: 500 }
-      );
-    }
+    const body = await request.json();
+    const { amount, currency = 'EUR' } = body;
 
-    const orderData: PayPalOrderRequest = await request.json();
-
-    if (!orderData.amount || !orderData.currency) {
+    if (!amount || isNaN(parseFloat(amount))) {
       return NextResponse.json(
-        { error: "Missing required fields: amount, currency" },
+        { error: 'Invalid amount' },
         { status: 400 }
       );
     }
 
-    const accessToken = await getPayPalAccessToken();
-    const paypalOrder = await createPayPalOrder(accessToken, orderData);
+    const accessToken = await generateAccessToken();
 
-    const approvalUrl = paypalOrder.links.find(
-      (link: any) => link.rel === "approve"
-    )?.href;
+    const orderResponse = await fetch(`${PAYPAL_API_BASE}/v2/checkout/orders`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({
+        intent: 'CAPTURE',
+        purchase_units: [
+          {
+            amount: {
+              currency_code: currency,
+              value: parseFloat(amount).toFixed(2),
+            },
+          },
+        ],
+        application_context: {
+          brand_name: 'La Boutique de Morgane',
+          landing_page: 'NO_PREFERENCE',
+          user_action: 'PAY_NOW',
+          return_url: `${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/checkout/confirmation`,
+          cancel_url: `${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/checkout`,
+        },
+      }),
+    });
+
+    const orderData = await orderResponse.json();
+
+    if (!orderResponse.ok) {
+      console.error('PayPal order creation failed:', orderData);
+      return NextResponse.json(
+        { error: 'Failed to create PayPal order', details: orderData },
+        { status: 500 }
+      );
+    }
 
     return NextResponse.json({
-      orderId: paypalOrder.id,
-      approvalUrl,
-      status: paypalOrder.status,
+      id: orderData.id,
+      status: orderData.status,
     });
   } catch (error) {
-    console.error("Error creating PayPal order:", error);
+    console.error('Error creating PayPal order:', error);
     return NextResponse.json(
-      {
-        error: error instanceof Error ? error.message : "Unknown error",
-      },
+      { error: 'Internal server error' },
       { status: 500 }
     );
   }

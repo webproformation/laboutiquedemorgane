@@ -1,595 +1,882 @@
 "use client";
 
-import { useState, useEffect } from 'react';
-import { Card, CardContent } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Loader2, Package, FileText, Send, Download } from 'lucide-react';
-import { toast } from 'sonner';
-import html2pdf from 'html2pdf.js';
+import { useState, useEffect, useMemo } from "react";
+import Link from "next/link";
+import { supabase } from "@/lib/supabase";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { toast } from "sonner";
+import {
+  ShoppingCart,
+  Search,
+  Eye,
+  Download,
+  Mail,
+  RefreshCw,
+  Package,
+  Truck,
+  CheckCircle,
+  XCircle,
+  Clock,
+  Trash2,
+  FileText,
+  MapPin,
+} from "lucide-react";
+import { Separator } from "@/components/ui/separator";
 
 interface Order {
-  id: number;
-  number: string;
-  status: string;
-  total: string;
-  date_created: string;
-  billing: {
-    first_name: string;
-    last_name: string;
-    email: string;
-    address_1: string;
-    address_2: string;
-    city: string;
-    postcode: string;
-    country: string;
-    phone: string;
-    company: string;
-  };
-  shipping: {
-    first_name: string;
-    last_name: string;
-    address_1: string;
-    address_2: string;
-    city: string;
-    postcode: string;
-    country: string;
-    company: string;
-  };
-  line_items: Array<{
-    name: string;
-    quantity: number;
-    price: number;
-    total: string;
-    subtotal: string;
-    sku: string;
-  }>;
-  shipping_lines: Array<{
-    method_title: string;
-    total: string;
-  }>;
-  total_tax: string;
-  shipping_total: string;
-  discount_total: string;
-  payment_method_title: string;
-}
-
-interface Invoice {
   id: string;
-  invoice_number: string;
-  pdf_url: string;
-  sent_at: string | null;
+  order_number: string;
+  user_id: string;
+  status: string;
+  payment_status: string;
+  subtotal: number;
+  shipping_cost: number;
+  tax_amount: number;
+  discount_amount: number;
+  wallet_amount_used: number;
+  total: number;
+  items: any[];
+  order_items?: any[];
+  shipping_address: any;
+  shipping_method_id: string;
+  shipping_method?: any;
+  payment_method_id: string;
+  payment_method?: any;
+  coupon_code?: string;
+  notes?: string;
+  newsletter_consent: boolean;
+  rgpd_consent: boolean;
+  is_open_package: boolean;
+  open_package?: {
+    id: string;
+    status: string;
+    user_id: string;
+  } | null;
+  created_at: string;
+  updated_at: string;
 }
 
 const statusLabels: Record<string, string> = {
-  'pending': 'En attente',
-  'processing': 'En traitement',
-  'on-hold': 'En attente',
-  'completed': 'Terminée',
-  'cancelled': 'Annulée',
-  'refunded': 'Remboursée',
-  'failed': 'Échouée',
+  pending: "En attente",
+  processing: "En cours",
+  shipped: "Expédiée",
+  delivered: "Livrée",
+  cancelled: "Annulée",
+  refunded: "Remboursée",
 };
 
-export default function AdminOrders() {
+const paymentStatusLabels: Record<string, string> = {
+  pending: "En attente",
+  processing: "En cours",
+  completed: "Payée",
+  failed: "Échouée",
+  refunded: "Remboursée",
+};
+
+export default function OrdersPage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
-  const [page, setPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
-  const [filterStatus, setFilterStatus] = useState('all');
-  const [invoices, setInvoices] = useState<Record<number, Invoice>>({});
-  const [generatingInvoice, setGeneratingInvoice] = useState<number | null>(null);
-  const [sendingInvoice, setSendingInvoice] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [paymentFilter, setPaymentFilter] = useState("all");
+  const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+  const [dialogOpen, setDialogOpen] = useState(false);
 
-  const fetchOrders = async () => {
+  useEffect(() => {
+    loadOrders();
+  }, []);
+
+  const loadOrders = async () => {
     setLoading(true);
     try {
-      const url = `/api/woocommerce/orders?action=list&page=${page}&per_page=10${filterStatus !== 'all' ? `&status=${filterStatus}` : ''}`;
+      // Récupération des commandes avec order_items
+      const { data: ordersData, error: ordersError } = await supabase
+        .from("orders")
+        .select(`
+          *,
+          order_items(*)
+        `)
+        .order("created_at", { ascending: false });
 
-      const response = await fetch(url);
+      if (ordersError) throw ordersError;
 
-      const data = await response.json();
-      setOrders(data.orders || []);
-      setTotalPages(parseInt(data.totalPages || '1'));
+      // Récupération des méthodes de livraison et paiement
+      const shippingMethodIds = Array.from(new Set(ordersData?.map(o => o.shipping_method_id).filter(Boolean))) as string[];
+      const paymentMethodIds = Array.from(new Set(ordersData?.map(o => o.payment_method_id).filter(Boolean))) as string[];
 
-      // Fetch invoices for all orders
-      if (data.orders && data.orders.length > 0) {
-        fetchInvoicesForOrders(data.orders);
+      const [shippingMethodsRes, paymentMethodsRes] = await Promise.all([
+        shippingMethodIds.length > 0
+          ? supabase.from("shipping_methods").select("*").in("id", shippingMethodIds)
+          : Promise.resolve({ data: [] }),
+        paymentMethodIds.length > 0
+          ? supabase.from("payment_methods").select("*").in("id", paymentMethodIds)
+          : Promise.resolve({ data: [] })
+      ]);
+
+      // Récupération des infos de colis ouverts pour les commandes is_open_package
+      const openPackageOrders = ordersData?.filter(o => o.is_open_package) || [];
+      const openPackageInfoMap = new Map();
+
+      if (openPackageOrders.length > 0) {
+        const { data: packageOrdersData } = await supabase
+          .from("open_package_orders")
+          .select("order_id, open_package_id")
+          .in("order_id", openPackageOrders.map(o => o.id));
+
+        if (packageOrdersData && packageOrdersData.length > 0) {
+          const packageIds = packageOrdersData.map(po => po.open_package_id);
+          const { data: packagesData } = await supabase
+            .from("open_packages")
+            .select("id, status, user_id")
+            .in("id", packageIds);
+
+          if (packagesData) {
+            const packagesMap = new Map(packagesData.map(p => [p.id, p]));
+            packageOrdersData.forEach(po => {
+              const pkg = packagesMap.get(po.open_package_id);
+              if (pkg) {
+                openPackageInfoMap.set(po.order_id, pkg);
+              }
+            });
+          }
+        }
       }
+
+      // Association des données
+      const shippingMethodsMap = new Map(shippingMethodsRes.data?.map(m => [m.id, m]));
+      const paymentMethodsMap = new Map(paymentMethodsRes.data?.map(m => [m.id, m]));
+
+      const enrichedOrders = ordersData?.map(order => ({
+        ...order,
+        shipping_method: order.shipping_method_id ? shippingMethodsMap.get(order.shipping_method_id) : null,
+        payment_method: order.payment_method_id ? paymentMethodsMap.get(order.payment_method_id) : null,
+        open_package: openPackageInfoMap.get(order.id) || null
+      })) || [];
+
+      setOrders(enrichedOrders);
     } catch (error) {
-      toast.error('Erreur lors du chargement des commandes');
-      console.error(error);
+      console.error("Error loading orders:", error);
+      toast.error("Erreur lors du chargement des commandes");
     } finally {
       setLoading(false);
     }
   };
 
-  const fetchInvoicesForOrders = async (ordersData: Order[]) => {
+  const filteredOrders = useMemo(() => {
+    return orders.filter((order) => {
+      const matchesSearch =
+        order.order_number.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        order.user_id.toLowerCase().includes(searchTerm.toLowerCase());
+
+      const matchesStatus = statusFilter === "all" || order.status === statusFilter;
+      const matchesPayment = paymentFilter === "all" || order.payment_status === paymentFilter;
+
+      return matchesSearch && matchesStatus && matchesPayment;
+    });
+  }, [orders, searchTerm, statusFilter, paymentFilter]);
+
+  const handleUpdateStatus = async (orderId: string, newStatus: string) => {
+    const order = orders.find(o => o.id === orderId);
+
+    if (order?.open_package && (order.open_package.status === 'active' || order.open_package.status === 'ready_to_prepare')) {
+      if (newStatus === 'shipped') {
+        toast.error("❌ Cette commande fait partie d'un colis ouvert actif. Expédiez le colis depuis la gestion des colis ouverts.");
+        return;
+      }
+    }
+
     try {
-      console.log('Fetching invoices for orders:', ordersData.map(o => o.id));
+      const { error } = await supabase
+        .from("orders")
+        .update({ status: newStatus, updated_at: new Date().toISOString() })
+        .eq("id", orderId);
 
-      const invoicePromises = ordersData.map(async (order) => {
-        try {
-          const response = await fetch(`/api/invoices?orderId=${order.id}`);
-          if (!response.ok) {
-            console.warn(`Failed to fetch invoice for order ${order.id}:`, response.status);
-            return { orderId: order.id, invoice: null };
-          }
-          const data = await response.json();
-          const invoice = data.invoices?.[0] || null;
-          if (invoice) {
-            console.log(`Found invoice for order ${order.id}:`, invoice.invoice_number);
-          } else {
-            console.log(`No invoice found for order ${order.id}`);
-          }
-          return { orderId: order.id, invoice };
-        } catch (err) {
-          console.error(`Error fetching invoice for order ${order.id}:`, err);
-          return { orderId: order.id, invoice: null };
-        }
-      });
+      if (error) throw error;
 
-      const results = await Promise.all(invoicePromises);
-      const invoicesMap: Record<number, Invoice> = {};
-      results.forEach(({ orderId, invoice }) => {
-        if (invoice) {
-          invoicesMap[orderId] = invoice;
-        }
-      });
+      setOrders((prev) =>
+        prev.map((o) => (o.id === orderId ? { ...o, status: newStatus } : o))
+      );
 
-      console.log('Invoices map:', Object.keys(invoicesMap).map(k => `${k}: ${invoicesMap[parseInt(k)].invoice_number}`));
-      setInvoices(invoicesMap);
+      if (selectedOrder && selectedOrder.id === orderId) {
+        setSelectedOrder({ ...selectedOrder, status: newStatus });
+      }
+
+      toast.success("Statut mis à jour");
     } catch (error) {
-      console.error('Error fetching invoices:', error);
+      console.error("Error updating status:", error);
+      toast.error("Erreur lors de la mise à jour");
     }
   };
 
-  const generateInvoice = async (order: Order, autoSend: boolean = false) => {
-    setGeneratingInvoice(order.id);
+  const handleUpdatePaymentStatus = async (orderId: string, newStatus: string) => {
     try {
-      const response = await fetch('/api/invoices/generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          orderId: order.id,
-          orderData: order,
-          autoSend,
-        }),
+      const { error } = await supabase
+        .from("orders")
+        .update({ payment_status: newStatus, updated_at: new Date().toISOString() })
+        .eq("id", orderId);
+
+      if (error) throw error;
+
+      setOrders((prev) =>
+        prev.map((o) => (o.id === orderId ? { ...o, payment_status: newStatus } : o))
+      );
+
+      if (selectedOrder && selectedOrder.id === orderId) {
+        setSelectedOrder({ ...selectedOrder, payment_status: newStatus });
+      }
+
+      toast.success("Statut de paiement mis à jour");
+    } catch (error) {
+      console.error("Error updating payment status:", error);
+      toast.error("Erreur lors de la mise à jour");
+    }
+  };
+
+  const getStatusBadge = (status: string) => {
+    const variants: Record<string, any> = {
+      pending: "secondary",
+      processing: "default",
+      shipped: "default",
+      delivered: "default",
+      cancelled: "destructive",
+      refunded: "destructive",
+    };
+
+    return (
+      <Badge variant={variants[status] || "secondary"}>
+        {statusLabels[status] || status}
+      </Badge>
+    );
+  };
+
+  const getPaymentBadge = (status: string) => {
+    const variants: Record<string, any> = {
+      pending: "secondary",
+      processing: "default",
+      completed: "default",
+      failed: "destructive",
+      refunded: "destructive",
+    };
+
+    return (
+      <Badge variant={variants[status] || "secondary"}>
+        {paymentStatusLabels[status] || status}
+      </Badge>
+    );
+  };
+
+  const handleViewOrder = (order: Order) => {
+    setSelectedOrder(order);
+    setDialogOpen(true);
+  };
+
+  const handleDeleteOrder = async (orderId: string, orderNumber: string) => {
+    const confirmed = confirm(
+      `Êtes-vous sûr de vouloir supprimer la commande #${orderNumber} ?\n\nCette action est irréversible.`
+    );
+
+    if (!confirmed) return;
+
+    try {
+      const { error } = await supabase.from("orders").delete().eq("id", orderId);
+
+      if (error) throw error;
+
+      setOrders((prev) => prev.filter((o) => o.id !== orderId));
+      toast.success("Commande supprimée avec succès");
+
+      if (selectedOrder && selectedOrder.id === orderId) {
+        setDialogOpen(false);
+        setSelectedOrder(null);
+      }
+    } catch (error: any) {
+      console.error("Error deleting order:", error);
+      toast.error(`Erreur lors de la suppression: ${error.message}`);
+    }
+  };
+
+  const handleGeneratePDF = async (orderId: string, orderNumber: string) => {
+    toast.loading("Génération du PDF en cours...");
+
+    try {
+      const response = await fetch("/api/orders/generate-pdf", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orderId }),
       });
 
       const data = await response.json();
-      if (response.ok) {
-        toast.success(
-          autoSend
-            ? 'Bon de commande généré et envoyé avec succès'
-            : 'Bon de commande généré avec succès'
-        );
-        if (data.invoice) {
-          setInvoices((prev) => ({ ...prev, [order.id]: data.invoice }));
-        }
-      } else {
-        toast.error(data.error || 'Erreur lors de la génération');
-      }
-    } catch (error) {
-      toast.error('Erreur lors de la génération du bon de commande');
-      console.error(error);
-    } finally {
-      setGeneratingInvoice(null);
-    }
-  };
 
-  const sendInvoiceEmail = async (invoiceId: string) => {
-    setSendingInvoice(invoiceId);
-    try {
-      console.log('Sending invoice email for:', invoiceId);
-      const response = await fetch('/api/invoices/send', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ invoiceId, resend: true }),
+      if (!response.ok) {
+        throw new Error(data.error || "Erreur lors de la génération");
+      }
+
+      const pdfBlob = new Blob([Uint8Array.from(atob(data.pdf), (c) => c.charCodeAt(0))], {
+        type: "application/pdf",
       });
 
-      console.log('Response status:', response.status);
+      const url = URL.createObjectURL(pdfBlob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = data.filename || `Commande_${orderNumber}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
 
-      let data;
-      try {
-        data = await response.json();
-        console.log('Response data:', data);
-      } catch (parseError) {
-        console.error('Failed to parse response:', parseError);
-        const text = await response.text();
-        console.error('Response text:', text);
-        throw new Error('Invalid server response');
-      }
-
-      if (response.ok) {
-        toast.success('Bon de commande envoyé avec succès');
-        // Update invoice sent_at
-        setInvoices((prev) => ({
-          ...prev,
-          ...Object.fromEntries(
-            Object.entries(prev).map(([key, invoice]) =>
-              invoice.id === invoiceId
-                ? [key, { ...invoice, sent_at: new Date().toISOString() }]
-                : [key, invoice]
-            )
-          ),
-        }));
-      } else {
-        const errorMsg = data?.details
-          ? `${data.error}: ${data.details}`
-          : data?.error || 'Erreur lors de l\'envoi';
-        toast.error(errorMsg, { duration: 10000 });
-        console.error('Send invoice error:', {
-          status: response.status,
-          data
-        });
-      }
-    } catch (error) {
-      console.error('Send invoice exception:', error);
-      toast.error('Erreur lors de l\'envoi du bon de commande: ' + (error as Error).message);
-    } finally {
-      setSendingInvoice(null);
+      toast.dismiss();
+      toast.success("PDF téléchargé avec succès");
+    } catch (error: any) {
+      toast.dismiss();
+      console.error("Error generating PDF:", error);
+      toast.error(`Erreur: ${error.message}`);
     }
   };
 
-  const viewInvoice = async (orderId: number) => {
-    try {
-      const invoice = invoices[orderId];
-
-      if (!invoice) {
-        toast.error('Aucune facture trouvée pour cette commande');
-        console.error('Invoice not found in state for order:', orderId);
-        return;
-      }
-
-      if (!invoice.pdf_url) {
-        toast.error('URL de la facture manquante');
-        console.error('Invoice missing pdf_url:', invoice);
-        return;
-      }
-
-      console.log('Viewing invoice from:', invoice.pdf_url);
-
-      const invoiceResponse = await fetch(invoice.pdf_url);
-      if (!invoiceResponse.ok) {
-        console.error('Failed to fetch invoice:', invoiceResponse.status, invoiceResponse.statusText);
-        throw new Error('Impossible de charger le document');
-      }
-
-      const invoiceData = await invoiceResponse.json();
-
-      if (!invoiceData.html) {
-        console.error('Invoice data missing html:', invoiceData);
-        toast.error('Le document est invalide');
-        return;
-      }
-
-      const printWindow = window.open('', '_blank');
-      if (printWindow) {
-        printWindow.document.write(invoiceData.html);
-        printWindow.document.close();
-      } else {
-        toast.error('Le popup a été bloqué par votre navigateur');
-      }
-    } catch (error) {
-      toast.error('Erreur lors de l\'ouverture du bon de commande');
-      console.error('View invoice error:', error);
-    }
-  };
-
-  const downloadInvoice = async (orderId: number) => {
-    let tempContainer: HTMLElement | null = null;
-    const loadingToastId = toast.loading('Génération du PDF en cours...');
+  const handleSendEmail = async (orderId: string, orderNumber: string) => {
+    toast.loading("Génération et envoi de l'email...");
 
     try {
-      const invoice = invoices[orderId];
-
-      if (!invoice) {
-        toast.dismiss(loadingToastId);
-        toast.error('Aucune facture trouvée pour cette commande');
-        console.error('Invoice not found in state for order:', orderId);
-        return;
-      }
-
-      if (!invoice.pdf_url) {
-        toast.dismiss(loadingToastId);
-        toast.error('URL de la facture manquante');
-        console.error('Invoice missing pdf_url:', invoice);
-        return;
-      }
-
-      console.log('Downloading invoice from:', invoice.pdf_url);
-
-      const invoiceResponse = await fetch(invoice.pdf_url);
-      if (!invoiceResponse.ok) {
-        console.error('Failed to fetch invoice:', invoiceResponse.status, invoiceResponse.statusText);
-        throw new Error(`Impossible de charger le document (${invoiceResponse.status})`);
-      }
-
-      const invoiceData = await invoiceResponse.json();
-
-      if (!invoiceData.html) {
-        console.error('Invoice data missing html:', invoiceData);
-        throw new Error('Le document est invalide (HTML manquant)');
-      }
-
-      console.log('Invoice HTML loaded, creating PDF...');
-
-      // Create a temporary container for the HTML
-      tempContainer = document.createElement('div');
-      tempContainer.innerHTML = invoiceData.html;
-      tempContainer.style.position = 'absolute';
-      tempContainer.style.left = '-9999px';
-      tempContainer.style.top = '0';
-      tempContainer.style.width = '800px';
-      document.body.appendChild(tempContainer);
-
-      // Wait a bit for images to load
-      await new Promise(resolve => setTimeout(resolve, 500));
-
-      // Configure PDF options
-      const opt = {
-        margin: [10, 10, 10, 10] as [number, number, number, number],
-        filename: `bon-commande-${invoice.invoice_number}.pdf`,
-        image: { type: 'jpeg' as const, quality: 0.98 },
-        html2canvas: {
-          scale: 2,
-          useCORS: true,
-          logging: true,
-          letterRendering: true,
-          allowTaint: true,
-          backgroundColor: '#ffffff'
-        },
-        jsPDF: {
-          unit: 'mm' as const,
-          format: 'a4' as const,
-          orientation: 'portrait' as const
-        },
-        pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
-      };
-
-      // Convert HTML to PDF and download
-      const htmlElement = tempContainer.querySelector('.container') as HTMLElement;
-      if (!htmlElement) {
-        console.error('Container not found in HTML, using full tempContainer');
-        throw new Error('Structure du document invalide');
-      }
-
-      console.log('Starting PDF generation...');
-      await html2pdf().set(opt).from(htmlElement).save();
-      console.log('PDF generation completed');
-
-      // Clean up
-      if (tempContainer && document.body.contains(tempContainer)) {
-        document.body.removeChild(tempContainer);
-      }
-
-      toast.dismiss(loadingToastId);
-      toast.success('PDF téléchargé avec succès');
-    } catch (error) {
-      console.error('Download error:', error);
-
-      // Clean up on error
-      if (tempContainer && document.body.contains(tempContainer)) {
-        try {
-          document.body.removeChild(tempContainer);
-        } catch (cleanupError) {
-          console.error('Cleanup error:', cleanupError);
-        }
-      }
-
-      toast.dismiss(loadingToastId);
-      toast.error(`Erreur lors de la génération du PDF: ${(error as Error).message}`, {
-        duration: 5000
+      const pdfResponse = await fetch("/api/orders/generate-pdf", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orderId }),
       });
-    }
-  };
 
-  useEffect(() => {
-    fetchOrders();
-  }, [page, filterStatus]);
+      const pdfData = await pdfResponse.json();
 
-  const updateOrderStatus = async (orderId: number, newStatus: string) => {
-    try {
-      await fetch('/api/woocommerce/orders', {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+      if (!pdfResponse.ok) {
+        throw new Error(pdfData.error || "Erreur lors de la génération du PDF");
+      }
+
+      const emailResponse = await fetch("/api/orders/send-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           orderId,
-          orderData: { status: newStatus }
+          pdfBase64: pdfData.pdf,
+          filename: pdfData.filename,
         }),
       });
 
-      toast.success('Statut mis à jour');
+      const emailData = await emailResponse.json();
 
-      // Auto-generate and send invoice when status changes to "processing"
-      if (newStatus === 'processing' && !invoices[orderId]) {
-        const order = orders.find(o => o.id === orderId);
-        if (order) {
-          toast.info('Génération du bon de commande en cours...');
-          await generateInvoice(order, true);
-        }
+      if (!emailResponse.ok) {
+        throw new Error(emailData.error || "Erreur lors de l'envoi de l'email");
       }
 
-      fetchOrders();
-    } catch (error) {
-      toast.error('Erreur lors de la mise à jour');
-      console.error(error);
+      toast.dismiss();
+      toast.success("Email envoyé avec succès au client");
+    } catch (error: any) {
+      toast.dismiss();
+      console.error("Error sending email:", error);
+      toast.error(`Erreur: ${error.message}`);
     }
   };
 
-  return (
-    <div>
-      <h1 className="text-3xl font-bold mb-8">Gestion des Commandes</h1>
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-center">
+          <RefreshCw className="h-8 w-8 animate-spin mx-auto mb-2 text-[#D4AF37]" />
+          <p className="text-gray-600">Chargement des commandes...</p>
+        </div>
+      </div>
+    );
+  }
 
-      <Card className="mb-6">
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-4xl font-bold bg-gradient-to-r from-[#b8933d] to-[#d4af37] bg-clip-text text-transparent">
+            Gestion des commandes
+          </h1>
+          <p className="text-gray-600 mt-2 text-lg">
+            {filteredOrders.length} commande(s) trouvée(s) sur {orders.length} au total
+          </p>
+        </div>
+        <Button
+          onClick={loadOrders}
+          variant="outline"
+          className="border-[#D4AF37] hover:bg-[#D4AF37] hover:text-white"
+        >
+          <RefreshCw className="h-4 w-4 mr-2" />
+          Actualiser
+        </Button>
+      </div>
+
+      <Card>
         <CardContent className="pt-6">
-          <div className="flex gap-4">
-            <Select value={filterStatus} onValueChange={setFilterStatus}>
-              <SelectTrigger className="w-48">
-                <SelectValue placeholder="Tous les statuts" />
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+              <Input
+                placeholder="Rechercher par numéro ou client..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-10"
+              />
+            </div>
+
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger>
+                <SelectValue placeholder="Statut commande" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Tous les statuts</SelectItem>
                 <SelectItem value="pending">En attente</SelectItem>
-                <SelectItem value="processing">En traitement</SelectItem>
-                <SelectItem value="completed">Terminée</SelectItem>
+                <SelectItem value="processing">En cours</SelectItem>
+                <SelectItem value="shipped">Expédiée</SelectItem>
+                <SelectItem value="delivered">Livrée</SelectItem>
                 <SelectItem value="cancelled">Annulée</SelectItem>
+                <SelectItem value="refunded">Remboursée</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <Select value={paymentFilter} onValueChange={setPaymentFilter}>
+              <SelectTrigger>
+                <SelectValue placeholder="Statut paiement" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Tous les paiements</SelectItem>
+                <SelectItem value="pending">En attente</SelectItem>
+                <SelectItem value="processing">En cours</SelectItem>
+                <SelectItem value="completed">Payée</SelectItem>
+                <SelectItem value="failed">Échouée</SelectItem>
+                <SelectItem value="refunded">Remboursée</SelectItem>
               </SelectContent>
             </Select>
           </div>
         </CardContent>
       </Card>
 
-      {loading ? (
-        <div className="flex justify-center py-12">
-          <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
-        </div>
+      {filteredOrders.length === 0 ? (
+        <Card>
+          <CardContent className="py-12 text-center">
+            <ShoppingCart className="h-16 w-16 mx-auto mb-4 text-gray-300" />
+            <h3 className="text-lg font-medium text-gray-900 mb-2">
+              Aucune commande trouvée
+            </h3>
+            <p className="text-gray-600">
+              {searchTerm || statusFilter !== "all" || paymentFilter !== "all"
+                ? "Essayez de modifier vos filtres"
+                : "Les commandes apparaîtront ici"}
+            </p>
+          </CardContent>
+        </Card>
       ) : (
-        <>
-          <div className="space-y-4 mb-6">
-            {orders.map((order) => (
-              <Card key={order.id}>
-                <CardContent className="p-4 sm:p-6">
-                  <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4 mb-4">
-                    <div className="flex-1">
-                      <h3 className="font-bold text-lg mb-1">
-                        Commande #{order.number}
-                      </h3>
-                      <p className="text-gray-600 text-sm">
-                        {order.billing.first_name} {order.billing.last_name}
-                      </p>
-                      <p className="text-gray-500 text-xs">
-                        {new Date(order.date_created).toLocaleDateString('fr-FR')}
-                      </p>
-                    </div>
-                    <div className="flex sm:flex-col gap-4 sm:gap-2 items-center sm:items-end">
-                      <p className="font-bold text-lg">{order.total}€</p>
+        <Card>
+          <CardContent className="p-0">
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>N° Commande</TableHead>
+                    <TableHead>Date</TableHead>
+                    <TableHead>Client</TableHead>
+                    <TableHead>Total</TableHead>
+                    <TableHead>Statut</TableHead>
+                    <TableHead>Paiement</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredOrders.map((order) => (
+                    <TableRow key={order.id} className="hover:bg-gray-50">
+                      <TableCell className="font-medium">
+                        <div className="flex items-center gap-2">
+                          {order.is_open_package && order.open_package && (
+                            <Badge
+                              className={
+                                order.open_package.status === 'active' || order.open_package.status === 'ready_to_prepare'
+                                  ? 'bg-blue-100 text-blue-800'
+                                  : 'bg-purple-100 text-purple-800'
+                              }
+                              title={`Colis ouvert - Statut: ${order.open_package.status}`}
+                            >
+                              📦 Colis Ouvert
+                            </Badge>
+                          )}
+                          #{order.order_number}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        {new Date(order.created_at).toLocaleDateString("fr-FR", {
+                          day: "2-digit",
+                          month: "2-digit",
+                          year: "numeric",
+                        })}
+                      </TableCell>
+                      <TableCell className="text-sm text-gray-600">
+                        {order.shipping_address?.first_name} {order.shipping_address?.last_name}
+                      </TableCell>
+                      <TableCell className="font-semibold text-[#D4AF37]">
+                        {(Number(order.total) || 0).toFixed(2)} €
+                      </TableCell>
+                      <TableCell>{getStatusBadge(order.status)}</TableCell>
+                      <TableCell>{getPaymentBadge(order.payment_status)}</TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleViewOrder(order)}
+                            className="hover:bg-blue-50 hover:text-blue-600"
+                            title="Voir les détails"
+                          >
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleGeneratePDF(order.id, order.order_number)}
+                            className="hover:bg-green-50 hover:text-green-600"
+                            title="Télécharger le PDF"
+                          >
+                            <Download className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleSendEmail(order.id, order.order_number)}
+                            className="hover:bg-purple-50 hover:text-purple-600"
+                            title="Envoyer par email"
+                          >
+                            <Mail className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleDeleteOrder(order.id, order.order_number)}
+                            className="hover:bg-red-50 hover:text-red-600"
+                            title="Supprimer"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          {selectedOrder && (
+            <>
+              <DialogHeader>
+                <DialogTitle className="text-2xl flex items-center gap-2">
+                  Commande #{selectedOrder.order_number}
+                  {selectedOrder.is_open_package && (
+                    <Badge className="bg-blue-500">Colis ouvert</Badge>
+                  )}
+                </DialogTitle>
+                <DialogDescription>
+                  Créée le {new Date(selectedOrder.created_at).toLocaleDateString("fr-FR")} à{" "}
+                  {new Date(selectedOrder.created_at).toLocaleTimeString("fr-FR")}
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="space-y-6 mt-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-sm">Statut commande</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      {selectedOrder.is_open_package && selectedOrder.open_package &&
+                       (selectedOrder.open_package.status === 'active' || selectedOrder.open_package.status === 'ready_to_prepare') ? (
+                        <div className="space-y-2">
+                          <Badge className="bg-blue-100 text-blue-800">
+                            📦 Commande dans un colis ouvert
+                          </Badge>
+                          <p className="text-sm text-gray-600">
+                            Cette commande ne peut pas être expédiée individuellement.
+                            Gérez l'expédition depuis la page des colis ouverts.
+                          </p>
+                          <Select
+                            value={selectedOrder.status}
+                            onValueChange={(value) => {
+                              if (value === 'shipped') {
+                                toast.error("Impossible d'expédier individuellement une commande dans un colis ouvert");
+                                return;
+                              }
+                              handleUpdateStatus(selectedOrder.id, value);
+                            }}
+                          >
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="pending">En attente</SelectItem>
+                              <SelectItem value="processing">En cours</SelectItem>
+                              <SelectItem value="shipped" disabled>Expédiée (Désactivé - Colis ouvert)</SelectItem>
+                              <SelectItem value="delivered">Livrée</SelectItem>
+                              <SelectItem value="cancelled">Annulée</SelectItem>
+                              <SelectItem value="refunded">Remboursée</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      ) : (
+                        <Select
+                          value={selectedOrder.status}
+                          onValueChange={(value) => handleUpdateStatus(selectedOrder.id, value)}
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="pending">En attente</SelectItem>
+                            <SelectItem value="processing">En cours</SelectItem>
+                            <SelectItem value="shipped">Expédiée</SelectItem>
+                            <SelectItem value="delivered">Livrée</SelectItem>
+                            <SelectItem value="cancelled">Annulée</SelectItem>
+                            <SelectItem value="refunded">Remboursée</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      )}
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-sm">Statut paiement</CardTitle>
+                    </CardHeader>
+                    <CardContent>
                       <Select
-                        value={order.status}
-                        onValueChange={(value) => updateOrderStatus(order.id, value)}
+                        value={selectedOrder.payment_status}
+                        onValueChange={(value) =>
+                          handleUpdatePaymentStatus(selectedOrder.id, value)
+                        }
                       >
-                        <SelectTrigger className="w-full sm:w-40">
+                        <SelectTrigger>
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          {Object.entries(statusLabels).map(([value, label]) => (
-                            <SelectItem key={value} value={value}>
-                              {label}
-                            </SelectItem>
-                          ))}
+                          <SelectItem value="pending">En attente</SelectItem>
+                          <SelectItem value="processing">En cours</SelectItem>
+                          <SelectItem value="completed">Payée</SelectItem>
+                          <SelectItem value="failed">Échouée</SelectItem>
+                          <SelectItem value="refunded">Remboursée</SelectItem>
                         </SelectContent>
                       </Select>
-                    </div>
-                  </div>
-                  <div className="border-t pt-4">
-                    <div className="flex items-center gap-2 text-sm text-gray-600 mb-2">
-                      <Package className="w-4 h-4" />
-                      <span>Articles:</span>
-                    </div>
-                    <ul className="text-sm space-y-1">
-                      {order.line_items.map((item, idx) => (
-                        <li key={idx} className="text-gray-600">
-                          {item.name} × {item.quantity}
-                        </li>
-                      ))}
-                    </ul>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                <Separator />
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <h3 className="font-semibold text-lg mb-3 flex items-center gap-2">
+                      <MapPin className="h-5 w-5 text-[#D4AF37]" />
+                      Adresse de livraison
+                    </h3>
+                    {selectedOrder.shipping_address ? (
+                      <div className="bg-gray-50 p-4 rounded-lg text-sm">
+                        <p className="font-medium">
+                          {selectedOrder.shipping_address.first_name}{" "}
+                          {selectedOrder.shipping_address.last_name}
+                        </p>
+                        <p>{(selectedOrder as any).shipping_street || selectedOrder.shipping_address.address_line1 || selectedOrder.shipping_address.street}</p>
+                        {selectedOrder.shipping_address.address_line2 && (
+                          <p>{selectedOrder.shipping_address.address_line2}</p>
+                        )}
+                        <p>
+                          {selectedOrder.shipping_address.postal_code}{" "}
+                          {selectedOrder.shipping_address.city}
+                        </p>
+                        <p>{selectedOrder.shipping_address.country}</p>
+                        <p className="mt-2">Tél: {(selectedOrder as any).shipping_phone || selectedOrder.shipping_address.phone}</p>
+                      </div>
+                    ) : (
+                      <p className="text-gray-500 text-sm">Adresse non disponible</p>
+                    )}
                   </div>
 
-                  {/* Show invoice buttons if invoice exists, or show generate button if processing */}
-                  {(invoices[order.id]?.pdf_url || order.status === 'processing') && (
-                    <div className="border-t pt-4 mt-4">
-                      <div className="flex flex-wrap gap-2">
-                        {invoices[order.id]?.pdf_url ? (
-                          <>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => viewInvoice(order.id)}
-                              className="flex-1 sm:flex-none"
-                            >
-                              <FileText className="w-4 h-4 mr-2" />
-                              Voir le bon de commande
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => downloadInvoice(order.id)}
-                              className="flex-1 sm:flex-none"
-                            >
-                              <Download className="w-4 h-4 mr-2" />
-                              Télécharger
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => sendInvoiceEmail(invoices[order.id].id)}
-                              disabled={sendingInvoice === invoices[order.id].id}
-                              className="flex-1 sm:flex-none"
-                            >
-                              {sendingInvoice === invoices[order.id].id ? (
-                                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                              ) : (
-                                <Send className="w-4 h-4 mr-2" />
-                              )}
-                              Envoyer au client
-                            </Button>
-                            {invoices[order.id].sent_at && (
-                              <span className="text-xs text-green-600 self-center">
-                                Envoyé le{' '}
-                                {new Date(invoices[order.id].sent_at!).toLocaleDateString(
-                                  'fr-FR'
-                                )}
-                              </span>
-                            )}
-                          </>
-                        ) : order.status === 'processing' && (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => generateInvoice(order, false)}
-                            disabled={generatingInvoice === order.id}
-                            className="flex-1 sm:flex-none"
-                          >
-                            {generatingInvoice === order.id ? (
-                              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                            ) : (
-                              <FileText className="w-4 h-4 mr-2" />
-                            )}
-                            Générer le bon de commande
-                          </Button>
+                  {selectedOrder.shipping_method && (
+                    <div>
+                      <h3 className="font-semibold text-lg mb-3 flex items-center gap-2">
+                        <Truck className="h-5 w-5 text-[#D4AF37]" />
+                        Mode de livraison
+                      </h3>
+                      <div className="bg-gray-50 p-4 rounded-lg text-sm">
+                        <p className="font-medium">{selectedOrder.shipping_method.name}</p>
+                        <p className="text-gray-600 mt-1">{selectedOrder.shipping_method.description}</p>
+                        {selectedOrder.shipping_method.delivery_time && (
+                          <p className="text-gray-600 mt-1">
+                            Délai: {selectedOrder.shipping_method.delivery_time}
+                          </p>
                         )}
                       </div>
                     </div>
                   )}
-                </CardContent>
-              </Card>
-            ))}
-          </div>
+                </div>
 
-          <div className="flex justify-center gap-2">
-            <Button
-              variant="outline"
-              onClick={() => setPage(p => Math.max(1, p - 1))}
-              disabled={page === 1}
-            >
-              Précédent
-            </Button>
-            <span className="px-4 py-2">
-              Page {page} sur {totalPages}
-            </span>
-            <Button
-              variant="outline"
-              onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-              disabled={page === totalPages}
-            >
-              Suivant
-            </Button>
-          </div>
-        </>
-      )}
+                <Separator />
+
+                <div>
+                  <h3 className="font-semibold text-lg mb-3 flex items-center gap-2">
+                    <Package className="h-5 w-5 text-[#D4AF37]" />
+                    Produits commandés ({selectedOrder.order_items?.length || 0})
+                  </h3>
+                  <div className="space-y-3">
+                    {selectedOrder.order_items && selectedOrder.order_items.length > 0 ? (
+                      selectedOrder.order_items.map((item: any) => (
+                        <div
+                          key={item.id}
+                          className="flex gap-4 bg-gray-50 p-4 rounded-lg border"
+                        >
+                          {item.product_image && (
+                            <div className="relative w-16 h-16 flex-shrink-0">
+                              <img
+                                src={item.product_image}
+                                alt={item.product_name}
+                                className="w-full h-full object-cover rounded"
+                              />
+                            </div>
+                          )}
+                          <div className="flex-1">
+                            <p className="font-medium">{item.product_name}</p>
+                            {item.variation_data && (
+                              <div className="text-sm text-gray-600 mt-1">
+                                {(() => {
+                                  // Gérer les deux formats: array d'objets ou objet direct
+                                  const attributes = item.variation_data.attributes || item.variation_data;
+
+                                  // Si c'est un array d'objets avec name/option
+                                  if (Array.isArray(attributes)) {
+                                    return attributes.map((attr: any, idx: number) => (
+                                      <span key={idx} className="mr-3">
+                                        {attr.name}: <strong>{attr.option}</strong>
+                                      </span>
+                                    ));
+                                  }
+
+                                  // Si c'est un objet clé-valeur
+                                  if (typeof attributes === 'object') {
+                                    return Object.entries(attributes).map(([key, value]) => {
+                                      // Ignorer les champs techniques
+                                      if (key === 'price' || key === 'image' || key.includes('_id') || key.includes('color_code')) {
+                                        return null;
+                                      }
+
+                                      const displayValue = typeof value === 'object'
+                                        ? (value as any)?.name || (value as any)?.option || String(value)
+                                        : String(value);
+
+                                      return (
+                                        <span key={key} className="mr-3">
+                                          {key}: <strong>{displayValue}</strong>
+                                        </span>
+                                      );
+                                    }).filter(Boolean);
+                                  }
+
+                                  return null;
+                                })()}
+                              </div>
+                            )}
+                            <div className="flex items-center justify-between mt-2">
+                              <p className="text-sm text-gray-600">Quantité: {item.quantity}</p>
+                              <p className="font-semibold">
+                                {((Number(item.price) || 0) * item.quantity).toFixed(2)} €
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <p className="text-gray-500 text-sm">Aucun produit trouvé</p>
+                    )}
+                  </div>
+                </div>
+
+                <Separator />
+
+                <div>
+                  <h3 className="font-semibold text-lg mb-3">Récapitulatif financier</h3>
+                  <div className="bg-gray-50 p-4 rounded-lg space-y-2 text-sm">
+                    <div className="flex justify-between">
+                      <span>Sous-total</span>
+                      <span>{(Number(selectedOrder.subtotal) || 0).toFixed(2)} €</span>
+                    </div>
+                    {(Number(selectedOrder.shipping_cost) || 0) > 0 && (
+                      <div className="flex justify-between">
+                        <span>Frais de port</span>
+                        <span>{(Number(selectedOrder.shipping_cost) || 0).toFixed(2)} €</span>
+                      </div>
+                    )}
+                    {(Number(selectedOrder.discount_amount) || 0) > 0 && (
+                      <div className="flex justify-between text-green-600">
+                        <span>
+                          Remise {selectedOrder.coupon_code && `(${selectedOrder.coupon_code})`}
+                        </span>
+                        <span>-{(Number(selectedOrder.discount_amount) || 0).toFixed(2)} €</span>
+                      </div>
+                    )}
+                    {Number(selectedOrder.wallet_amount_used) > 0 && (
+                      <div className="flex justify-between text-purple-600">
+                        <span>Portefeuille utilisé</span>
+                        <span>-{(Number(selectedOrder.wallet_amount_used) || 0).toFixed(2)} €</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between text-xs text-gray-500">
+                      <span>TVA (20%)</span>
+                      <span>{(Number(selectedOrder.tax_amount) || 0).toFixed(2)} €</span>
+                    </div>
+                    <Separator />
+                    <div className="flex justify-between font-bold text-lg text-[#D4AF37]">
+                      <span>Total TTC</span>
+                      <span>{(Number(selectedOrder.total) || 0).toFixed(2)} €</span>
+                    </div>
+                  </div>
+                </div>
+
+                {selectedOrder.notes && (
+                  <>
+                    <Separator />
+                    <div>
+                      <h3 className="font-semibold text-lg mb-2">Notes client</h3>
+                      <p className="bg-gray-50 p-3 rounded-lg text-sm">{selectedOrder.notes}</p>
+                    </div>
+                  </>
+                )}
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -1,79 +1,173 @@
 'use client';
 
-import { Suspense, useEffect } from 'react';
-import { useQuery } from '@apollo/client/react';
+import { Suspense, useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { GET_POSTS, GET_POSTS_BY_CATEGORY } from '@/lib/queries';
-import { GetPostsResponse } from '@/types';
 import NewsCard from '@/components/NewsCard';
-import { BookOpen, Sparkles } from 'lucide-react';
+import { BookOpen, Sparkles, Filter } from 'lucide-react';
+import { supabase } from '@/lib/supabase';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import PageHeader from '@/components/PageHeader';
+
+interface NewsCategory {
+  id: string;
+  name: string;
+  slug: string;
+  color: string;
+  count: number;
+}
+
+interface NewsPost {
+  id: string;
+  title: string;
+  slug: string;
+  excerpt: string;
+  featured_image_url: string | null;
+  published_at: string;
+  news_post_categories: Array<{
+    news_categories: NewsCategory;
+  }>;
+}
 
 function ActualitesContent() {
   const searchParams = useSearchParams();
   const categorySlug = searchParams.get('category');
 
-  const { loading, data } = useQuery<GetPostsResponse>(
-    categorySlug ? GET_POSTS_BY_CATEGORY : GET_POSTS,
-    {
-      variables: categorySlug ? { categorySlug } : undefined,
-    }
-  );
-
-  const posts = data?.posts?.nodes || [];
+  const [loading, setLoading] = useState(true);
+  const [posts, setPosts] = useState<NewsPost[]>([]);
+  const [categories, setCategories] = useState<NewsCategory[]>([]);
+  const [categoryName, setCategoryName] = useState<string | null>(null);
 
   useEffect(() => {
-    const titleText = categorySlug && posts.length > 0
-      ? `Le Carnet de Morgane - ${getCategoryName()} | Conseils Mode, Beauté et Maison`
-      : 'Le Carnet de Morgane | Conseils Mode, Beauté et Maison - La Boutique de Morgane';
+    loadCategories();
+    loadPosts();
+  }, [categorySlug]);
 
-    const descriptionText = categorySlug && posts.length > 0
-      ? `Découvre tous mes conseils et astuces ${getCategoryName()?.toLowerCase()} sur le Carnet de Morgane. Mode, beauté, lifestyle et bien plus encore !`
-      : 'Plonge dans le Carnet de Morgane : conseils mode, beauté, lifestyle et astuces maison. Mon coin des confidences où je partage mes coups de cœur et mes découvertes du moment.';
+  const loadCategories = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('news_categories')
+        .select('*')
+        .eq('is_active', true)
+        .order('display_order', { ascending: true });
 
-    document.title = titleText;
-
-    let metaDescription = document.querySelector('meta[name="description"]');
-    if (!metaDescription) {
-      metaDescription = document.createElement('meta');
-      metaDescription.setAttribute('name', 'description');
-      document.head.appendChild(metaDescription);
+      if (error) throw error;
+      setCategories(data || []);
+    } catch (error) {
+      console.error('Error loading categories:', error);
     }
-    metaDescription.setAttribute('content', descriptionText);
+  };
 
-    let metaOgTitle = document.querySelector('meta[property="og:title"]');
-    if (!metaOgTitle) {
-      metaOgTitle = document.createElement('meta');
-      metaOgTitle.setAttribute('property', 'og:title');
-      document.head.appendChild(metaOgTitle);
-    }
-    metaOgTitle.setAttribute('content', titleText);
+  const loadPosts = async () => {
+    try {
+      setLoading(true);
 
-    let metaOgDescription = document.querySelector('meta[property="og:description"]');
-    if (!metaOgDescription) {
-      metaOgDescription = document.createElement('meta');
-      metaOgDescription.setAttribute('property', 'og:description');
-      document.head.appendChild(metaOgDescription);
+      if (categorySlug) {
+        const { data: categoryData } = await supabase
+          .from('news_categories')
+          .select('id, name')
+          .eq('slug', categorySlug)
+          .maybeSingle();
+
+        if (categoryData) {
+          setCategoryName(categoryData.name);
+
+          const { data: postCategoriesData } = await supabase
+            .from('news_post_categories')
+            .select('post_id')
+            .eq('category_id', categoryData.id);
+
+          const postIds = (postCategoriesData || []).map(pc => pc.post_id);
+
+          if (postIds.length === 0) {
+            setPosts([]);
+            setLoading(false);
+            return;
+          }
+
+          const { data, error } = await supabase
+            .from('news_posts')
+            .select(`
+              id,
+              title,
+              slug,
+              excerpt,
+              featured_image_url,
+              published_at,
+              news_post_categories (
+                news_categories (
+                  id,
+                  name,
+                  slug,
+                  color
+                )
+              )
+            `)
+            .in('id', postIds)
+            .eq('status', 'publish')
+            .lte('published_at', new Date().toISOString())
+            .order('published_at', { ascending: false });
+
+          if (error) throw error;
+
+          const formattedPosts = (data || []).map((post: any) => ({
+            ...post,
+            news_post_categories: post.news_post_categories.map((pc: any) => ({
+              news_categories: Array.isArray(pc.news_categories) ? pc.news_categories[0] : pc.news_categories
+            }))
+          }));
+
+          setPosts(formattedPosts);
+        }
+      } else {
+        const { data, error } = await supabase
+          .from('news_posts')
+          .select(`
+            id,
+            title,
+            slug,
+            excerpt,
+            featured_image_url,
+            published_at,
+            news_post_categories (
+              news_categories (
+                id,
+                name,
+                slug,
+                color
+              )
+            )
+          `)
+          .eq('status', 'publish')
+          .lte('published_at', new Date().toISOString())
+          .order('published_at', { ascending: false });
+
+        if (error) throw error;
+
+        const formattedPosts = (data || []).map((post: any) => ({
+          ...post,
+          news_post_categories: post.news_post_categories.map((pc: any) => ({
+            news_categories: Array.isArray(pc.news_categories) ? pc.news_categories[0] : pc.news_categories
+          }))
+        }));
+
+        setPosts(formattedPosts);
+        setCategoryName(null);
+      }
+    } catch (error) {
+      console.error('Error loading posts:', error);
+    } finally {
+      setLoading(false);
     }
-    metaOgDescription.setAttribute('content', descriptionText);
-  }, [posts, categorySlug]);
+  };
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 py-12">
+      <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white py-12">
         <div className="container mx-auto px-4">
-          <div className="mb-8">
-            <div className="flex items-center gap-3 mb-3">
-              <BookOpen className="h-8 w-8 text-[#b8933d]" />
-              <h1 className="text-4xl font-bold text-gray-900">Le Carnet de Morgane</h1>
-              <Sparkles className="h-6 w-6 text-[#b8933d]" />
-            </div>
-            <p className="text-lg text-gray-600 italic ml-11" style={{ fontFamily: "'Dancing Script', 'Brush Script MT', cursive" }}>
-              Le coin des confidences, de la mode et du lifestyle
-            </p>
-          </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
-              <div key={i} className="bg-white rounded-lg overflow-hidden shadow-md animate-pulse">
+              <div key={i} className="bg-white rounded-xl overflow-hidden shadow-md animate-pulse">
                 <div className="h-48 bg-gray-200" />
                 <div className="p-5 space-y-3">
                   <div className="h-4 bg-gray-200 rounded w-1/4" />
@@ -89,45 +183,56 @@ function ActualitesContent() {
     );
   }
 
-  const getCategoryName = () => {
-    if (categorySlug && posts.length > 0) {
-      const firstPost = posts[0];
-      const category = firstPost.categories.nodes.find(cat => cat.slug === categorySlug);
-      return category?.name;
-    }
-    return null;
-  };
-
-  const categoryName = getCategoryName();
-
   return (
-    <div className="min-h-screen bg-gray-50 py-12">
+    <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white py-12">
       <div className="container mx-auto px-4">
-        <div className="mb-8">
-          <div className="flex items-center gap-3 mb-3">
-            <BookOpen className="h-8 w-8 text-[#b8933d]" />
-            <h1 className="text-4xl font-bold text-gray-900">
-              {categoryName ? `Le Carnet de Morgane - ${categoryName}` : 'Le Carnet de Morgane'}
-            </h1>
-            <Sparkles className="h-6 w-6 text-[#b8933d]" />
-          </div>
-          <p className="text-lg text-gray-600 italic ml-11" style={{ fontFamily: "'Dancing Script', 'Brush Script MT', cursive" }}>
-            {categoryName
+        <PageHeader
+          icon={BookOpen}
+          title={categoryName || 'Le Carnet de Morgane'}
+          description={
+            categoryName
               ? `${posts.length} article${posts.length > 1 ? 's' : ''} dans cette catégorie`
               : 'Le coin des confidences, de la mode et du lifestyle'
-            }
-          </p>
-        </div>
+          }
+        />
+
+        {categories.length > 0 && (
+          <div className="mb-8 flex items-center gap-3 flex-wrap">
+            <Filter className="h-5 w-5 text-gray-500" />
+            <Button
+              variant={!categorySlug ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => window.location.href = '/actualites'}
+              className={!categorySlug ? 'bg-[#C6A15B] hover:bg-[#b8933d]' : ''}
+            >
+              Toutes
+            </Button>
+            {categories.map((cat) => (
+              <Button
+                key={cat.id}
+                variant={categorySlug === cat.slug ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => window.location.href = `/actualites?category=${cat.slug}`}
+                className={categorySlug === cat.slug ? 'text-white' : ''}
+                style={categorySlug === cat.slug ? { backgroundColor: cat.color } : {}}
+              >
+                {cat.name}
+              </Button>
+            ))}
+          </div>
+        )}
 
         {posts.length === 0 ? (
-          <div className="text-center py-12">
-            <BookOpen className="h-16 w-16 text-gray-300 mx-auto mb-4" />
-            <h2 className="text-xl font-semibold text-gray-600 mb-2">
-              Aucune actualité pour le moment
-            </h2>
-            <p className="text-gray-500">
-              Revenez bientôt pour découvrir nos dernières nouvelles
-            </p>
+          <div className="text-center py-20">
+            <div className="bg-white rounded-2xl shadow-lg p-12 max-w-md mx-auto">
+              <BookOpen className="h-20 w-20 text-gray-300 mx-auto mb-6" />
+              <h2 className="text-2xl font-bold text-gray-700 mb-3">
+                Aucune actualité pour le moment
+              </h2>
+              <p className="text-gray-500 text-lg">
+                Revenez bientôt pour découvrir nos dernières nouvelles
+              </p>
+            </div>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -143,37 +248,11 @@ function ActualitesContent() {
 
 export default function ActualitesPage() {
   return (
-    <Suspense
-      fallback={
-        <div className="min-h-screen bg-gray-50 py-12">
-          <div className="container mx-auto px-4">
-            <div className="mb-8">
-              <div className="flex items-center gap-3 mb-3">
-                <BookOpen className="h-8 w-8 text-[#b8933d]" />
-                <h1 className="text-4xl font-bold text-gray-900">Le Carnet de Morgane</h1>
-                <Sparkles className="h-6 w-6 text-[#b8933d]" />
-              </div>
-              <p className="text-lg text-gray-600 italic ml-11" style={{ fontFamily: "'Dancing Script', 'Brush Script MT', cursive" }}>
-                Le coin des confidences, de la mode et du lifestyle
-              </p>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
-                <div key={i} className="bg-white rounded-lg overflow-hidden shadow-md animate-pulse">
-                  <div className="h-48 bg-gray-200" />
-                  <div className="p-5 space-y-3">
-                    <div className="h-4 bg-gray-200 rounded w-1/4" />
-                    <div className="h-6 bg-gray-200 rounded w-3/4" />
-                    <div className="h-4 bg-gray-200 rounded w-full" />
-                    <div className="h-4 bg-gray-200 rounded w-5/6" />
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      }
-    >
+    <Suspense fallback={
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-gray-600">Chargement...</div>
+      </div>
+    }>
       <ActualitesContent />
     </Suspense>
   );

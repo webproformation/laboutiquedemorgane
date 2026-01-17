@@ -1,10 +1,10 @@
-"use client";
+'use client';
 
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { X, Plus } from 'lucide-react';
-import MediaGrid from './MediaGrid';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import MediaLibrary from '@/components/MediaLibrary';
+import { Plus, X } from 'lucide-react';
 
 export interface GalleryImage {
   url: string;
@@ -19,26 +19,25 @@ interface ProductGalleryManagerProps {
 export default function ProductGalleryManager({ images, onChange }: ProductGalleryManagerProps) {
   const [open, setOpen] = useState(false);
 
-  const handleAddImage = (url: string, id: number) => {
-    onChange([...images, { url, id }]);
+  const handleAddImage = (url: string) => {
+    onChange([...images, { url, id: Date.now() }]);
     setOpen(false);
   };
 
   const handleRemoveImage = (index: number) => {
-    const newImages = images.filter((_, i) => i !== index);
-    onChange(newImages);
+    onChange(images.filter((_, i) => i !== index));
   };
 
   return (
-    <div>
+    <div className="space-y-4">
       {images.length > 0 && (
-        <div className="grid grid-cols-4 gap-4 mb-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
           {images.map((image, index) => (
             <div key={index} className="relative group">
               <img
                 src={image.url}
                 alt={`Galerie ${index + 1}`}
-                className="w-full h-32 object-cover rounded-lg border"
+                className="w-full h-32 object-cover rounded border"
               />
               <Button
                 type="button"
@@ -49,6 +48,9 @@ export default function ProductGalleryManager({ images, onChange }: ProductGalle
               >
                 <X className="w-4 h-4" />
               </Button>
+              <div className="absolute bottom-2 left-2 bg-black bg-opacity-70 text-white text-xs px-2 py-1 rounded">
+                {index + 1}
+              </div>
             </div>
           ))}
         </div>
@@ -56,24 +58,21 @@ export default function ProductGalleryManager({ images, onChange }: ProductGalle
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogTrigger asChild>
-          <Button
-            type="button"
-            variant="outline"
-            className="w-full border-dashed"
-          >
-            <Plus className="w-4 h-4 mr-2" />
+          <Button type="button" variant="outline" className="w-full border-dashed gap-2">
+            <Plus className="w-4 h-4" />
             Ajouter une image à la galerie
           </Button>
         </DialogTrigger>
-        <DialogContent className="max-w-4xl max-h-[80vh]">
-          <DialogHeader>
+        <DialogContent className="max-w-6xl max-h-[90vh] overflow-hidden flex flex-col p-0">
+          <DialogHeader className="p-6 pb-0 shrink-0">
             <DialogTitle>Choisir une image pour la galerie</DialogTitle>
-            <DialogDescription>
-              Sélectionnez une image de la médiathèque WordPress ou uploadez-en une nouvelle
-            </DialogDescription>
           </DialogHeader>
-          <div className="overflow-auto max-h-[60vh]">
-            <MediaGrid onSelect={handleAddImage} />
+          <div className="p-6 pt-4 overflow-y-auto flex-1">
+            <MediaLibrary
+              bucket="media"
+              onSelect={(url) => handleAddImage(url)}
+              onClose={() => setOpen(false)}
+            />
           </div>
         </DialogContent>
       </Dialog>

@@ -1,264 +1,223 @@
-import { Card, CardContent } from '@/components/ui/card';
-import { Heart, Sparkles, Users, Smile, ShoppingBag, Tv, Facebook, Instagram, Phone } from 'lucide-react';
-import Image from 'next/image';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Heart, Sparkles, ShoppingBag, Tv, Phone, Users, Facebook, UserCircle } from 'lucide-react';
+import Link from 'next/link';
+import PageHeader from '@/components/PageHeader';
 
 export default function QuiSommesNousPage() {
   return (
     <div className="min-h-screen bg-gradient-to-b from-white to-[#F2F2E8]">
       <div className="container mx-auto px-4 py-12">
-        <div className="max-w-4xl mx-auto">
-          <div className="text-center mb-12">
-            <h1 className="text-4xl md:text-5xl font-bold text-gray-900 mb-4">
-              Bienvenue dans la famille
-            </h1>
-            <div className="inline-block">
-              <h2 className="text-3xl md:text-4xl font-bold bg-gradient-to-r from-[#D4AF37] to-[#b8933d] bg-clip-text text-transparent mb-6">
-                "La Boutique de Morgane"
-              </h2>
-            </div>
-            <p className="text-lg text-gray-700 max-w-3xl mx-auto leading-relaxed">
-              Si vous lisez ces lignes, c'est que vous cherchez bien plus que des vêtements.
-              Vous cherchez une histoire, un sourire, et peut-être un peu de folie.
-              Ça tombe bien, vous êtes exactement au bon endroit.
-            </p>
-          </div>
+        <div className="max-w-4xl mx-auto space-y-8">
+          <PageHeader
+            icon={UserCircle}
+            title="Qui Sommes-Nous ?"
+            description="Découvrez notre histoire, celle d'une passion devenue entreprise, d'un rêve partagé avec des milliers de clientes heureuses."
+          />
 
-          <Card className="mb-8 bg-gradient-to-br from-[#D4AF37]/10 to-[#F2F2E8] border-[#D4AF37]">
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-3 mb-4">
-                <div className="w-12 h-12 rounded-full bg-[#D4AF37] flex items-center justify-center">
-                  <Heart className="h-6 w-6 text-white" />
-                </div>
-                <h3 className="text-2xl font-bold text-gray-900">Notre slogan</h3>
+          <Card className="bg-gradient-to-br from-[#D4AF37]/20 to-[#b8933d]/20 border-[#C6A15B]">
+            <CardHeader>
+              <div className="flex items-center gap-3">
+                <Heart className="h-8 w-8 text-[#C6A15B]" />
+                <CardTitle className="text-2xl">Notre slogan</CardTitle>
               </div>
-              <p className="text-lg text-gray-700 italic">
-                « Votre dose de style et de joie » n'est pas une phrase marketing.
-                C'est le résumé de notre vie depuis 2020.
+            </CardHeader>
+            <CardContent>
+              <p className="text-lg italic text-gray-700 leading-relaxed">
+                « Votre dose de style et de joie » n'est pas une phrase marketing. C'est le résumé de notre vie depuis 2020.
               </p>
             </CardContent>
           </Card>
 
-          <div className="space-y-8">
-            <Card className="overflow-hidden">
-              <div className="bg-gradient-to-r from-[#D4AF37] to-[#b8933d] p-6">
-                <div className="flex items-center gap-3 text-white">
-                  <Sparkles className="h-8 w-8" />
-                  <div>
-                    <h3 className="text-2xl font-bold">2020 : Le "Système D" et la Passion</h3>
-                    <p className="text-white/90">L'ère Morgane</p>
-                  </div>
+          <Card className="overflow-hidden">
+            <div className="bg-gradient-to-r from-[#D4AF37] to-[#b8933d] p-6">
+              <div className="flex items-center gap-3 text-white">
+                <Sparkles className="h-8 w-8" />
+                <div>
+                  <h3 className="text-2xl font-bold">2020 : Le "Système D" et la Passion</h3>
+                  <p className="text-white/90">L'ère Morgane</p>
                 </div>
               </div>
-              <CardContent className="pt-6">
-                <p className="text-gray-700 mb-4 leading-relaxed">
-                  Tout a commencé par une envie simple : partager ma passion pour la mode et apporter de la joie,
-                  même à distance. Morgane s'est lancée seule, armée de son téléphone et d'une énergie débordante.
-                </p>
-                <p className="text-gray-700 mb-4 leading-relaxed">
-                  Celles qui sont là depuis le début (merci, vous êtes nos piliers !) s'en souviennent avec le sourire :
-                </p>
-                <div className="bg-[#F2F2E8] rounded-lg p-6 space-y-3">
-                  <div className="flex items-start gap-3">
-                    <div className="w-2 h-2 rounded-full bg-[#D4AF37] mt-2"></div>
-                    <p className="text-gray-700">
-                      <strong>C'était l'époque où le scotch des colis s'arrachait... avec les dents !</strong>
-                    </p>
-                  </div>
-                  <div className="flex items-start gap-3">
-                    <div className="w-2 h-2 rounded-full bg-[#D4AF37] mt-2"></div>
-                    <p className="text-gray-700">
-                      <strong>C'était les nuits blanches</strong> à faire les factures à la main après des heures de live.
-                    </p>
-                  </div>
-                  <div className="flex items-start gap-3">
-                    <div className="w-2 h-2 rounded-full bg-[#D4AF37] mt-2"></div>
-                    <p className="text-gray-700">
-                      C'était artisanal, c'était parfois chaotique, mais c'était surtout <strong>rempli d'amour</strong>.
-                    </p>
-                  </div>
-                </div>
-                <p className="text-gray-700 mt-4 italic">
-                  C'est dans ces moments-là, entre deux éclats de rire et trois cartons,
-                  que les fondations de cette "Team" ont été posées.
-                </p>
-              </CardContent>
-            </Card>
+            </div>
+            <CardContent className="p-6 space-y-4">
+              <p className="text-gray-700 leading-relaxed">
+                C'est en 2020 que tout a commencé. Morgane, passionnée de mode, a décidé de partager ses pépites avec vous.
+                Tout était artisanal, authentique, fait avec les moyens du bord mais surtout... avec une passion immense.
+              </p>
+              <div className="bg-gray-50 p-4 rounded-lg space-y-3">
+                <p className="font-semibold text-[#C6A15B]">Celles qui sont là depuis le début se souviennent :</p>
+                <ul className="space-y-2 text-gray-700">
+                  <li className="flex items-start gap-2">
+                    <span className="text-[#C6A15B] mt-1">•</span>
+                    <span>C'était l'époque où le scotch des colis s'arrachait... avec les dents !</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="text-[#C6A15B] mt-1">•</span>
+                    <span>C'était les nuits blanches à faire les factures à la main</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="text-[#C6A15B] mt-1">•</span>
+                    <span>C'était artisanal, chaotique, mais rempli d'amour</span>
+                  </li>
+                </ul>
+              </div>
+              <p className="text-gray-700 italic">
+                "Chaque commande était une victoire, chaque sourire de cliente une récompense."
+              </p>
+            </CardContent>
+          </Card>
 
-            <Card className="overflow-hidden">
-              <div className="bg-gradient-to-r from-pink-500 to-red-500 p-6">
-                <div className="flex items-center gap-3 text-white">
-                  <Heart className="h-8 w-8 fill-current" />
-                  <div>
-                    <h3 className="text-2xl font-bold">2023 : L'Amour s'en mêle</h3>
-                    <p className="text-white/90">Le Duo de Choc</p>
-                  </div>
+          <Card className="overflow-hidden">
+            <div className="bg-gradient-to-r from-pink-500 to-red-500 p-6">
+              <div className="flex items-center gap-3 text-white">
+                <Heart className="h-8 w-8 fill-current" />
+                <div>
+                  <h3 className="text-2xl font-bold">2023 : L'Amour s'en mêle</h3>
+                  <p className="text-white/90">Le Duo de Choc</p>
                 </div>
               </div>
-              <CardContent className="pt-6">
-                <p className="text-gray-700 mb-4 leading-relaxed">
-                  En 2023, la vie de Morgane a basculé avec la rencontre du grand Amour.
+            </div>
+            <CardContent className="p-6 space-y-4">
+              <p className="text-gray-700 leading-relaxed">
+                En 2023, la vie de Morgane a basculé avec la rencontre du grand Amour. André, touché par cette aventure humaine
+                et par la détermination de Morgane, s'est laissé séduire... et pas seulement par elle !
+              </p>
+              <div className="bg-gradient-to-r from-pink-100 to-red-100 border-l-4 border-pink-500 p-4 rounded">
+                <p className="text-gray-800 font-medium">
+                  Touché par cette aventure humaine et convaincu que ce projet méritait d'aller plus loin,
+                  il a rejoint l'aventure en 2024 !
                 </p>
-                <p className="text-gray-700 mb-4 leading-relaxed">
-                  Au fil des discussions, Morgane lui a raconté ses journées, non pas comme un travail,
-                  mais comme une relation privilégiée avec vous. Elle lui a parlé de cette proximité unique,
-                  de ce lien qui fait que nos clientes sont bien plus que des clientes :
-                  elles sont une extension de notre famille.
-                </p>
-                <div className="bg-gradient-to-r from-pink-50 to-red-50 rounded-lg p-6 my-4 border-l-4 border-pink-500">
-                  <p className="text-gray-800 font-semibold">
-                    Touché par cette aventure humaine et par l'énergie incroyable de la Team,
-                    il a fait le grand saut. En 2024, il rejoint officiellement l'aventure !
-                  </p>
-                </div>
-                <p className="text-gray-700 leading-relaxed">
-                  Son arrivée a tout changé : plus de lives, plus de structure, mais surtout encore plus de fous rires.
-                  Ensemble, nous avons transformé les sessions shopping en véritables événements,
-                  mêlant jeux, détente et mode. Parce que s'habiller, c'est bien, mais s'amuser en le faisant, c'est mieux !
-                </p>
-              </CardContent>
-            </Card>
+              </div>
+              <p className="text-gray-700 leading-relaxed">
+                Le résultat ? Plus de lives interactifs, plus de structure, encore plus de fous rires...
+                et toujours cette même envie : vous faire plaisir.
+              </p>
+            </CardContent>
+          </Card>
 
-            <Card className="overflow-hidden">
-              <div className="bg-gradient-to-r from-[#D4AF37] via-[#b8933d] to-[#D4AF37] p-6">
-                <div className="flex items-center gap-3 text-white">
-                  <ShoppingBag className="h-8 w-8" />
-                  <div>
-                    <h3 className="text-2xl font-bold">2026 : Bienvenue dans notre (votre) nouvelle maison</h3>
-                  </div>
+          <Card className="overflow-hidden">
+            <div className="bg-gradient-to-r from-[#D4AF37] via-[#b8933d] to-[#D4AF37] p-6">
+              <div className="flex items-center gap-3 text-white">
+                <ShoppingBag className="h-8 w-8" />
+                <div>
+                  <h3 className="text-2xl font-bold">2026 : Bienvenue dans notre (votre) nouvelle maison</h3>
+                  <p className="text-white/90">Une Boutique qui vous ressemble</p>
                 </div>
               </div>
-              <CardContent className="pt-6">
-                <p className="text-gray-700 mb-6 leading-relaxed">
-                  Aujourd'hui, nous écrivons un nouveau chapitre. Nous avons voulu créer un endroit
-                  qui nous ressemble et qui <strong>VOUS</strong> rassemble.
+            </div>
+            <CardContent className="p-6 space-y-4">
+              <div className="grid md:grid-cols-2 gap-4">
+                <div className="bg-gray-50 p-4 rounded-lg">
+                  <div className="flex items-center gap-2 mb-2">
+                    <ShoppingBag className="h-6 w-6 text-[#C6A15B]" />
+                    <h4 className="font-semibold text-lg">Le Shopping Facile</h4>
+                  </div>
+                  <p className="text-gray-700">
+                    Retrouvez nos pépites 24h/24, 7j/7. Plus besoin d'attendre le live pour craquer !
+                  </p>
+                </div>
+                <div className="bg-gray-50 p-4 rounded-lg">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Tv className="h-6 w-6 text-[#C6A15B]" />
+                    <h4 className="font-semibold text-lg">Le Live Intégré</h4>
+                  </div>
+                  <p className="text-gray-700">
+                    Suivez nos directs et shoppez en temps réel. L'expérience live, en encore mieux !
+                  </p>
+                </div>
+              </div>
+              <div className="bg-green-50 border-l-4 border-green-500 p-4 rounded">
+                <p className="text-gray-800 font-medium">
+                  Malgré la technologie, notre promesse reste intacte : <strong>Qualité, Petit Prix, et Bonne Humeur.</strong>
                 </p>
-                <p className="text-gray-700 mb-6 leading-relaxed">
-                  Ce site web, c'est notre nouvelle maison. Nous l'avons imaginé pour nous rapprocher encore plus de vous :
-                </p>
-                <div className="grid md:grid-cols-2 gap-4 mb-6">
-                  <div className="bg-[#F2F2E8] rounded-lg p-5">
-                    <div className="flex items-center gap-3 mb-3">
-                      <div className="w-10 h-10 rounded-full bg-[#D4AF37] flex items-center justify-center">
-                        <ShoppingBag className="h-5 w-5 text-white" />
-                      </div>
-                      <h4 className="font-bold text-gray-900">Le Shopping Facile</h4>
-                    </div>
-                    <p className="text-sm text-gray-700">
-                      Retrouvez nos pépites 24h/24.
-                    </p>
-                  </div>
-                  <div className="bg-[#F2F2E8] rounded-lg p-5">
-                    <div className="flex items-center gap-3 mb-3">
-                      <div className="w-10 h-10 rounded-full bg-[#D4AF37] flex items-center justify-center">
-                        <Tv className="h-5 w-5 text-white" />
-                      </div>
-                      <h4 className="font-bold text-gray-900">Le Live Intégré</h4>
-                    </div>
-                    <p className="text-sm text-gray-700">
-                      La grande nouveauté ! Suivez nos directs et shoppez en temps réel directement ici,
-                      sans changer de plateforme.
-                    </p>
-                  </div>
-                </div>
-                <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg p-6 border-2 border-green-200">
-                  <p className="text-center text-lg font-semibold text-gray-900">
-                    Malgré la technologie, notre promesse reste intacte :
-                    <span className="text-green-700"> Qualité, Petit Prix, et Bonne Humeur.</span>
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
+              </div>
+            </CardContent>
+          </Card>
 
-            <Card className="bg-gradient-to-br from-[#D4AF37] to-[#b8933d] text-white">
-              <CardContent className="pt-6 pb-6">
-                <div className="text-center">
-                  <p className="text-xl mb-4 leading-relaxed">
-                    Merci de faire partie de notre histoire. Que vous soyez là depuis l'époque du scotch
-                    ou que vous veniez d'arriver, <strong>bienvenue dans la famille</strong>.
-                  </p>
-                  <div className="my-6">
-                    <p className="text-lg mb-2">Avec tout notre amour,</p>
-                    <p className="text-2xl font-bold">Morgane & Doudou</p>
-                    <p className="text-white/90">Vos complices mode.</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+          <Card className="bg-gradient-to-br from-[#C6A15B] to-[#b8933d] text-white">
+            <CardContent className="p-8 text-center space-y-4">
+              <p className="text-xl leading-relaxed">
+                Merci de faire partie de notre histoire. Merci de nous suivre, de nous soutenir,
+                de partager nos fous rires et nos coups de cœur mode.
+              </p>
+              <p className="text-xl leading-relaxed">
+                Vous n'êtes pas seulement des clientes, vous êtes notre <strong>famille</strong>.
+              </p>
+              <p className="text-2xl font-bold mt-6">
+                Avec tout notre amour,<br/>
+                <span className="text-white">Morgane & Doudou</span>
+              </p>
+              <p className="text-lg italic">Vos complices mode.</p>
+            </CardContent>
+          </Card>
 
-            <Card className="border-2 border-[#D4AF37]">
-              <CardContent className="pt-6">
-                <div className="text-center">
-                  <div className="flex items-center justify-center gap-3 mb-4">
-                    <Phone className="h-8 w-8 text-[#D4AF37]" />
-                    <h3 className="text-2xl font-bold text-gray-900">Besoin de nous contacter ?</h3>
-                  </div>
-                  <p className="text-gray-700 mb-4">
-                    N'hésitez pas à nous appeler, nous sommes là pour vous accompagner !
-                  </p>
-                  <div className="bg-gradient-to-r from-[#D4AF37]/10 to-[#b8933d]/10 rounded-lg p-6 mb-6">
-                    <div className="space-y-3">
-                      <a
-                        href="tel:+33641456671"
-                        className="text-lg font-semibold text-[#D4AF37] hover:underline block"
-                      >
-                        Morgane : +33 6 41 45 66 71
-                      </a>
-                      <a
-                        href="tel:+33603489662"
-                        className="text-lg font-semibold text-[#D4AF37] hover:underline block"
-                      >
-                        André : +33 6 03 48 96 62
-                      </a>
-                    </div>
-                  </div>
+          <Card className="border-[#C6A15B] border-2">
+            <CardHeader>
+              <div className="flex items-center gap-3">
+                <Phone className="h-6 w-6 text-[#C6A15B]" />
+                <CardTitle>Besoin de nous contacter ?</CardTitle>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="flex items-center gap-3">
+                <div className="bg-[#C6A15B]/10 p-3 rounded-full">
+                  <Phone className="h-5 w-5 text-[#C6A15B]" />
                 </div>
-              </CardContent>
-            </Card>
+                <div>
+                  <p className="font-semibold">Morgane</p>
+                  <a href="tel:+33641456671" className="text-[#C6A15B] hover:underline">
+                    +33 6 41 45 66 71
+                  </a>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <div className="bg-[#C6A15B]/10 p-3 rounded-full">
+                  <Phone className="h-5 w-5 text-[#C6A15B]" />
+                </div>
+                <div>
+                  <p className="font-semibold">André</p>
+                  <a href="tel:+33603489662" className="text-[#C6A15B] hover:underline">
+                    +33 6 03 48 96 62
+                  </a>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
 
-            <Card className="border-2 border-[#D4AF37]">
-              <CardContent className="pt-6">
-                <div className="text-center">
-                  <div className="flex items-center justify-center gap-3 mb-4">
-                    <Users className="h-8 w-8 text-[#D4AF37]" />
-                    <h3 className="text-2xl font-bold text-gray-900">On garde le contact ?</h3>
-                  </div>
-                  <p className="text-gray-700 mb-6">
-                    Même si nous avons notre beau site, on ne vous lâche pas sur les réseaux !
-                    Retrouvez nos coulisses et nos délires quotidiens ici :
-                  </p>
-                  <div className="flex items-center justify-center gap-4 flex-wrap">
-                    <a
-                      href="https://www.facebook.com/p/La-boutique-de-Morgane-100057420760713/?locale=fr_FR"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
-                    >
-                      <Facebook className="h-5 w-5" />
-                      <span className="font-medium">Facebook</span>
-                    </a>
-                    <a
-                      href="https://www.instagram.com/la.boutique.de.morgane/"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white rounded-lg transition-colors"
-                    >
-                      <Instagram className="h-5 w-5" />
-                      <span className="font-medium">Instagram</span>
-                    </a>
-                    <a
-                      href="https://www.tiktok.com/@laboutiquedemorgane"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center gap-2 px-6 py-3 bg-black hover:bg-gray-900 text-white rounded-lg transition-colors"
-                    >
-                      <Smile className="h-5 w-5" />
-                      <span className="font-medium">TikTok</span>
-                    </a>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
+          <Card className="border-[#C6A15B] border-2">
+            <CardHeader>
+              <div className="flex items-center gap-3">
+                <Users className="h-6 w-6 text-[#C6A15B]" />
+                <CardTitle>On garde le contact ?</CardTitle>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="flex flex-wrap gap-3">
+                <Button asChild className="bg-blue-600 hover:bg-blue-700">
+                  <a href="https://facebook.com/laboutiquedemorgane" target="_blank" rel="noopener noreferrer" className="gap-2">
+                    <Facebook className="h-5 w-5" />
+                    Facebook
+                  </a>
+                </Button>
+                <Button asChild className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600">
+                  <a href="https://instagram.com/laboutiquedemorgane" target="_blank" rel="noopener noreferrer" className="gap-2">
+                    <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/>
+                    </svg>
+                    Instagram
+                  </a>
+                </Button>
+                <Button asChild className="bg-black hover:bg-gray-800">
+                  <a href="https://tiktok.com/@laboutiquedemorgane" target="_blank" rel="noopener noreferrer" className="gap-2">
+                    <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-5.2 1.74 2.89 2.89 0 0 1 2.31-4.64 2.93 2.93 0 0 1 .88.13V9.4a6.84 6.84 0 0 0-1-.05A6.33 6.33 0 0 0 5 20.1a6.34 6.34 0 0 0 10.86-4.43v-7a8.16 8.16 0 0 0 4.77 1.52v-3.4a4.85 4.85 0 0 1-1-.1z"/>
+                    </svg>
+                    TikTok
+                  </a>
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
         </div>
       </div>
     </div>

@@ -1,596 +1,410 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
-import { supabase } from '@/lib/supabase-client';
+import { X, Sparkles, Trophy, Frown } from 'lucide-react';
+import { supabase } from '@/lib/supabase';
+import { toast } from 'sonner';
 import { useAuth } from '@/context/AuthContext';
-import confetti from 'canvas-confetti';
-import { Gift, Loader2, X, Sparkles, Trophy } from 'lucide-react';
-
-interface WheelZone {
-  id: string;
-  type: 'winning' | 'losing';
-  label: string;
-  color: string;
-  couponTypeId?: string;
-  message?: string;
-}
-
-interface WheelGameSettings {
-  id: string;
-  is_enabled: boolean;
-  require_newsletter: boolean;
-  require_authentication: boolean;
-  popup_delay_seconds: number;
-  max_plays_per_day: number;
-  max_plays_per_user: number;
-  winning_zones: any[];
-  losing_zones: any[];
-}
+import { Fireworks } from '@/components/Fireworks';
 
 interface WheelGameProps {
+  game: {
+    id: string;
+    name: string;
+    description: string;
+    wheel_design: {
+      backgroundColor: string;
+      wheelColors: string[];
+    };
+    segments: Array<{
+      label: string;
+      color: string;
+      coupon_id: string;
+      coupon_code: string;
+      probability: number;
+    }>;
+    max_plays_per_user: number;
+  };
   onClose: () => void;
+  onWin: (couponCode: string) => void;
 }
 
-export default function WheelGame({ onClose }: WheelGameProps) {
+export function WheelGame({ game, onClose, onWin }: WheelGameProps) {
   const { user } = useAuth();
-  const [settings, setSettings] = useState<WheelGameSettings | null>(null);
-  const [zones, setZones] = useState<WheelZone[]>([]);
-  const [isSpinning, setIsSpinning] = useState(false);
-  const [canPlay, setCanPlay] = useState(false);
-  const [playsToday, setPlaysToday] = useState(0);
-  const [result, setResult] = useState<any>(null);
-  const [showResult, setShowResult] = useState(false);
+  const [spinning, setSpinning] = useState(false);
   const [rotation, setRotation] = useState(0);
-  const [sessionId] = useState(() => `session_${Date.now()}_${Math.random()}`);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const wheelRef = useRef<HTMLDivElement>(null);
+  const [prize, setPrize] = useState<string | null>(null);
+  const [hasPlayed, setHasPlayed] = useState(false);
+  const [remainingPlays, setRemainingPlays] = useState(game.max_plays_per_user);
+  const [showFireworks, setShowFireworks] = useState(false);
+  const [hasLost, setHasLost] = useState(false);
+  const [hasSecondChance, setHasSecondChance] = useState(false);
+
+  const segmentAngle = 360 / game.segments.length;
 
   useEffect(() => {
-    loadSettings();
-  }, [user]);
+    checkUserPlays();
+  }, []);
 
-  useEffect(() => {
-    if (settings) {
-      checkPlaysToday();
-    }
-  }, [settings, user]);
+  const checkUserPlays = async () => {
+    if (!user) return;
 
-  useEffect(() => {
-    if (zones.length > 0) {
-      drawWheel();
-    }
-  }, [zones, rotation]);
-
-  const loadSettings = async () => {
     try {
       const { data, error } = await supabase
-        .from('wheel_game_settings')
+        .from('game_plays')
         .select('*')
-        .eq('is_enabled', true)
-        .maybeSingle();
+        .eq('user_id', user.id)
+        .eq('game_type', 'wheel')
+        .eq('game_id', game.id);
 
       if (error) throw error;
 
-      if (data) {
-        setSettings(data);
-        buildZones(data);
+      const plays = data?.length || 0;
+      const remaining = Math.max(0, game.max_plays_per_user - plays);
+      setRemainingPlays(remaining);
+
+      if (remaining === 0) {
+        setHasPlayed(true);
+        toast.info('Vous avez déjà utilisé toutes vos tentatives pour ce jeu');
       }
-    } catch (error) {
-      console.error('Error loading wheel settings:', error);
-    }
-  };
-
-  const buildZones = async (settings: WheelGameSettings) => {
-    const allZones: WheelZone[] = [];
-    const colors = [
-      '#b8933d', '#2d2d2d', '#f5f5dc', '#d4af37', '#8b7355',
-      '#c9a961', '#1a1a1a', '#e8d5b7', '#a0826d', '#bfa568'
-    ];
-
-    for (let i = 0; i < settings.winning_zones.length; i++) {
-      const zone = settings.winning_zones[i];
-      if (zone.coupon_type_id) {
-        const { data: couponType } = await supabase
-          .from('coupon_types')
-          .select('*')
-          .eq('id', zone.coupon_type_id)
-          .maybeSingle();
-
-        if (couponType) {
-          allZones.push({
-            id: `win_${i}`,
-            type: 'winning',
-            label: couponType.description,
-            color: colors[allZones.length % colors.length],
-            couponTypeId: zone.coupon_type_id
-          });
-        }
-      }
-    }
-
-    for (let i = 0; i < settings.losing_zones.length; i++) {
-      const zone = settings.losing_zones[i];
-      allZones.push({
-        id: `lose_${i}`,
-        type: 'losing',
-        label: 'Perdu',
-        color: colors[allZones.length % colors.length],
-        message: zone.message
-      });
-    }
-
-    setZones(allZones);
-  };
-
-  const drawWheel = () => {
-    const canvas = canvasRef.current;
-    if (!canvas || zones.length === 0) return;
-
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    const centerX = canvas.width / 2;
-    const centerY = canvas.height / 2;
-    const radius = Math.min(centerX, centerY) - 20;
-    const anglePerZone = (2 * Math.PI) / zones.length;
-
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-    ctx.save();
-    ctx.shadowColor = 'rgba(0,0,0,0.3)';
-    ctx.shadowBlur = 20;
-    ctx.shadowOffsetX = 0;
-    ctx.shadowOffsetY = 10;
-
-    ctx.beginPath();
-    ctx.arc(centerX, centerY, radius + 10, 0, 2 * Math.PI);
-    ctx.fillStyle = '#000';
-    ctx.fill();
-
-    ctx.restore();
-
-    ctx.save();
-    ctx.translate(centerX, centerY);
-    ctx.rotate((rotation * Math.PI) / 180);
-    ctx.translate(-centerX, -centerY);
-
-    zones.forEach((zone, index) => {
-      const startAngle = index * anglePerZone - Math.PI / 2;
-      const endAngle = startAngle + anglePerZone;
-
-      ctx.beginPath();
-      ctx.moveTo(centerX, centerY);
-      ctx.arc(centerX, centerY, radius, startAngle, endAngle);
-      ctx.closePath();
-
-      const gradient = ctx.createRadialGradient(centerX, centerY, radius * 0.3, centerX, centerY, radius);
-      gradient.addColorStop(0, zone.color);
-      gradient.addColorStop(1, darkenColor(zone.color, 30));
-      ctx.fillStyle = gradient;
-      ctx.fill();
-
-      ctx.strokeStyle = '#fff';
-      ctx.lineWidth = 4;
-      ctx.stroke();
-
-      ctx.save();
-      ctx.translate(centerX, centerY);
-      ctx.rotate(startAngle + anglePerZone / 2);
-      ctx.textAlign = 'center';
-      ctx.fillStyle = '#fff';
-      ctx.font = 'bold 16px Arial';
-      ctx.shadowColor = 'rgba(0,0,0,0.8)';
-      ctx.shadowBlur = 4;
-
-      const words = zone.label.split(' ');
-      if (words.length > 2) {
-        ctx.font = 'bold 13px Arial';
-        words.forEach((word, i) => {
-          ctx.fillText(word, radius * 0.7, -10 + i * 16);
-        });
-      } else if (words.length > 1) {
-        words.forEach((word, i) => {
-          ctx.fillText(word, radius * 0.7, -8 + i * 18);
-        });
-      } else {
-        ctx.fillText(zone.label, radius * 0.7, 5);
-      }
-
-      ctx.restore();
-    });
-
-    ctx.restore();
-  };
-
-  const darkenColor = (color: string, percent: number) => {
-    const num = parseInt(color.replace('#', ''), 16);
-    const amt = Math.round(2.55 * percent);
-    const R = (num >> 16) - amt;
-    const G = (num >> 8 & 0x00FF) - amt;
-    const B = (num & 0x0000FF) - amt;
-    return '#' + (0x1000000 + (R < 255 ? R < 1 ? 0 : R : 255) * 0x10000 +
-      (G < 255 ? G < 1 ? 0 : G : 255) * 0x100 +
-      (B < 255 ? B < 1 ? 0 : B : 255))
-      .toString(16).slice(1);
-  };
-
-  const checkPlaysToday = async () => {
-    if (!settings) {
-      setCanPlay(false);
-      return;
-    }
-
-    try {
-      let canPlayNow = true;
-
-      if (user) {
-        if (settings.max_plays_per_user > 0) {
-          const { count: totalPlays } = await supabase
-            .from('wheel_game_plays')
-            .select('*', { count: 'exact' })
-            .eq('user_id', user.id);
-
-          if (totalPlays && totalPlays >= settings.max_plays_per_user) {
-            canPlayNow = false;
-          }
-        }
-
-        if (canPlayNow && settings.max_plays_per_day > 0) {
-          const today = new Date();
-          today.setHours(0, 0, 0, 0);
-
-          const { count } = await supabase
-            .from('wheel_game_plays')
-            .select('*', { count: 'exact' })
-            .eq('user_id', user.id)
-            .gte('created_at', today.toISOString());
-
-          const todayCount = count || 0;
-          setPlaysToday(todayCount);
-
-          if (todayCount >= settings.max_plays_per_day) {
-            canPlayNow = false;
-          }
-        } else if (settings.max_plays_per_day === 0) {
-          setPlaysToday(0);
-        }
-      } else {
-        if (settings.max_plays_per_day > 0) {
-          const today = new Date();
-          today.setHours(0, 0, 0, 0);
-
-          const { count } = await supabase
-            .from('wheel_game_plays')
-            .select('*', { count: 'exact' })
-            .eq('session_id', sessionId)
-            .gte('created_at', today.toISOString());
-
-          const todayCount = count || 0;
-          setPlaysToday(todayCount);
-
-          if (todayCount >= settings.max_plays_per_day) {
-            canPlayNow = false;
-          }
-        } else if (settings.max_plays_per_day === 0) {
-          setPlaysToday(0);
-        }
-      }
-
-      setCanPlay(canPlayNow);
     } catch (error) {
       console.error('Error checking plays:', error);
-      setCanPlay(false);
     }
   };
 
-  const spinWheel = async () => {
-    if (!settings || !canPlay || isSpinning || zones.length === 0) return;
-
-    if (settings.require_authentication && !user) {
-      alert('Vous devez être connecté pour jouer');
-      return;
-    }
-
-    setIsSpinning(true);
-
-    const winningProbabilities: number[] = [];
-    const losingProbabilities: number[] = [];
-
-    settings.winning_zones.forEach((zone: any) => {
-      winningProbabilities.push(zone.probability || 0);
-    });
-
-    settings.losing_zones.forEach((zone: any) => {
-      losingProbabilities.push(zone.probability || 0);
-    });
-
-    const totalWinProb = winningProbabilities.reduce((a, b) => a + b, 0);
-    const totalLoseProb = losingProbabilities.reduce((a, b) => a + b, 0);
-    const totalProb = totalWinProb + totalLoseProb;
-
-    const random = Math.random() * totalProb;
+  const selectPrize = () => {
+    const random = Math.random() * 100;
     let cumulative = 0;
-    let selectedZoneIndex = 0;
-    let won = false;
 
-    for (let i = 0; i < settings.winning_zones.length; i++) {
-      cumulative += settings.winning_zones[i].probability || 0;
+    for (let i = 0; i < game.segments.length; i++) {
+      cumulative += game.segments[i].probability;
       if (random <= cumulative) {
-        selectedZoneIndex = i;
-        won = true;
-        break;
+        return { index: i, segment: game.segments[i] };
       }
     }
 
-    if (!won) {
-      cumulative = totalWinProb;
-      for (let i = 0; i < settings.losing_zones.length; i++) {
-        cumulative += settings.losing_zones[i].probability || 0;
-        if (random <= cumulative) {
-          selectedZoneIndex = settings.winning_zones.length + i;
-          break;
+    return { index: 0, segment: game.segments[0] };
+  };
+
+  const tryAgain = () => {
+    setPrize(null);
+    setHasLost(false);
+    setHasSecondChance(false);
+    setRotation(0);
+  };
+
+  const spin = async () => {
+    if (spinning || hasPlayed || remainingPlays === 0) return;
+
+    setSpinning(true);
+
+    const { index, segment } = selectPrize();
+
+    const targetAngle = index * segmentAngle;
+    const spins = 5 + Math.random() * 3;
+    const totalRotation = spins * 360 + (360 - targetAngle) + segmentAngle / 2;
+
+    setRotation(rotation + totalRotation);
+
+    setTimeout(async () => {
+      setSpinning(false);
+      setPrize(segment.coupon_code);
+
+      const isLosingSegment = segment.label?.toLowerCase().includes('perdu') ||
+                              segment.coupon_code?.toLowerCase().includes('perdu');
+
+      if (isLosingSegment) {
+        setHasLost(true);
+        if (remainingPlays > 1 && !hasSecondChance) {
+          setHasSecondChance(true);
         }
-      }
-    }
-
-    const anglePerZone = 360 / zones.length;
-    const targetAngle = selectedZoneIndex * anglePerZone;
-    const spins = 5;
-    const finalRotation = 360 * spins + (360 - targetAngle) + anglePerZone / 2;
-
-    let currentRotation = rotation;
-    const duration = 5000;
-    const startTime = Date.now();
-
-    const animate = () => {
-      const elapsed = Date.now() - startTime;
-      const progress = Math.min(elapsed / duration, 1);
-      const easeOut = 1 - Math.pow(1 - progress, 3);
-
-      currentRotation = rotation + finalRotation * easeOut;
-      setRotation(currentRotation % 360);
-
-      if (progress < 1) {
-        requestAnimationFrame(animate);
       } else {
-        handleSpinComplete(selectedZoneIndex, won);
+        setShowFireworks(true);
+        setTimeout(() => setShowFireworks(false), 3000);
       }
-    };
 
-    animate();
-  };
+      if (user) {
+        try {
+          await supabase
+            .from('game_plays')
+            .insert([{
+              user_id: user.id,
+              game_type: 'wheel',
+              game_id: game.id,
+              prize_won: segment.coupon_code,
+              coupon_id: segment.coupon_id,
+            }]);
 
-  const handleSpinComplete = async (zoneIndex: number, won: boolean) => {
-    const selectedZone = zones[zoneIndex];
-    let userCouponId = null;
+          if (!isLosingSegment && segment.coupon_code) {
+            // Trouver le coupon correspondant au code
+            const { data: coupon } = await supabase
+              .from('coupons')
+              .select('id')
+              .eq('code', segment.coupon_code)
+              .maybeSingle();
 
-    if (won && selectedZone.couponTypeId && user) {
-      const couponCode = `WHEEL_${Date.now()}_${Math.random().toString(36).substring(7)}`.toUpperCase();
+            if (coupon) {
+              const { data: existingCoupon } = await supabase
+                .from('user_coupons')
+                .select('id')
+                .eq('user_id', user.id)
+                .eq('code', segment.coupon_code)
+                .maybeSingle();
 
-      const { data: couponType } = await supabase
-        .from('coupon_types')
-        .select('*')
-        .eq('id', selectedZone.couponTypeId)
-        .single();
+              if (!existingCoupon) {
+                const validUntil = new Date();
+                validUntil.setDate(validUntil.getDate() + 30);
 
-      if (couponType) {
-        const { data: newCoupon } = await supabase
-          .from('user_coupons')
-          .insert({
-            user_id: user.id,
-            coupon_type_id: selectedZone.couponTypeId,
-            code: couponCode,
-            source: 'wheel_game',
-            valid_until: couponType.valid_until
-          })
-          .select()
-          .single();
+                await supabase.from('user_coupons').insert({
+                  user_id: user.id,
+                  coupon_id: coupon.id,
+                  code: segment.coupon_code,
+                  source: 'wheel_game',
+                  is_used: false,
+                  valid_until: validUntil.toISOString(),
+                });
 
-        if (newCoupon) {
-          userCouponId = newCoupon.id;
+                toast.success(`Coupon ${segment.coupon_code} ajouté à votre compte!`);
+              }
+            } else {
+              console.error('Coupon type not found for code:', segment.coupon_code);
+            }
+
+            onWin(segment.coupon_code);
+          }
+          setRemainingPlays(prev => prev - 1);
+        } catch (error) {
+          console.error('Error saving game play:', error);
         }
       }
-    }
-
-    await supabase.from('wheel_game_plays').insert({
-      user_id: user?.id || null,
-      session_id: !user ? sessionId : null,
-      won,
-      prize_type: won ? 'coupon' : 'none',
-      coupon_type_id: won ? selectedZone.couponTypeId : null,
-      user_coupon_id: userCouponId,
-      zone_index: zoneIndex
-    });
-
-    setResult({
-      won,
-      zone: selectedZone,
-      message: won ? `Félicitations ! Vous avez gagné : ${selectedZone.label}` : selectedZone.message
-    });
-
-    setShowResult(true);
-    setIsSpinning(false);
-    await checkPlaysToday();
-
-    if (won) {
-      confetti({
-        particleCount: 200,
-        spread: 160,
-        origin: { y: 0.5 },
-        colors: ['#FFD700', '#FFA500', '#FF6347', '#FF1493', '#9370DB']
-      });
-
-      const interval = setInterval(() => {
-        confetti({
-          particleCount: 50,
-          angle: 60,
-          spread: 55,
-          origin: { x: 0 }
-        });
-        confetti({
-          particleCount: 50,
-          angle: 120,
-          spread: 55,
-          origin: { x: 1 }
-        });
-      }, 250);
-
-      setTimeout(() => clearInterval(interval), 3000);
-    }
+    }, 5000);
   };
 
-  const remainingPlays = settings
-    ? settings.max_plays_per_day === 0
-      ? Infinity
-      : settings.max_plays_per_day - playsToday
-    : 0;
-
-  if (showResult) {
+  if (hasPlayed && remainingPlays === 0) {
     return (
-      <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-        <Card className="w-full max-w-2xl p-6 md:p-12 relative bg-gradient-to-br from-yellow-50 via-orange-50 to-red-50">
+      <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
+        <div
+          className="relative bg-gradient-to-br from-[#1a1a1a] via-[#2a2a2a] to-[#1a1a1a] rounded-2xl p-8 max-w-md w-full border-2 border-[#d4af37] shadow-2xl"
+          style={{
+            boxShadow: '0 0 30px rgba(212, 175, 55, 0.3)',
+          }}
+        >
           <button
             onClick={onClose}
-            className="absolute top-3 right-3 md:top-4 md:right-4 text-gray-500 hover:text-gray-700 z-10"
+            className="absolute top-4 right-4 text-white/60 hover:text-white transition-colors"
           >
-            <X className="w-5 h-5 md:w-6 md:h-6" />
+            <X className="h-6 w-6" />
           </button>
 
-          <div className="text-center">
-            {result?.won ? (
-              <>
-                <Trophy className="w-16 h-16 md:w-24 md:h-24 mx-auto mb-4 md:mb-6 text-yellow-500 animate-bounce" />
-                <h2 className="text-3xl md:text-5xl font-bold bg-gradient-to-r from-yellow-600 via-orange-600 to-red-600 bg-clip-text text-transparent mb-3 md:mb-4">
-                  FÉLICITATIONS !
-                </h2>
-                <div className="bg-green-100 border-2 border-green-400 rounded-lg p-4 md:p-6 mb-4">
-                  <p className="text-lg md:text-2xl text-green-800 font-bold mb-2">
-                    {result.zone.label}
-                  </p>
-                  {user ? (
-                    <p className="text-sm md:text-base text-green-700">
-                      Votre coupon est disponible dans votre compte, section &quot;Mes Coupons&quot;
-                    </p>
-                  ) : (
-                    <p className="text-sm md:text-base text-green-700">
-                      Connectez-vous pour récupérer votre gain !
-                    </p>
-                  )}
-                </div>
-              </>
-            ) : (
-              <>
-                <Sparkles className="w-16 h-16 md:w-24 md:h-24 mx-auto mb-4 md:mb-6 text-gray-500" />
-                <h2 className="text-3xl md:text-5xl font-bold text-gray-700 mb-3 md:mb-4">
-                  Dommage !
-                </h2>
-                <div className="bg-gray-100 border-2 border-gray-400 rounded-lg p-4 md:p-6 mb-4">
-                  <p className="text-lg md:text-2xl text-gray-700">
-                    {result.message || 'Ce n\'est pas grave, retentez votre chance !'}
-                  </p>
-                </div>
-              </>
-            )}
+          <div className="text-center space-y-4">
+            <div className="flex justify-center">
+              <Trophy className="h-16 w-16 text-[#d4af37]" />
+            </div>
+            <h3 className="text-2xl font-bold text-white">Déjà joué</h3>
+            <p className="text-white/80">
+              Vous avez déjà utilisé toutes vos tentatives pour ce jeu.
+            </p>
             <Button
               onClick={onClose}
-              size="lg"
-              className="text-base md:text-xl px-8 md:px-12 py-4 md:py-6 bg-gradient-to-r from-yellow-500 to-orange-500 hover:from-yellow-600 hover:to-orange-600"
+              className="w-full bg-gradient-to-r from-[#b8933d] to-[#d4af37] hover:from-[#9a7a2f] hover:to-[#b8933d]"
             >
               Fermer
             </Button>
           </div>
-        </Card>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-3 md:p-4">
-      <Card className="w-full max-w-4xl p-4 md:p-8 relative bg-gradient-to-br from-purple-50 via-pink-50 to-yellow-50">
-        <button
-          onClick={onClose}
-          className="absolute top-3 right-3 md:top-4 md:right-4 text-gray-500 hover:text-gray-700 z-10"
+    <>
+      <Fireworks active={showFireworks} />
+      <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4 overflow-y-auto">
+        <div
+          className="relative bg-gradient-to-br from-[#1a1a1a] via-[#2a2a2a] to-[#1a1a1a] rounded-2xl p-6 max-w-2xl w-full border-2 border-[#d4af37] shadow-2xl my-4 max-h-[95vh] overflow-y-auto"
+          style={{
+            boxShadow: '0 0 30px rgba(212, 175, 55, 0.3)',
+          }}
         >
-          <X className="w-5 h-5 md:w-6 md:h-6" />
-        </button>
+          <button
+            onClick={onClose}
+            className="absolute top-4 right-4 text-white/60 hover:text-white transition-colors"
+          >
+            <X className="h-6 w-6" />
+          </button>
 
-        <div className="text-center mb-4 md:mb-8">
-          <div className="flex items-center justify-center mb-3 md:mb-4">
-            <Sparkles className="w-8 h-8 md:w-12 md:h-12 text-yellow-500 animate-pulse" />
-            <Gift className="w-10 h-10 md:w-16 md:h-16 text-pink-500 mx-2 md:mx-4" />
-            <Sparkles className="w-8 h-8 md:w-12 md:h-12 text-yellow-500 animate-pulse" />
-          </div>
-          <h2 className="text-2xl md:text-4xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent mb-1 md:mb-2">
-            Roue de la Fortune
-          </h2>
-          <p className="text-sm md:text-lg text-gray-700">Tournez la roue et tentez de gagner !</p>
-          {settings && settings.max_plays_per_day > 0 && (
-            <p className="text-xs md:text-sm text-gray-500 mt-1 md:mt-2">
-              Tentatives restantes aujourd&apos;hui : {remainingPlays === Infinity ? '∞' : remainingPlays}
-            </p>
-          )}
-        </div>
+          <div className="text-center space-y-4">
+            <div className="flex justify-center">
+              <Sparkles className="h-10 w-10 text-[#d4af37] animate-pulse" />
+            </div>
 
-        <div className="relative flex justify-center items-center mb-6 md:mb-8">
-          <div className="relative" style={{ width: '100%', maxWidth: '400px', aspectRatio: '1' }}>
-            <div
-              ref={wheelRef}
-              className="relative w-full h-full"
-            >
-              <canvas
-                ref={canvasRef}
-                width={400}
-                height={400}
-                className="w-full h-full drop-shadow-2xl rounded-full"
-              />
+            <div>
+              <h2 className="text-2xl font-bold text-white mb-1">{game.name}</h2>
+              <p className="text-white/70 text-sm">{game.description}</p>
+              <p className="text-sm text-[#d4af37] mt-1">
+                Tentatives restantes: {remainingPlays}
+              </p>
+            </div>
 
-              <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-3 z-10">
-                <div className="w-0 h-0 border-l-[20px] border-l-transparent border-r-[20px] border-r-transparent border-t-[40px] border-t-red-500 drop-shadow-xl" />
+            <div className="relative mx-auto w-full max-w-sm aspect-square">
+              <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-6 z-20">
+                <div className="w-0 h-0 border-l-[20px] border-l-transparent border-r-[20px] border-r-transparent border-t-[40px] border-t-[#d4af37]" />
               </div>
 
-              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-20">
-                <div className="w-12 h-12 md:w-16 md:h-16 rounded-full bg-gradient-to-br from-yellow-400 to-orange-500 shadow-lg flex items-center justify-center border-4 border-white">
-                  <Sparkles className="w-6 h-6 md:w-8 md:h-8 text-white" />
+              <div
+                className="relative w-full h-full rounded-full overflow-hidden border-8 border-[#d4af37] shadow-2xl"
+                style={{
+                  transform: `rotate(${rotation}deg)`,
+                  transition: spinning ? 'transform 5s cubic-bezier(0.17, 0.67, 0.12, 0.99)' : 'none',
+                  backgroundColor: game.wheel_design.backgroundColor,
+                }}
+              >
+                {game.segments.map((segment, index) => {
+                  const angle = segmentAngle;
+                  const rotation = index * angle;
+
+                  return (
+                    <div
+                      key={index}
+                      className="absolute inset-0 origin-center"
+                      style={{
+                        transform: `rotate(${rotation}deg)`,
+                        clipPath: `polygon(50% 50%, 50% 0%, ${50 + Math.tan((angle / 2) * Math.PI / 180) * 50}% 0%)`,
+                      }}
+                    >
+                      <div
+                        className="absolute inset-0"
+                        style={{
+                          background: `conic-gradient(from ${rotation}deg, ${segment.color} 0deg, ${segment.color} ${angle}deg, transparent ${angle}deg)`,
+                        }}
+                      />
+                      <div
+                        className="absolute top-[20%] left-1/2 -translate-x-1/2 text-center max-w-[80px]"
+                        style={{
+                          transform: `rotate(${angle / 2}deg)`,
+                        }}
+                      >
+                        <p className="text-white font-bold text-xs drop-shadow-lg leading-tight break-words">
+                          {segment.label || segment.coupon_code}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })}
+
+                <div className="absolute inset-0 m-auto w-20 h-20 rounded-full bg-gradient-to-br from-[#d4af37] to-[#b8933d] border-4 border-white shadow-xl flex items-center justify-center">
+                  <Sparkles className="h-8 w-8 text-white" />
                 </div>
               </div>
             </div>
+
+            {prize && !spinning && hasLost && (
+              <div className="animate-bounce-in space-y-3 p-4 bg-gradient-to-br from-red-900/20 to-transparent rounded-xl border border-red-500">
+                <Frown className="h-12 w-12 text-red-500 mx-auto" />
+                <div className="text-white">
+                  <h3 className="text-xl font-bold mb-2">Dommage...</h3>
+                  <p className="text-base mb-2">Vous avez perdu cette fois</p>
+                  <div className="bg-white/10 rounded-lg p-3 border-2 border-red-500">
+                    <p className="text-lg font-bold text-red-400">{prize}</p>
+                  </div>
+                  {hasSecondChance && (
+                    <p className="text-sm text-white/70 mt-3">
+                      Mais vous avez encore une chance !
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {prize && !spinning && !hasLost && (
+              <div className="animate-bounce-in space-y-3 p-4 bg-gradient-to-br from-[#d4af37]/20 to-transparent rounded-xl border border-[#d4af37]">
+                <Trophy className="h-12 w-12 text-[#d4af37] mx-auto animate-pulse" />
+                <div className="text-white">
+                  <h3 className="text-xl font-bold mb-2">Félicitations!</h3>
+                  <p className="text-base mb-2">Vous avez gagné :</p>
+                  <div className="bg-white/10 rounded-lg p-3 border-2 border-[#d4af37]">
+                    <p className="text-lg font-bold text-[#d4af37]">{prize}</p>
+                  </div>
+                  <p className="text-sm text-white/70 mt-3">
+                    Le code promo a été ajouté à votre compte
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {!prize && (
+              <Button
+                onClick={spin}
+                disabled={spinning || hasPlayed || remainingPlays === 0}
+                className="w-full bg-gradient-to-r from-[#b8933d] to-[#d4af37] hover:from-[#9a7a2f] hover:to-[#b8933d] text-white font-bold text-lg py-6 disabled:opacity-50"
+              >
+                {spinning ? (
+                  <>
+                    <Sparkles className="h-5 w-5 mr-2 animate-spin" />
+                    La roue tourne...
+                  </>
+                ) : (
+                  <>
+                    <Trophy className="h-5 w-5 mr-2" />
+                    Faire tourner la roue
+                  </>
+                )}
+              </Button>
+            )}
+
+            {prize && !spinning && hasLost && hasSecondChance && (
+              <div className="flex gap-2">
+                <Button
+                  onClick={tryAgain}
+                  className="flex-1 bg-gradient-to-r from-green-600 to-green-500 hover:from-green-700 hover:to-green-600 text-white font-semibold py-3"
+                >
+                  Tenter ma chance
+                </Button>
+                <Button
+                  onClick={onClose}
+                  variant="outline"
+                  className="flex-1 border-white/20 text-white hover:bg-white/10"
+                >
+                  Abandonner
+                </Button>
+              </div>
+            )}
+
+            {prize && !spinning && (!hasLost || !hasSecondChance) && (
+              <Button
+                onClick={onClose}
+                className="w-full bg-gradient-to-r from-[#b8933d] to-[#d4af37] hover:from-[#9a7a2f] hover:to-[#b8933d] text-white font-semibold py-3"
+              >
+                Fermer
+              </Button>
+            )}
           </div>
         </div>
+      </div>
 
-        <div className="text-center space-y-3 md:space-y-4">
-          <Button
-            onClick={spinWheel}
-            disabled={!canPlay || isSpinning || zones.length === 0}
-            size="lg"
-            className="w-full max-w-md text-base md:text-xl px-6 md:px-12 py-4 md:py-6 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600"
-          >
-            {isSpinning ? (
-              <>
-                <Loader2 className="mr-2 h-5 w-5 md:h-6 md:w-6 animate-spin" />
-                La roue tourne...
-              </>
-            ) : (
-              <>
-                <Gift className="mr-2 h-5 w-5 md:h-6 md:w-6" />
-                Tourner la roue
-              </>
-            )}
-          </Button>
+      <style jsx>{`
+        @keyframes bounce-in {
+          0% {
+            opacity: 0;
+            transform: scale(0.3) translateY(-50px);
+          }
+          50% {
+            transform: scale(1.05) translateY(10px);
+          }
+          70% {
+            transform: scale(0.9) translateY(-5px);
+          }
+          100% {
+            opacity: 1;
+            transform: scale(1) translateY(0);
+          }
+        }
 
-          {!canPlay && settings && settings.max_plays_per_day > 0 && (
-            <div className="bg-amber-100 border-2 border-amber-400 rounded-lg p-3 md:p-4">
-              <p className="text-sm md:text-base text-amber-800 font-medium">
-                Vous avez atteint le nombre maximum de tentatives pour aujourd&apos;hui
-              </p>
-              <p className="text-xs md:text-sm text-amber-700 mt-1">
-                Revenez demain pour retenter votre chance !
-              </p>
-            </div>
-          )}
-        </div>
-      </Card>
-    </div>
+        .animate-bounce-in {
+          animation: bounce-in 0.6s ease-out;
+        }
+      `}</style>
+    </>
   );
 }

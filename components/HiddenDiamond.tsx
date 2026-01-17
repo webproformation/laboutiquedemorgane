@@ -1,205 +1,117 @@
-'use client';
+"use client";
 
-import { useState, useEffect } from 'react';
-import { Gem, Sparkles, PartyPopper } from 'lucide-react';
-import confetti from 'canvas-confetti';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
-import { supabase } from '@/lib/supabase-client';
-import { useAuth } from '@/context/AuthContext';
+import { useState, useEffect } from "react";
+import { Gem, Sparkles } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
+import { supabase } from "@/lib/supabase";
+import { useAuth } from "@/context/AuthContext";
 
 interface HiddenDiamondProps {
-  diamondId: string;
-  pageUrl?: string;
-  inline?: boolean;
+  productId: string;
+  position: "title" | "image" | "description";
+  selectedPosition: "title" | "image" | "description";
 }
 
-export default function HiddenDiamond({ diamondId, pageUrl, inline = false }: HiddenDiamondProps) {
-  const { user } = useAuth();
-  const [isFound, setIsFound] = useState(false);
-  const [showDialog, setShowDialog] = useState(false);
-  const [reward, setReward] = useState(0);
-  const [loyaltyPoints, setLoyaltyPoints] = useState(0);
-  const [message, setMessage] = useState('');
-  const [isLoading, setIsLoading] = useState(true);
-  const [isVisible, setIsVisible] = useState(false);
+export function HiddenDiamond({ productId, position, selectedPosition }: HiddenDiamondProps) {
+  const { user, profile, refreshProfile } = useAuth();
+  const [isVisible, setIsVisible] = useState(position === selectedPosition);
+  const [hasFoundDiamond, setHasFoundDiamond] = useState(false);
   const [isAnimating, setIsAnimating] = useState(false);
 
   useEffect(() => {
-    checkDiamondStatus();
-  }, [diamondId, user]);
-
-  const checkDiamondStatus = async () => {
-    if (!user) {
-      setIsVisible(true);
-      setIsLoading(false);
-      return;
+    if (user && profile) {
+      checkIfAlreadyFound();
     }
+  }, [user, profile, productId]);
 
-    try {
-      const { data, error } = await supabase
-        .from('diamond_finds')
-        .select('id')
-        .eq('user_id', user.id)
-        .eq('diamond_id', diamondId)
-        .maybeSingle();
+  const checkIfAlreadyFound = async () => {
+    if (!user || !profile) return;
 
-      if (error) throw error;
+    const today = new Date().toISOString().split("T")[0];
 
-      if (data) {
-        setIsFound(true);
-        setIsVisible(false);
-      } else {
-        setIsVisible(true);
-      }
-    } catch (error) {
-      console.error('Error checking diamond status:', error);
-    } finally {
-      setIsLoading(false);
+    const { data, error } = await supabase
+      .from("loyalty_euro_transactions")
+      .select("id")
+      .eq("user_id", profile.id)
+      .eq("type", "diamond_found")
+      .eq("reference_id", productId)
+      .gte("created_at", today)
+      .maybeSingle();
+
+    if (!error && data) {
+      setHasFoundDiamond(true);
+      setIsVisible(false);
     }
   };
 
-  const handleClick = async () => {
-    if (!user) {
-      alert('Connecte-toi pour gagner des récompenses !');
+  const handleDiamondClick = async () => {
+    if (!user || !profile) {
+      toast.error("Connectez-vous pour collecter les diamants !");
       return;
     }
 
-    if (isFound || isAnimating) return;
+    if (hasFoundDiamond) {
+      toast.info("Vous avez déjà trouvé ce diamant aujourd'hui !");
+      return;
+    }
 
     setIsAnimating(true);
 
     try {
-      const { data, error } = await supabase.rpc('award_diamond_find_bonus', {
-        p_user_id: user.id,
-        p_diamond_id: diamondId
+      const { data, error } = await supabase.rpc('add_loyalty_gain', {
+        p_user_id: profile.id,
+        p_type: 'diamond_found',
+        p_base_amount: 0.10,
+        p_description: 'Diamant trouvé sur le produit'
       });
 
-      if (error) throw error;
+      if (error) {
+        throw error;
+      }
 
-      if (data.success) {
-        setReward(data.amount);
-        setLoyaltyPoints(data.loyalty_points || 0);
-        setMessage(data.message);
-        setIsFound(true);
-        setIsVisible(false);
+      if (data) {
+        const result = typeof data === 'string' ? JSON.parse(data) : data;
+        const finalAmount = (0.10 * result.multiplier).toFixed(2);
+        const multiplierText = result.multiplier > 1 ? ` (x${result.multiplier})` : '';
 
-        fireConfetti();
+        await refreshProfile();
+
+        toast.success(`Félicitations ! Vous avez gagné ${finalAmount} € !${multiplierText}`, {
+          icon: <Gem className="h-4 w-4 fill-amber-500 text-amber-500" />,
+          duration: 5000,
+        });
+
+        setHasFoundDiamond(true);
 
         setTimeout(() => {
-          setShowDialog(true);
-        }, 500);
+          setIsVisible(false);
+        }, 1000);
       }
     } catch (error) {
-      console.error('Error claiming diamond:', error);
+      console.error("Error collecting diamond:", error);
+      toast.error("Une erreur est survenue");
       setIsAnimating(false);
     }
   };
 
-  const fireConfetti = () => {
-    const duration = 3000;
-    const animationEnd = Date.now() + duration;
-    const defaults = { startVelocity: 30, spread: 360, ticks: 60, zIndex: 9999 };
-
-    function randomInRange(min: number, max: number) {
-      return Math.random() * (max - min) + min;
-    }
-
-    const interval: any = setInterval(function() {
-      const timeLeft = animationEnd - Date.now();
-
-      if (timeLeft <= 0) {
-        return clearInterval(interval);
-      }
-
-      const particleCount = 50 * (timeLeft / duration);
-
-      confetti({
-        ...defaults,
-        particleCount,
-        origin: { x: randomInRange(0.1, 0.3), y: Math.random() - 0.2 }
-      });
-      confetti({
-        ...defaults,
-        particleCount,
-        origin: { x: randomInRange(0.7, 0.9), y: Math.random() - 0.2 }
-      });
-    }, 250);
-  };
-
-  if (isLoading || !isVisible || isFound) return null;
+  if (!isVisible || position !== selectedPosition) {
+    return null;
+  }
 
   return (
-    <>
-      <button
-        onClick={handleClick}
-        className={`${inline ? 'relative inline-flex items-center justify-center' : 'absolute top-2 right-2'} z-30 cursor-pointer hover:scale-125 transition-all duration-300 ${
-          isAnimating ? 'scale-150 opacity-0' : 'animate-pulse'
-        }`}
-        aria-label="Diamant caché"
-        style={{
-          filter: 'drop-shadow(0 0 8px rgba(59, 130, 246, 0.8))',
-        }}
-      >
-        <Gem className="w-6 h-6 text-blue-500" fill="currentColor" />
-        <Sparkles className="w-3 h-3 text-yellow-400 absolute -top-1 -right-1 animate-spin" />
-      </button>
-
-      <Dialog open={showDialog} onOpenChange={setShowDialog}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="text-center text-3xl font-bold bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 bg-clip-text text-transparent flex items-center justify-center gap-2">
-              <PartyPopper className="h-8 w-8 text-yellow-500" />
-              FÉLICITATIONS !
-              <PartyPopper className="h-8 w-8 text-yellow-500" />
-            </DialogTitle>
-            <DialogDescription className="text-center text-lg mt-2">
-              Vous avez trouvé un diamant caché !
-            </DialogDescription>
-          </DialogHeader>
-          <div className="text-center py-8 space-y-6">
-            <div className="relative inline-block">
-              <Gem className="w-24 h-24 mx-auto text-blue-500 animate-bounce" fill="currentColor" />
-              <div className="absolute inset-0 animate-ping">
-                <Gem className="w-24 h-24 text-blue-400 opacity-75" fill="currentColor" />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <p className="text-lg font-semibold text-gray-700">{message}</p>
-
-              <div className="bg-gradient-to-r from-yellow-50 to-orange-50 border-2 border-yellow-300 rounded-lg p-4 space-y-2">
-                <p className="text-4xl font-bold bg-gradient-to-r from-yellow-600 to-orange-600 bg-clip-text text-transparent">
-                  +{reward} €
-                </p>
-                <p className="text-sm text-gray-600">Ajoutés à votre cagnotte !</p>
-              </div>
-
-              {loyaltyPoints > 0 && (
-                <div className="bg-gradient-to-r from-purple-50 to-pink-50 border-2 border-purple-300 rounded-lg p-3">
-                  <p className="text-2xl font-bold text-purple-600">
-                    +{loyaltyPoints} points
-                  </p>
-                  <p className="text-xs text-gray-600">Points de fidélité</p>
-                </div>
-              )}
-            </div>
-
-            <div className="flex items-center justify-center gap-2 text-sm text-gray-500">
-              <Sparkles className="h-4 w-4 text-yellow-500" />
-              <span>Continuez à explorer pour trouver plus de diamants !</span>
-              <Sparkles className="h-4 w-4 text-yellow-500" />
-            </div>
-          </div>
-          <Button
-            onClick={() => setShowDialog(false)}
-            className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white text-lg py-6"
-          >
-            <PartyPopper className="mr-2 h-5 w-5" />
-            Super ! Merci !
-          </Button>
-        </DialogContent>
-      </Dialog>
-    </>
+    <Button
+      onClick={handleDiamondClick}
+      disabled={isAnimating}
+      variant="ghost"
+      size="sm"
+      className={`relative inline-flex items-center gap-1.5 text-amber-600 hover:text-amber-700 hover:bg-amber-50 transition-all ${
+        isAnimating ? "animate-ping" : "animate-pulse"
+      }`}
+    >
+      <Gem className="h-5 w-5 fill-amber-500" />
+      <Sparkles className="h-4 w-4" />
+      <span className="text-xs font-semibold">+0,10 €</span>
+    </Button>
   );
 }

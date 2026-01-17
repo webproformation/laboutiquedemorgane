@@ -5,21 +5,23 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Wallet, Sparkles } from 'lucide-react';
+import { Wallet, Sparkles, Loader2 } from 'lucide-react';
 import { useWalletBalance } from '@/hooks/use-wallet-balance';
 import { useAuth } from '@/context/AuthContext';
 
 interface WalletSelectorProps {
   cartTotal: number;
   onWalletAmountChange: (amount: number) => void;
-  currentWalletAmount?: number;
+  currentWalletAmount: number;
 }
 
-export default function WalletSelector({ cartTotal, onWalletAmountChange, currentWalletAmount = 0 }: WalletSelectorProps) {
+export function WalletSelector({ cartTotal, onWalletAmountChange, currentWalletAmount }: WalletSelectorProps) {
   const { user } = useAuth();
   const { balance, loading } = useWalletBalance();
   const [useWallet, setUseWallet] = useState(false);
-  const [walletAmount, setWalletAmount] = useState(currentWalletAmount);
+  const [walletAmount, setWalletAmount] = useState(0);
+
+  const maxUsableAmount = Math.min(balance, cartTotal);
 
   useEffect(() => {
     if (currentWalletAmount > 0) {
@@ -28,47 +30,19 @@ export default function WalletSelector({ cartTotal, onWalletAmountChange, curren
     }
   }, [currentWalletAmount]);
 
-  if (!user) {
-    return null;
-  }
-
-  if (loading) {
-    return (
-      <Card className="border-[#b8933d]">
-        <CardContent className="p-4">
-          <div className="flex items-center space-x-2">
-            <Wallet className="h-5 w-5 text-[#b8933d] animate-pulse" />
-            <span className="text-sm text-gray-600">Chargement de votre cagnotte...</span>
-          </div>
-        </CardContent>
-      </Card>
-    );
-  }
-
-  if (balance === 0) {
-    return (
-      <Card className="border-gray-200">
-        <CardContent className="p-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-2">
-              <Wallet className="h-5 w-5 text-gray-400" />
-              <span className="text-sm text-gray-600">
-                Cagnotte : <span className="font-semibold">0,00 €</span>
-              </span>
-            </div>
-            <span className="text-xs text-gray-500">Pas encore de solde disponible</span>
-          </div>
-        </CardContent>
-      </Card>
-    );
-  }
-
-  const maxUsableAmount = Math.min(balance, cartTotal);
+  useEffect(() => {
+    if (!useWallet) {
+      setWalletAmount(0);
+      onWalletAmountChange(0);
+    }
+  }, [useWallet, onWalletAmountChange]);
 
   const handleToggleWallet = () => {
-    if (!useWallet) {
+    if (!useWallet && balance > 0) {
       setUseWallet(true);
-      setWalletAmount(0);
+      const defaultAmount = Math.min(balance, cartTotal);
+      setWalletAmount(defaultAmount);
+      onWalletAmountChange(defaultAmount);
     } else {
       setUseWallet(false);
       setWalletAmount(0);
@@ -76,18 +50,26 @@ export default function WalletSelector({ cartTotal, onWalletAmountChange, curren
     }
   };
 
-  const handleUseFull = () => {
-    const amount = maxUsableAmount;
-    setWalletAmount(amount);
-    onWalletAmountChange(amount);
+  const handleAmountChange = (value: string) => {
+    const amount = parseFloat(value) || 0;
+    const validAmount = Math.min(Math.max(0, amount), maxUsableAmount);
+    setWalletAmount(validAmount);
+    onWalletAmountChange(validAmount);
   };
 
-  const handleAmountChange = (value: string) => {
-    const numValue = parseFloat(value) || 0;
-    const clampedValue = Math.min(Math.max(0, numValue), maxUsableAmount);
-    setWalletAmount(clampedValue);
-    onWalletAmountChange(clampedValue);
+  const handleUseFull = () => {
+    const fullAmount = maxUsableAmount;
+    setWalletAmount(fullAmount);
+    onWalletAmountChange(fullAmount);
   };
+
+  if (!user || loading) {
+    return null;
+  }
+
+  if (balance <= 0) {
+    return null;
+  }
 
   return (
     <Card className="border-[#b8933d] bg-gradient-to-br from-[#b8933d]/5 to-transparent">
@@ -115,7 +97,7 @@ export default function WalletSelector({ cartTotal, onWalletAmountChange, curren
         {useWallet && (
           <div className="space-y-3 pt-2 border-t border-[#b8933d]/20">
             <div>
-              <Label htmlFor="wallet-amount" className="text-sm">
+              <Label htmlFor="wallet-amount" className="text-sm text-gray-700">
                 Montant à utiliser (max. {maxUsableAmount.toFixed(2)} €)
               </Label>
               <div className="flex gap-2 mt-1">
@@ -127,8 +109,8 @@ export default function WalletSelector({ cartTotal, onWalletAmountChange, curren
                   step="0.01"
                   value={walletAmount || ''}
                   onChange={(e) => handleAmountChange(e.target.value)}
-                  placeholder="0,00"
                   className="flex-1"
+                  placeholder="0.00"
                 />
                 <Button
                   onClick={handleUseFull}
@@ -142,13 +124,15 @@ export default function WalletSelector({ cartTotal, onWalletAmountChange, curren
             </div>
 
             {walletAmount > 0 && (
-              <div className="bg-white/60 p-2 rounded-md">
-                <p className="text-xs text-gray-700">
-                  <span className="font-semibold text-[#b8933d]">{walletAmount.toFixed(2)} €</span> sera déduit de votre cagnotte
-                </p>
-                <p className="text-xs text-gray-600 mt-1">
-                  Nouveau solde : <span className="font-semibold">{(balance - walletAmount).toFixed(2)} €</span>
-                </p>
+              <div className="bg-white/60 p-3 rounded-md border border-[#b8933d]/20">
+                <div className="flex justify-between items-center mb-1">
+                  <p className="text-xs text-gray-700">Montant déduit</p>
+                  <p className="text-sm font-semibold text-[#b8933d]">-{walletAmount.toFixed(2)} €</p>
+                </div>
+                <div className="flex justify-between items-center">
+                  <p className="text-xs text-gray-600">Nouveau solde</p>
+                  <p className="text-xs font-semibold text-gray-900">{(balance - walletAmount).toFixed(2)} €</p>
+                </div>
               </div>
             )}
           </div>

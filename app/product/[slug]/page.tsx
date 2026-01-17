@@ -1,27 +1,36 @@
 "use client";
 
-import { useQuery } from '@apollo/client/react';
-import { GET_PRODUCT_BY_SLUG } from '@/lib/queries';
-import { useCart } from '@/context/CartContext';
-import { useWishlist } from '@/context/WishlistContext';
-import { useAuth } from '@/context/AuthContext';
-import { GetProductBySlugResponse } from '@/types';
-import { Button } from '@/components/ui/button';
-import { Skeleton } from '@/components/ui/skeleton';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { CircleAlert as AlertCircle, ShoppingCart, Hop as Home, Heart, Bell, Sparkles } from 'lucide-react';
-import Link from 'next/link';
-import { toast } from 'sonner';
-import { useState, use, useCallback, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import ProductGallery from '@/components/ProductGallery';
-import ShareButtons from '@/components/ShareButtons';
+import { useEffect, useState, useMemo } from "react";
+import { useParams, useRouter } from "next/navigation";
+import Link from "next/link";
+import { supabase, Product } from "@/lib/supabase";
+import {
+  ChevronRight,
+  Home,
+  ShoppingCart,
+  Heart,
+  Bell,
+  Plus,
+  Minus,
+  Edit,
+  Trash2,
+  Shield,
+} from "lucide-react";
+import { ProductGallery } from "@/components/ProductGallery";
+import { ProductVariationSelector } from "@/components/ProductVariationSelector";
+import { HiddenDiamond } from "@/components/HiddenDiamond";
+import { ShareButtons } from "@/components/ShareButtons";
+import { WishlistButton } from "@/components/wishlist-button";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Accordion,
   AccordionContent,
   AccordionItem,
   AccordionTrigger,
-} from '@/components/ui/accordion';
+} from "@/components/ui/accordion";
 import {
   Dialog,
   DialogContent,
@@ -29,811 +38,976 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { formatPrice, formatAttributeName, isStockAvailable } from '@/lib/utils';
-import { supabase } from '@/lib/supabase-client';
-import ProductVariationSelector from '@/components/ProductVariationSelector';
-import ColorSwatch from '@/components/ColorSwatch';
-import { isColorAttribute } from '@/lib/colors';
-import ProductReviews from '@/components/ProductReviews';
-import HiddenDiamond from '@/components/HiddenDiamond';
-import RelatedProductsDisplay from '@/components/RelatedProductsDisplay';
+} from "@/components/ui/dialog";
+import { toast } from "sonner";
+import { decodeHtmlEntities } from "@/lib/utils";
+import { useCart } from "@/context/CartContext";
+import { useAuth } from "@/context/AuthContext";
+import { CUSTOM_TEXTS } from "@/lib/texts";
 
-export default function ProductPage({ params }: { params: Promise<{ slug: string }> }) {
-  const { slug: rawSlug } = use(params);
-  const slug = decodeURIComponent(rawSlug);
+const diamondPositions: Array<"title" | "image" | "description"> = ["title", "image", "description"];
+
+export default function ProductPage() {
+  const params = useParams();
   const router = useRouter();
-  const { loading, error, data } = useQuery<GetProductBySlugResponse>(GET_PRODUCT_BY_SLUG, {
-    variables: { slug },
-  });
+  const slug = params.slug as string;
   const { addToCart } = useCart();
-  const { addToWishlist, removeFromWishlist, isInWishlist } = useWishlist();
-  const { user, profile } = useAuth();
+  const { user } = useAuth();
+
+  const [product, setProduct] = useState<Product | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [quantity, setQuantity] = useState(1);
-  const [showNotifyDialog, setShowNotifyDialog] = useState(false);
-  const [notifyEmail, setNotifyEmail] = useState('');
-  const [isSubmittingNotification, setIsSubmittingNotification] = useState(false);
   const [selectedVariation, setSelectedVariation] = useState<any>(null);
-  const [currentImages, setCurrentImages] = useState<any[]>([]);
-  const [selectedCharacteristics, setSelectedCharacteristics] = useState<Record<string, string>>({});
-  const [redirectCountdown, setRedirectCountdown] = useState(5);
-  const [hasHiddenDiamond, setHasHiddenDiamond] = useState(false);
-  const [diamondPosition, setDiamondPosition] = useState<'title' | 'image' | 'description'>('title');
+  const [notifyEmail, setNotifyEmail] = useState("");
+  const [showNotifyDialog, setShowNotifyDialog] = useState(false);
+  const [activeImageUrl, setActiveImageUrl] = useState<string | undefined>(undefined);
+  const [userSelectedGalleryImage, setUserSelectedGalleryImage] = useState<string | null>(null);
+  const [initialAttributes, setInitialAttributes] = useState<Record<string, string>>({});
+  const [informativeAttributes, setInformativeAttributes] = useState<Array<{ name: string; values: string[] }>>([]);
+  const [diamondPosition] = useState<"title" | "image" | "description">(() =>
+    diamondPositions[Math.floor(Math.random() * diamondPositions.length)]
+  );
 
   useEffect(() => {
-    if ((error || !data?.product) && !loading) {
-      const timer = setInterval(() => {
-        setRedirectCountdown((prev) => {
-          if (prev <= 1) {
-            clearInterval(timer);
-            router.push('/');
-            return 0;
-          }
-          return prev - 1;
+    loadProduct();
+    checkAdminStatus();
+  }, [slug, user]);
+
+  // Auto-sélection de la première variation au chargement
+  useEffect(() => {
+    if (product && product.type === "VARIABLE" && product.attributes && product.variations && !selectedVariation) {
+      const firstSelections: Record<string, string> = {};
+
+      // Sélectionner la première option de chaque attribut
+      product.attributes.forEach((attr: any) => {
+        if (attr.options && attr.options.length > 0) {
+          firstSelections[attr.name] = attr.options[0];
+        }
+      });
+
+      // Trouver la variation correspondante
+      const matchingVariation = product.variations.find((variation: any) =>
+        variation.attributes?.every((attr: any) =>
+          firstSelections[attr.name]?.toLowerCase() === attr.option?.toLowerCase()
+        )
+      );
+
+      if (matchingVariation) {
+        // Extraire les attributs de la variation pour les passer au sélecteur
+        const variationAttributes: Record<string, string> = {};
+        matchingVariation.attributes?.forEach((attr: any) => {
+          variationAttributes[attr.name] = attr.option;
         });
-      }, 1000);
 
-      return () => clearInterval(timer);
+        setInitialAttributes(variationAttributes);
+        setSelectedVariation(matchingVariation);
+        if (matchingVariation.image?.src) {
+          setActiveImageUrl(matchingVariation.image.src);
+        }
+      }
     }
-  }, [error, data, loading, router]);
+  }, [product]);
 
-  useEffect(() => {
-    if (data?.product?.databaseId) {
-      checkHiddenDiamondStatus(data.product.databaseId);
-    }
-  }, [data?.product?.databaseId]);
+  async function checkAdminStatus() {
+    if (!user) return;
 
-  const checkHiddenDiamondStatus = async (productId: number) => {
     try {
-      const { data: diamondData, error } = await supabase
-        .from('featured_products')
-        .select('is_hidden_diamond')
-        .eq('product_id', productId)
-        .eq('is_hidden_diamond', true)
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('is_admin')
+        .eq('id', user.id)
         .maybeSingle();
 
-      if (error) throw error;
-
-      if (diamondData) {
-        setHasHiddenDiamond(true);
-        const positions: ('title' | 'image' | 'description')[] = ['title', 'image', 'description'];
-        const randomPosition = positions[Math.floor(Math.random() * positions.length)];
-        setDiamondPosition(randomPosition);
+      if (!error && data) {
+        setIsAdmin(data.is_admin || false);
       }
     } catch (error) {
-      console.error('Error checking hidden diamond status:', error);
+      console.error('Error checking admin status:', error);
     }
-  };
-
-  const handleVariationChange = useCallback((variation: any, defaultImages: any[]) => {
-    setSelectedVariation(variation);
-    if (variation && variation.image) {
-      setCurrentImages([variation.image, ...defaultImages]);
-    } else {
-      setCurrentImages(defaultImages);
-    }
-  }, []);
-
-  const handleAttributeSelect = useCallback((attributeName: string, value: string, currentCharacteristics: Record<string, string>, variations: any[], variationAttributes: any[], defaultImages: any[]) => {
-    console.log('🎨 Attribute selected:', attributeName, '=', value);
-
-    const newSelectedCharacteristics = {
-      ...currentCharacteristics,
-      [attributeName]: value
-    };
-    setSelectedCharacteristics(newSelectedCharacteristics);
-
-    console.log('📊 All selected characteristics:', newSelectedCharacteristics);
-    console.log('🔍 Available variations:', variations.length);
-
-    const normalizeAttributeName = (name: string) => {
-      return name.toLowerCase()
-        .replace(/^pa_/, '')
-        .replace(/-/g, ' ')
-        .replace(/_/g, ' ')
-        .trim();
-    };
-
-    const attributeMatches = (varAttrName: string, selectedAttrName: string, varAttrValue: string, selectedValue: string) => {
-      const normalizedVarAttr = normalizeAttributeName(varAttrName);
-      const normalizedSelectedAttr = normalizeAttributeName(selectedAttrName);
-
-      return (normalizedVarAttr === normalizedSelectedAttr || varAttrName.toLowerCase() === selectedAttrName.toLowerCase()) &&
-             varAttrValue.toLowerCase() === selectedValue.toLowerCase();
-    };
-
-    const selectedEntries = Object.entries(newSelectedCharacteristics);
-
-    const exactMatch = variations.find(variation => {
-      const matches = variation.attributes.every((varAttr: any) => {
-        const found = selectedEntries.some(([selName, selValue]) => {
-          const match = attributeMatches(varAttr.name, selName, varAttr.option, selValue);
-          return match;
-        });
-        return found;
-      }) && variation.attributes.length === selectedEntries.length;
-
-      return matches;
-    });
-
-    console.log('✅ Exact match found:', exactMatch ? 'YES' : 'NO', exactMatch?.id);
-
-    if (exactMatch) {
-      console.log('💰 Setting price to:', exactMatch.price);
-      console.log('🖼️ Setting image to:', exactMatch.image?.sourceUrl || 'default');
-      setSelectedVariation(exactMatch);
-      if (exactMatch.image) {
-        setCurrentImages([exactMatch.image, ...defaultImages]);
-      } else {
-        setCurrentImages(defaultImages);
-      }
-      return;
-    }
-
-    const partialMatches = variations.filter(variation => {
-      return selectedEntries.every(([selName, selValue]) => {
-        return variation.attributes.some((varAttr: any) =>
-          attributeMatches(varAttr.name, selName, varAttr.option, selValue)
-        );
-      });
-    });
-
-    console.log('🔎 Partial matches found:', partialMatches.length);
-
-    if (partialMatches.length === 1) {
-      console.log('💰 Setting price to (partial):', partialMatches[0].price);
-      setSelectedVariation(partialMatches[0]);
-      if (partialMatches[0].image) {
-        setCurrentImages([partialMatches[0].image, ...defaultImages]);
-      } else {
-        setCurrentImages(defaultImages);
-      }
-    } else if (partialMatches.length > 1) {
-      const bestMatch = partialMatches.find(v => v.image);
-      if (bestMatch && bestMatch.image) {
-        setCurrentImages([bestMatch.image, ...defaultImages]);
-      } else if (partialMatches[0].image) {
-        setCurrentImages([partialMatches[0].image, ...defaultImages]);
-      }
-
-      if (selectedEntries.length === variationAttributes.length) {
-        console.log('💰 Setting price to (best of multiple):', partialMatches[0].price);
-        setSelectedVariation(partialMatches[0]);
-      } else {
-        console.log('⚠️ Not enough attributes selected');
-        setSelectedVariation(null);
-      }
-    } else {
-      console.log('❌ No matches found - resetting');
-      setSelectedVariation(null);
-      setCurrentImages(defaultImages);
-    }
-  }, []);
-
-  if (loading) {
-    return (
-      <div className="bg-gray-50 min-h-screen">
-        <div className="container mx-auto px-4 py-6">
-          <Skeleton className="mb-6 h-5 w-64" />
-          <div className="grid gap-8 lg:grid-cols-2 bg-white p-6 rounded-lg">
-            <div className="space-y-4">
-              <Skeleton className="aspect-[4/5] w-full rounded-lg" />
-              <div className="grid grid-cols-6 gap-2">
-                {[...Array(6)].map((_, i) => (
-                  <Skeleton key={i} className="aspect-[3/4]" />
-                ))}
-              </div>
-            </div>
-            <div className="space-y-6">
-              <Skeleton className="h-10 w-3/4" />
-              <Skeleton className="h-8 w-32" />
-              <Skeleton className="h-24 w-full" />
-              <Skeleton className="h-12 w-full" />
-            </div>
-          </div>
-        </div>
-      </div>
-    );
   }
 
-  if (error || !data?.product) {
-    console.error('❌ GraphQL Error:', error);
-    console.error('❌ GraphQL Response:', data);
-    return (
-      <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white flex items-center justify-center px-4">
-        <div className="max-w-2xl w-full">
-          <div className="text-center mb-8">
-            <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-[#b8933d]/10 mb-6">
-              <Sparkles className="w-10 h-10 text-[#b8933d]" />
-            </div>
-            <h1 className="text-4xl font-bold text-gray-900 mb-4">
-              Oups, cette pépite a été victime de son succès !
-            </h1>
-            <p className="text-xl text-gray-600 mb-8">
-              Mais ne t'inquiète pas, j'ai plein d'autres merveilles à te montrer.
-            </p>
-          </div>
-
-          <Alert className="bg-white border-[#b8933d]/20 shadow-lg">
-            <Sparkles className="h-5 w-5 text-[#b8933d]" />
-            <AlertTitle className="text-lg font-semibold text-gray-900 mb-2">
-              Redirection automatique dans {redirectCountdown} seconde{redirectCountdown > 1 ? 's' : ''}...
-            </AlertTitle>
-            <AlertDescription className="text-gray-700">
-              <p className="mb-4">
-                Ce produit n'est plus disponible, mais nos nouveautés vont te plaire !
-              </p>
-              <div className="flex flex-col sm:flex-row gap-3">
-                <Link href="/" className="flex-1">
-                  <Button className="w-full bg-[#b8933d] hover:bg-[#a07c2f] text-white">
-                    <Home className="w-4 h-4 mr-2" />
-                    Découvrir nos nouveautés
-                  </Button>
-                </Link>
-                <Link href="/promos" className="flex-1">
-                  <Button variant="outline" className="w-full border-[#b8933d] text-[#b8933d] hover:bg-[#b8933d]/5">
-                    <Sparkles className="w-4 h-4 mr-2" />
-                    Voir les promotions
-                  </Button>
-                </Link>
-              </div>
-            </AlertDescription>
-          </Alert>
-
-          {error && (
-            <p className="text-center text-sm text-gray-500 mt-4">
-              Erreur technique : {error.message}
-            </p>
-          )}
-        </div>
-      </div>
-    );
-  }
-
-  const rawProduct = data.product;
-
-  const product = {
-    ...rawProduct,
-    variations: rawProduct.variations?.nodes ? {
-      nodes: rawProduct.variations.nodes.map((variation: any) => ({
-        ...variation,
-        attributes: variation.attributes?.nodes?.map((attr: any) => ({
-          name: attr.name,
-          option: attr.value || attr.option
-        })) || []
-      }))
-    } : undefined
-  };
-
-  console.log('🔄 Raw product loaded:', rawProduct.name);
-  console.log('🔄 Variations available:', rawProduct.variations?.nodes?.length || 0);
-  if (rawProduct.variations?.nodes && rawProduct.variations.nodes.length > 0) {
-    console.log('🔄 Raw variation sample:', rawProduct.variations.nodes[0]);
-    console.log('🔄 Mapped variation sample:', product.variations?.nodes[0]);
-    console.log('📦 Stock Status (raw):', rawProduct.variations.nodes[0].stockStatus);
-    console.log('📦 Stock Quantity (raw):', rawProduct.variations.nodes[0].stockQuantity);
-    console.log('📦 Stock Status (mapped):', product.variations?.nodes[0].stockStatus);
-    console.log('📦 Stock Quantity (mapped):', product.variations?.nodes[0].stockQuantity);
-  }
-
-  const sizeOrder = ['xs', 's', 'm', 'l', 'xl', 'xxl', 'xxxl'];
-
-  const sortSizes = (options: string[]) => {
-    return [...options].sort((a, b) => {
-      const aLower = a.toLowerCase();
-      const bLower = b.toLowerCase();
-      const aIndex = sizeOrder.indexOf(aLower);
-      const bIndex = sizeOrder.indexOf(bLower);
-
-      if (aIndex !== -1 && bIndex !== -1) {
-        return aIndex - bIndex;
-      }
-      if (aIndex !== -1) return -1;
-      if (bIndex !== -1) return 1;
-      return 0;
-    });
-  };
-
-  const handleAddToCart = () => {
-    if (isVariable && selectedVariation) {
-      const cartItem = {
-        ...product,
-        id: `${product.id}-${selectedVariation.id}`,
-        variationId: selectedVariation.id,
-        price: selectedVariation.price,
-        variationPrice: selectedVariation.price,
-        image: selectedVariation.image || product.image,
-        variationImage: selectedVariation.image,
-        selectedAttributes: selectedCharacteristics,
-      };
-      addToCart(cartItem, quantity);
-
-      const attributesText = Object.entries(selectedCharacteristics)
-        .map(([key, value]) => `${key}: ${value}`)
-        .join(', ');
-      toast.success(`${quantity} × ${product.name} (${attributesText}) ajouté au panier !`);
-    } else {
-      const hasSelectedAttributes = Object.keys(selectedCharacteristics).length > 0;
-
-      const cartItem = hasSelectedAttributes ? {
-        ...product,
-        id: `${product.id}-${Object.values(selectedCharacteristics).join('-')}`,
-        selectedAttributes: selectedCharacteristics,
-      } : product;
-
-      addToCart(cartItem, quantity);
-
-      if (hasSelectedAttributes) {
-        const attributesText = Object.entries(selectedCharacteristics)
-          .map(([key, value]) => `${formatAttributeName(key)}: ${value}`)
-          .join(', ');
-        toast.success(`${quantity} × ${product.name} (${attributesText}) ajouté au panier !`);
-      } else {
-        toast.success(`${quantity} × ${product.name} ajouté au panier !`);
-      }
-    }
-  };
-
-  const handleToggleWishlist = async () => {
+  async function loadProduct() {
     try {
-      if (isInWishlist(product.slug)) {
-        await removeFromWishlist(product.slug);
-        toast.success(`${product.name} retiré de vos coups de cœur`);
-      } else {
-        await addToWishlist(product);
-        toast.success(`${product.name} ajouté à vos coups de cœur !`);
+      const { data: productData, error: productError } = await supabase
+        .from("products")
+        .select("*")
+        .eq("slug", slug)
+        .maybeSingle();
+
+      if (productError) throw productError;
+
+      if (!productData) {
+        router.push("/");
+        return;
+      }
+
+      if (productData.is_variable_product) {
+        const { data: variations, error: variationsError } = await supabase
+          .from("product_variations")
+          .select("*")
+          .eq("product_id", productData.id);
+
+        if (!variationsError && variations) {
+          const attributesMap = new Map<string, Set<string>>();
+
+          const extractValue = (value: any): string => {
+            if (typeof value === 'object' && value !== null) {
+              return value.name || value.value || String(value);
+            }
+            return String(value);
+          };
+
+          const normalizeAttributeName = (key: string): string => {
+            const lowerKey = key.toLowerCase();
+            if (lowerKey.includes('couleur') || lowerKey === 'couleur_name') {
+              return 'Couleur';
+            }
+            if (lowerKey.includes('taille') || lowerKey.includes('size')) {
+              return 'Taille';
+            }
+            return key.charAt(0).toUpperCase() + key.slice(1);
+          };
+
+          variations.forEach((variation) => {
+            if (variation.attributes && typeof variation.attributes === 'object') {
+              Object.entries(variation.attributes).forEach(([key, value]) => {
+                const lowerKey = key.toLowerCase();
+
+                if (lowerKey.includes('color_code') || lowerKey.includes('id')) {
+                  return;
+                }
+
+                const displayName = normalizeAttributeName(key);
+                const displayValue = extractValue(value);
+
+                if (displayValue && displayValue.trim()) {
+                  if (!attributesMap.has(displayName)) {
+                    attributesMap.set(displayName, new Set());
+                  }
+                  attributesMap.get(displayName)?.add(displayValue);
+                }
+              });
+            }
+          });
+
+          const attributes = Array.from(attributesMap.entries()).map(([name, options]) => ({
+            name,
+            options: Array.from(options),
+          }));
+
+          const formattedVariations = variations.map((v) => {
+            const variationAttributes: Array<{name: string; option: string}> = [];
+
+            if (v.attributes && typeof v.attributes === 'object') {
+              Object.entries(v.attributes).forEach(([key, value]) => {
+                const lowerKey = key.toLowerCase();
+
+                if (lowerKey.includes('color_code') || lowerKey.includes('id')) {
+                  return;
+                }
+
+                const displayName = normalizeAttributeName(key);
+                const displayValue = extractValue(value);
+
+                if (displayValue && displayValue.trim()) {
+                  variationAttributes.push({
+                    name: displayName,
+                    option: displayValue
+                  });
+                }
+              });
+            }
+
+            return {
+              id: v.id,
+              attributes: variationAttributes,
+              price: v.sale_price || v.regular_price || productData.sale_price || productData.regular_price || "0",
+              regular_price: v.regular_price || productData.regular_price || "0",
+              sale_price: v.sale_price || (v.regular_price ? null : productData.sale_price),
+              stock_status: v.stock_status || "outofstock",
+              stock_quantity: v.stock_quantity,
+              image: v.image_url
+                ? { src: v.image_url, alt: productData.name }
+                : (productData.image_url ? { src: productData.image_url, alt: productData.name } : undefined),
+            };
+          });
+
+          productData.attributes = attributes;
+          productData.variations = formattedVariations;
+          productData.type = "VARIABLE";
+        }
+      } else if (productData.attributes && typeof productData.attributes === 'object') {
+        // Produit simple avec attributs dans products.attributes
+        const simpleAttributes = productData.attributes;
+
+        // Charger les noms des termes d'attributs depuis la base
+        const attributeTermIds: string[] = [];
+        Object.values(simpleAttributes).forEach((termIds: any) => {
+          if (Array.isArray(termIds)) {
+            attributeTermIds.push(...termIds);
+          }
+        });
+
+        if (attributeTermIds.length > 0) {
+          const { data: attributeTerms } = await supabase
+            .from("product_attribute_terms")
+            .select("id, name, slug, color_code, attribute_id, product_attributes!inner(name, slug)")
+            .in("id", attributeTermIds);
+
+          if (attributeTerms) {
+            const attributesMap = new Map<string, { options: string[], colorCodes?: string[] }>();
+
+            attributeTerms.forEach((term: any) => {
+              const attrName = term.product_attributes?.name || "Attribut";
+              if (!attributesMap.has(attrName)) {
+                attributesMap.set(attrName, { options: [], colorCodes: [] });
+              }
+              attributesMap.get(attrName)?.options.push(term.name);
+              if (term.color_code) {
+                attributesMap.get(attrName)?.colorCodes?.push(term.color_code);
+              }
+            });
+
+            const formattedAttributes = Array.from(attributesMap.entries()).map(([name, data]) => ({
+              name,
+              options: data.options,
+              colorCodes: data.colorCodes && data.colorCodes.length > 0 ? data.colorCodes : undefined,
+            }));
+
+            productData.attributes = formattedAttributes;
+            productData.type = "SIMPLE";
+          }
+        }
+      }
+
+      setProduct(productData);
+
+      // Charger les attributs informatifs (non-variations)
+      const { data: attributeValues, error: attributeError } = await supabase
+        .from("product_attribute_values")
+        .select(`
+          product_attributes!inner(
+            id,
+            name,
+            slug,
+            type
+          ),
+          product_attribute_terms(
+            id,
+            name
+          )
+        `)
+        .eq("product_id", productData.id);
+
+      if (!attributeError && attributeValues && attributeValues.length > 0) {
+        // Grouper par attribut et exclure uniquement les variations (couleurs-principales, tailles)
+        const attributesMap = new Map<string, Set<string>>();
+
+        attributeValues.forEach((av: any) => {
+          if (av.product_attributes && av.product_attribute_terms) {
+            const attrName = av.product_attributes.name;
+            const attrSlug = av.product_attributes.slug?.toLowerCase() || '';
+            const termValue = av.product_attribute_terms.name;
+
+            // Exclure uniquement les attributs de variations (couleurs-principales, tailles)
+            if (attrSlug === 'couleurs-principales' ||
+                attrSlug === 'tailles' ||
+                attrSlug.includes('couleur') ||
+                attrSlug.includes('color') ||
+                attrSlug.includes('taille') ||
+                attrSlug.includes('size')) {
+              return;
+            }
+
+            // Tout le reste est considéré comme informatif (Coupe, Confort, Live, etc.)
+            if (!attributesMap.has(attrName)) {
+              attributesMap.set(attrName, new Set());
+            }
+            if (termValue) {
+              attributesMap.get(attrName)?.add(termValue);
+            }
+          }
+        });
+
+        const formattedAttributes = Array.from(attributesMap.entries()).map(([name, valuesSet]) => ({
+          name,
+          values: Array.from(valuesSet),
+        }));
+
+        setInformativeAttributes(formattedAttributes);
+
+        if (formattedAttributes.length > 0) {
+          console.log('✅ Attributs informatifs chargés:', formattedAttributes);
+        }
+      } else if (attributeError) {
+        console.error('❌ Erreur lors du chargement des attributs informatifs:', attributeError);
       }
     } catch (error) {
-      toast.error('Une erreur est survenue');
+      console.error("Error loading product:", error);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  const handleQuantityChange = (delta: number) => {
+    setQuantity((prev) => Math.max(1, prev + delta));
+  };
+
+  const handleVariationChange = (variation: any) => {
+    setSelectedVariation(variation);
+    setUserSelectedGalleryImage(null);
+    if (variation?.image?.src) {
+      setActiveImageUrl(variation.image.src);
     }
   };
 
-  const handleNotifyAvailability = async () => {
-    if (!user && !notifyEmail) {
-      setShowNotifyDialog(true);
+const handleImageClick = (image: { id: string; src: string }) => {
+    console.log("🖱️ CLIC IMAGE:", image); // DEBUG
+
+    let isVariation = false;
+    let targetVariation = null;
+
+    // 1. Vérification par l'ID
+    if (image.id.startsWith("variation") || image.id === "variation-selected") {
+      isVariation = true;
+      console.log("✅ Identifié comme variation via ID");
+      
+      if (image.id.startsWith("variation-") && image.id !== "variation-selected") {
+        const parts = image.id.split("-");
+        const idx = parseInt(parts[1]);
+        if (!isNaN(idx) && product?.variations && product.variations[idx]) {
+          targetVariation = product.variations[idx];
+        }
+      }
+    }
+
+    // 2. Vérification de secours par l'URL
+    if (!isVariation && product?.variations) {
+      const matchingVar = product.variations.find((v: any) => v.image?.src === image.src);
+      if (matchingVar) {
+        isVariation = true;
+        targetVariation = matchingVar;
+        console.log("✅ Identifié comme variation via URL (Fallback)");
+      } else {
+        console.log("❌ URL ne correspond à aucune variation:", image.src);
+      }
+    }
+
+    if (isVariation) {
+      // DÉVERROUILLAGE
+      console.log("🔓 DÉVERROUILLAGE de la galerie");
+      setUserSelectedGalleryImage(null);
+
+      if (targetVariation && targetVariation.id !== selectedVariation?.id) {
+        console.log("🔄 Changement de variation vers:", targetVariation.id);
+        const variationAttributes: Record<string, string> = {};
+        targetVariation.attributes?.forEach((attr: any) => {
+          variationAttributes[attr.name] = attr.option;
+        });
+        setInitialAttributes(variationAttributes);
+        setSelectedVariation(targetVariation);
+        
+        if (targetVariation.image?.src) {
+          setActiveImageUrl(targetVariation.image.src);
+        }
+      }
+    } else {
+      // VERROUILLAGE
+      console.log("🔒 VERROUILLAGE sur l'image:", image.id);
+      setUserSelectedGalleryImage(image.src);
+    }
+  };
+  
+  const handleAddToCart = () => {
+    if (!product) return;
+
+    if (product?.type === "VARIABLE" && !selectedVariation) {
+      toast.error("Veuillez sélectionner toutes les options");
       return;
     }
 
-    setIsSubmittingNotification(true);
+    const productToAdd = {
+      id: product.id,
+      name: product.name,
+      slug: product.slug,
+      price: selectedVariation?.sale_price || selectedVariation?.price || product.sale_price || product.regular_price || 0,
+      image: selectedVariation?.image?.src
+        ? { sourceUrl: selectedVariation.image.src }
+        : (product.image_url ? { sourceUrl: product.image_url } : undefined),
+      variationId: selectedVariation?.id || null,
+      variationPrice: selectedVariation?.sale_price || selectedVariation?.price || product.sale_price || product.regular_price || null,
+      variationImage: selectedVariation?.image || (product.image_url ? { src: product.image_url, alt: product.name } : null),
+      selectedAttributes: selectedVariation?.attributes || {},
+    };
+
+    addToCart(productToAdd, quantity);
+  };
+
+  const handleNotifyMe = async () => {
+    if (!notifyEmail) {
+      toast.error("Veuillez entrer votre email");
+      return;
+    }
+
+    toast.success(CUSTOM_TEXTS.stockAlert.success);
+    setShowNotifyDialog(false);
+    setNotifyEmail("");
+  };
+
+  const handleDeleteProduct = async () => {
+    if (!product || !isAdmin) return;
+
+    const confirmed = confirm(
+      `Êtes-vous sûr de vouloir supprimer le produit "${decodeHtmlEntities(product.name)}" ?\n\nCette action est irréversible.`
+    );
+
+    if (!confirmed) return;
 
     try {
       const { error } = await supabase
-        .from('product_availability_notifications')
-        .insert({
-          user_id: user?.id || null,
-          product_slug: product.slug,
-          product_name: product.name,
-          email: user ? profile?.email : notifyEmail,
-        });
+        .from('products')
+        .delete()
+        .eq('id', product.id);
 
       if (error) throw error;
 
-      toast.success('Vous serez notifié quand ce produit sera de nouveau disponible !');
-      setShowNotifyDialog(false);
-      setNotifyEmail('');
-    } catch (error) {
-      toast.error('Erreur lors de l\'inscription à la notification');
-    } finally {
-      setIsSubmittingNotification(false);
+      toast.success('Produit supprimé avec succès', {
+        position: 'bottom-right'
+      });
+
+      router.push('/admin/products');
+    } catch (error: any) {
+      console.error('Error deleting product:', error);
+      toast.error(`Erreur lors de la suppression: ${error.message}`, {
+        position: 'bottom-right'
+      });
     }
   };
 
-  const inWishlist = isInWishlist(product.slug);
-  const galleryImages = product.galleryImages?.nodes || [];
-  const defaultImages = product.image ? [product.image, ...galleryImages] : galleryImages;
-  const isVariable = product.__typename === 'VariableProduct';
-  const variations = product.variations?.nodes || [];
-  const variationAttributes = product.attributes?.nodes?.filter((attr: any) => attr.variation) || [];
+  // HOOKS: Déclarer TOUS les hooks AVANT les early returns (règle React)
+  // Logique d'héritage d'image en cascade (4 priorités)
+  const getCurrentImageUrl = (): string | undefined => {
+    if (!product) return undefined;
 
-  const wrappedHandleVariationChange = (variation: any) => {
-    handleVariationChange(variation, defaultImages);
+    // Priorité 1: Sélection manuelle dans la galerie (PRIORITÉ ABSOLUE)
+    if (userSelectedGalleryImage) {
+      return userSelectedGalleryImage;
+    }
+
+    // Priorité 2: Image de la variation exacte sélectionnée
+    if (selectedVariation?.image?.src) {
+      return selectedVariation.image.src;
+    }
+
+    // Priorité 3: Image d'une autre variation avec la même couleur
+    if (selectedVariation && product?.variations) {
+      // Chercher l'attribut couleur dans la variation sélectionnée
+      const colorAttribute = selectedVariation.attributes?.find((attr: any) => {
+        const attrName = attr.name?.toLowerCase() || '';
+        return attrName.includes('couleur') || attrName.includes('color');
+      });
+
+      if (colorAttribute) {
+        const selectedColor = colorAttribute.option;
+
+        // Chercher une autre variation avec la même couleur qui a une image
+        const variationWithSameColor = product.variations.find((v: any) => {
+          if (!v.image?.src || v.id === selectedVariation.id) return false;
+
+          const vColorAttribute = v.attributes?.find((attr: any) => {
+            const attrName = attr.name?.toLowerCase() || '';
+            return attrName.includes('couleur') || attrName.includes('color');
+          });
+
+          return vColorAttribute?.option?.toLowerCase() === selectedColor?.toLowerCase();
+        });
+
+        if (variationWithSameColor?.image?.src) {
+          return variationWithSameColor.image.src;
+        }
+      }
+    }
+
+    // Priorité 4: Première image du produit parent
+    if (product?.image_url) {
+      return product.image_url;
+    }
+
+    return undefined;
   };
 
-  const wrappedHandleAttributeSelect = (attributeName: string, value: string) => {
-    handleAttributeSelect(attributeName, value, selectedCharacteristics, variations, variationAttributes, defaultImages);
-  };
+  const galleryImages = useMemo(() => {
+      if (!product) return [{ id: "placeholder", src: "/placeholder.png", alt: "Product" }];
 
-  const allImages = currentImages.length > 0 ? currentImages : defaultImages;
-  const displayPrice = selectedVariation ? selectedVariation.price : product.price;
-  const displayRegularPrice = selectedVariation ? selectedVariation.regularPrice : product.regularPrice;
-  const isOnSale = selectedVariation
-    ? selectedVariation.salePrice && parseFloat(selectedVariation.salePrice) > 0
-    : product.onSale;
-  const displayStockQuantity = selectedVariation
-    ? selectedVariation.stockQuantity
-    : product.stockQuantity;
-  const displayStockStatus = selectedVariation
-    ? selectedVariation.stockStatus
-    : product.stockStatus;
-  const isProductInStock = isStockAvailable(displayStockStatus, displayStockQuantity);
+      const images: Array<{ id: string; src: string; alt: string }> = [];
 
-  console.log('🏷️ Product:', product.name);
-  console.log('📦 Is Variable:', isVariable);
-  console.log('🎯 Variations count:', variations.length);
-  console.log('🔧 Variation attributes:', variationAttributes.map((a: any) => a.name));
+      // --- NOUVEL ORDRE DE PRIORITÉ (CORRECTIF) ---
 
-  if (variations.length > 0) {
-    console.log('📋 First variation sample:', {
-      id: variations[0].id,
-      price: variations[0].price,
-      attributes: variations[0].attributes.map((a: any) => ({
-        name: a.name,
-        option: a.option
-      }))
-    });
+      // 1. D'abord l'image de la variation ACTIVE (Top priorité)
+      if (selectedVariation?.image?.src) {
+        images.push({
+          id: "variation-selected",
+          src: selectedVariation.image.src,
+          alt: selectedVariation.image.alt || product.name,
+        });
+      }
+
+      // 2. Ensuite TOUTES les images de variations (C'est ICI le changement clé)
+      // On les met AVANT l'image principale pour qu'elles gardent leur identité "variation-x"
+      // et déverrouillent la galerie au clic.
+      if (product.variations && Array.isArray(product.variations) && product.variations.length > 0) {
+        product.variations.forEach((variation: any, idx: number) => {
+          // On évite juste le doublon avec l'image "selected" juste au dessus
+          if (variation.image?.src && !images.some(i => i.src === variation.image.src)) {
+            images.push({
+              id: `variation-${idx}`,
+              src: variation.image.src,
+              alt: variation.image.alt || product.name,
+            });
+          }
+        });
+      }
+
+      // 3. Ensuite l'Image Principale (si elle n'est pas déjà ajoutée via les variations)
+      if (product.image_url && !images.some(i => i.src === product.image_url)) {
+        images.push({
+          id: "main",
+          src: product.image_url,
+          alt: product.name,
+        });
+      }
+
+      // 4. Enfin les images de la Galerie (si elles ne sont pas déjà là)
+      if (product.gallery_images && Array.isArray(product.gallery_images) && product.gallery_images.length > 0) {
+        product.gallery_images.forEach((imgUrl: string, idx: number) => {
+          if (imgUrl && !images.some(i => i.src === imgUrl)) {
+            images.push({
+              id: `gallery-${idx}`,
+              src: imgUrl,
+              alt: product.name,
+            });
+          }
+        });
+      }
+
+      // 5. Fallback
+      if (product.images && Array.isArray(product.images) && product.images.length > 0) {
+        product.images.forEach((img: any, idx: number) => {
+          const imgSrc = img.src || img.sourceUrl || img.url;
+          if (imgSrc && !images.some(i => i.src === imgSrc)) {
+            images.push({
+              id: `img-${idx}`,
+              src: imgSrc,
+              alt: img.alt || product.name,
+            });
+          }
+        });
+      }
+
+      return images.length > 0 ? images : [{ id: "placeholder", src: "/placeholder.png", alt: product.name }];
+    }, [product, selectedVariation]);
+  
+  // Variables calculées (après les hooks, mais avant les early returns si nécessaire)
+  const currentPrice =
+    selectedVariation?.sale_price ||
+    selectedVariation?.price ||
+    product?.sale_price ||
+    product?.regular_price;
+  const regularPrice =
+    selectedVariation?.regular_price || product?.regular_price;
+  const hasDiscount =
+    currentPrice && regularPrice && currentPrice < regularPrice;
+  const isVariable = product?.type === "VARIABLE";
+  const isInStock = isVariable
+    ? selectedVariation?.stock_status === "instock"
+    : product?.stock_status === "instock" && (product?.stock_quantity ?? 0) > 0;
+
+  // EARLY RETURNS: Après tous les hooks
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-gray-600">Chargement...</div>
+      </div>
+    );
   }
 
-  console.log('✨ Current selected variation:', selectedVariation?.id || 'none');
-  console.log('💵 Display price:', displayPrice);
-  console.log('🎨 Selected characteristics:', selectedCharacteristics);
+  if (!product) {
+    return null;
+  }
 
   return (
-    <>
-      <Dialog open={showNotifyDialog} onOpenChange={setShowNotifyDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Être notifié de la disponibilité</DialogTitle>
-            <DialogDescription>
-              Recevez un email dès que {product.name} sera de nouveau en stock.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="grid gap-2">
-              <Label htmlFor="email">Adresse email</Label>
-              <Input
-                id="email"
-                type="email"
-                placeholder="votre@email.com"
-                value={notifyEmail}
-                onChange={(e) => setNotifyEmail(e.target.value)}
-              />
+    <div className="min-h-screen bg-gradient-to-b from-white via-[#FFF9F0] to-white">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+        <nav className="flex items-center gap-2 text-sm text-gray-600 mb-6 sm:mb-8">
+          <Link href="/" className="hover:text-[#b8933d] transition-colors flex items-center gap-1">
+            <Home className="h-4 w-4" />
+            <span className="hidden sm:inline">Accueil</span>
+          </Link>
+          <ChevronRight className="h-4 w-4" />
+          <span className="text-gray-900 font-medium truncate">{decodeHtmlEntities(product.name)}</span>
+        </nav>
+
+        {isAdmin && (
+          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-4 mb-8">
+            <div className="flex items-start justify-between">
+              <div className="flex items-start gap-3">
+                <Shield className="h-5 w-5 text-blue-600 mt-0.5" />
+                <div>
+                  <p className="text-sm font-medium text-blue-900">
+                    Mode Administrateur
+                  </p>
+                  <p className="text-xs text-blue-700 mt-1">
+                    Vous voyez ces boutons car vous êtes connecté en tant qu'administrateur
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <Link href={`/admin/products/${product.id}`}>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="border-blue-300 text-blue-700 hover:bg-blue-100"
+                  >
+                    <Edit className="h-4 w-4 mr-2" />
+                    Modifier
+                  </Button>
+                </Link>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleDeleteProduct}
+                  className="border-red-300 text-red-700 hover:bg-red-100"
+                >
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Supprimer
+                </Button>
+              </div>
             </div>
           </div>
-          <DialogFooter>
+        )}
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12 mb-12 sm:mb-16">
+          <div className="relative lg:sticky lg:top-4 lg:self-start">
+            <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
+              <ProductGallery
+                images={galleryImages}
+                productName={decodeHtmlEntities(product.name)}
+                selectedImageUrl={getCurrentImageUrl()}
+                onImageClick={handleImageClick}
+              />
+            </div>
+            {product.is_diamond && (
+              <div className="mt-4">
+                <HiddenDiamond productId={product.id} position="image" selectedPosition={diamondPosition} />
+              </div>
+            )}
+          </div>
+
+          <div className="space-y-6 bg-white rounded-2xl shadow-lg p-6 sm:p-8 h-fit">
+            {product.is_diamond && (
+              <HiddenDiamond productId={product.id} position="title" selectedPosition={diamondPosition} />
+            )}
+
+            <div className="border-b border-gray-100 pb-6">
+              <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-4 leading-tight">
+                {decodeHtmlEntities(product.name)}
+              </h1>
+
+              <div className="flex flex-wrap items-center gap-3 sm:gap-4 mb-4">
+                <div className="flex items-baseline gap-3">
+                  {hasDiscount && regularPrice && (
+                    <span className="text-xl sm:text-2xl text-gray-400 line-through">
+                      {Number(regularPrice).toFixed(2)} €
+                    </span>
+                  )}
+                  <span className="text-3xl sm:text-4xl font-bold bg-gradient-to-r from-[#b8933d] to-[#D4AF37] bg-clip-text text-transparent">
+                    {currentPrice ? Number(currentPrice).toFixed(2) : "0.00"} €
+                  </span>
+                </div>
+                {hasDiscount && (
+                  <Badge className="bg-gradient-to-r from-pink-500 to-pink-600 hover:from-pink-600 hover:to-pink-700 text-white px-4 py-1.5 text-sm font-bold animate-pulse">
+                    PROMO
+                  </Badge>
+                )}
+              </div>
+
+              {isVariable && (
+                <p className="text-sm text-gray-600 mb-4">
+                  Sélectionnez les options ci-dessous
+                </p>
+              )}
+
+              {!isVariable && (
+                <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-gradient-to-r from-gray-50 to-gray-100 border border-gray-200">
+                  {isInStock ? (
+                    <>
+                      {product.stock_quantity === 1 ? (
+                        <>
+                          <div className="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse shadow-lg shadow-red-300" />
+                          <span className="text-red-700 font-bold text-sm">
+                            {CUSTOM_TEXTS.stock.lowStock}
+                          </span>
+                        </>
+                      ) : product.stock_quantity && product.stock_quantity < 5 ? (
+                        <>
+                          <div className="w-2.5 h-2.5 rounded-full bg-orange-500 animate-pulse shadow-lg shadow-orange-300" />
+                          <span className="text-orange-700 font-bold text-sm">
+                            {CUSTOM_TEXTS.stock.lowStock}
+                          </span>
+                        </>
+                      ) : (
+                        <>
+                          <div className="w-2.5 h-2.5 rounded-full bg-green-500 shadow-lg shadow-green-300" />
+                          <span className="text-green-700 font-semibold text-sm">
+                            {CUSTOM_TEXTS.stock.inStock}
+                          </span>
+                        </>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      <div className="w-2.5 h-2.5 rounded-full bg-pink-500" />
+                      <span className="text-pink-700 font-semibold text-sm">
+                        {CUSTOM_TEXTS.stock.outOfStock}
+                      </span>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {isVariable && product.attributes && product.variations && (
+              <ProductVariationSelector
+                attributes={product.attributes}
+                variations={product.variations}
+                onVariationChange={handleVariationChange}
+                initialSelectedAttributes={initialAttributes}
+              />
+            )}
+
+            {informativeAttributes.length > 0 && (
+              <div className="border-2 border-amber-300 bg-gradient-to-br from-amber-50 via-amber-25 to-white rounded-xl p-6 space-y-4 shadow-sm">
+                <h3 className="text-base font-bold text-[#b8933d] uppercase tracking-wide flex items-center gap-2">
+                  <span className="text-xl">✨</span> Caractéristiques du Produit
+                </h3>
+                <div className="space-y-3">
+                  {informativeAttributes.map((attr, index) => (
+                    <div key={index} className="flex items-start gap-3 text-sm bg-white/80 rounded-lg p-3 border border-amber-100">
+                      <span className="font-bold text-gray-800 min-w-[120px] text-[#b8933d]">{attr.name} :</span>
+                      <span className="text-gray-900 font-medium">{attr.values.join(", ")}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {!isVariable && product.attributes && product.attributes.length > 0 && (
+              <div className="border border-gray-200 rounded-lg p-4 space-y-3">
+                <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">
+                  Caractéristiques
+                </h3>
+                {product.attributes.map((attr: any, index: number) => (
+                  <div key={index} className="space-y-2">
+                    <Label className="text-gray-700">{attr.name}</Label>
+                    <div className="flex flex-wrap gap-2">
+                      {attr.options.map((option: string, optionIndex: number) => {
+                        const colorCode = attr.colorCodes?.[optionIndex];
+                        return (
+                          <div
+                            key={optionIndex}
+                            className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-md bg-white"
+                          >
+                            {colorCode && (
+                              <div
+                                className="w-5 h-5 rounded-full border-2 border-gray-300"
+                                style={{ backgroundColor: colorCode }}
+                              />
+                            )}
+                            <span className="text-sm text-gray-900">{option}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="space-y-6 bg-gradient-to-br from-gray-50 to-white rounded-xl p-6 border border-gray-100">
+              <div>
+                <Label htmlFor="quantity" className="mb-3 block text-sm font-semibold text-gray-700">
+                  {CUSTOM_TEXTS.product.quantity}
+                </Label>
+                <div className="flex items-center bg-white border-2 border-gray-200 rounded-xl w-36 shadow-sm hover:border-[#b8933d] transition-colors">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => handleQuantityChange(-1)}
+                    disabled={quantity <= 1}
+                    className="hover:bg-[#FFF9F0] rounded-l-xl"
+                    aria-label={CUSTOM_TEXTS.buttons.decreaseQuantity}
+                  >
+                    <Minus className="h-4 w-4" />
+                  </Button>
+                  <Input
+                    id="quantity"
+                    type="number"
+                    min="1"
+                    value={quantity}
+                    onChange={(e) => setQuantity(Math.max(1, parseInt(e.target.value) || 1))}
+                    className="border-0 text-center focus-visible:ring-0 font-semibold text-lg"
+                  />
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => handleQuantityChange(1)}
+                    className="hover:bg-[#FFF9F0] rounded-r-xl"
+                    aria-label={CUSTOM_TEXTS.buttons.increaseQuantity}
+                  >
+                    <Plus className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+
+              <div className="flex gap-3">
+                {isInStock ? (
+                  <Button
+                    onClick={handleAddToCart}
+                    disabled={isVariable && !selectedVariation}
+                    className="flex-1 bg-gradient-to-r from-[#b8933d] to-[#D4AF37] hover:from-[#a07c2f] hover:to-[#C6A15B] text-white font-bold py-6 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-[1.02] text-base"
+                  >
+                    <ShoppingCart className="h-5 w-5 mr-2" />
+                    {CUSTOM_TEXTS.buttons.addToCart}
+                  </Button>
+                ) : (
+                  <Button
+                    onClick={() => setShowNotifyDialog(true)}
+                    className="flex-1 bg-gradient-to-r from-pink-500 to-pink-600 hover:from-pink-600 hover:to-pink-700 text-white font-bold py-6 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-[1.02] text-base"
+                  >
+                    <Bell className="h-5 w-5 mr-2" />
+                    {CUSTOM_TEXTS.buttons.alertStock}
+                  </Button>
+                )}
+
+                <WishlistButton
+                  productId={product.id}
+                  variant="icon"
+                  size="icon"
+                  className="border-2 border-gray-200 hover:border-pink-300 hover:bg-pink-50 rounded-xl shadow-sm hover:shadow-md transition-all w-14 h-14"
+                />
+              </div>
+
+              <ShareButtons
+                url={`/product/${product.slug}`}
+                title={product.name}
+                description={product.short_description || undefined}
+              />
+            </div>
+
+            <Accordion type="single" collapsible defaultValue="description" className="w-full border border-gray-200 rounded-xl overflow-hidden shadow-sm">
+              <AccordionItem value="description" className="border-b last:border-b-0">
+                <AccordionTrigger className="px-6 py-4 hover:bg-[#FFF9F0] transition-colors text-base font-semibold">
+                  📝 Description
+                </AccordionTrigger>
+                <AccordionContent className="px-6 pb-6 pt-2">
+                  {product.is_diamond && (
+                    <div className="mb-4">
+                      <HiddenDiamond productId={product.id} position="description" selectedPosition={diamondPosition} />
+                    </div>
+                  )}
+                  {product.description ? (
+                    <div
+                      className="prose prose-sm max-w-none text-gray-700 leading-relaxed"
+                      dangerouslySetInnerHTML={{ __html: product.description }}
+                    />
+                  ) : (
+                    <p className="text-gray-600">Aucune description disponible.</p>
+                  )}
+                </AccordionContent>
+              </AccordionItem>
+
+              <AccordionItem value="composition" className="border-b last:border-b-0">
+                <AccordionTrigger className="px-6 py-4 hover:bg-[#FFF9F0] transition-colors text-base font-semibold">
+                  🧵 Composition & Entretien
+                </AccordionTrigger>
+                <AccordionContent className="px-6 pb-6 pt-2">
+                  <div className="space-y-3 text-gray-700">
+                    <div className="flex items-start gap-2">
+                      <span className="font-semibold min-w-[120px]">Composition :</span>
+                      <span>À compléter</span>
+                    </div>
+                    <div className="flex items-start gap-2">
+                      <span className="font-semibold min-w-[120px]">Entretien :</span>
+                      <span>Lavage en machine à 30°C</span>
+                    </div>
+                  </div>
+                </AccordionContent>
+              </AccordionItem>
+
+              <AccordionItem value="delivery" className="border-b-0">
+                <AccordionTrigger className="px-6 py-4 hover:bg-[#FFF9F0] transition-colors text-base font-semibold">
+                  {CUSTOM_TEXTS.shipping.label}
+                </AccordionTrigger>
+                <AccordionContent className="px-6 pb-6 pt-2">
+                  <div className="space-y-3 text-gray-700">
+                    <div className="flex items-start gap-2">
+                      <span className="text-green-600">✅</span>
+                      <span>Livraison standard : 3-5 jours ouvrés</span>
+                    </div>
+                    <div className="flex items-start gap-2">
+                      <span className="text-blue-600">↩️</span>
+                      <span>Retours gratuits sous 30 jours</span>
+                    </div>
+                  </div>
+                </AccordionContent>
+              </AccordionItem>
+            </Accordion>
+          </div>
+        </div>
+      </main>
+
+      <Dialog open={showNotifyDialog} onOpenChange={setShowNotifyDialog}>
+        <DialogContent className="sm:max-w-md rounded-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-2xl font-bold flex items-center gap-2">
+              <Bell className="h-6 w-6 text-[#b8933d]" />
+              {CUSTOM_TEXTS.buttons.alertStock}
+            </DialogTitle>
+            <DialogDescription className="text-base pt-2">
+              Entrez votre email pour être notifié quand cette pépite sera de nouveau disponible.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <Label htmlFor="email" className="text-sm font-semibold text-gray-700 mb-2 block">
+              Adresse email
+            </Label>
+            <Input
+              id="email"
+              type="email"
+              placeholder="votre@email.com"
+              value={notifyEmail}
+              onChange={(e) => setNotifyEmail(e.target.value)}
+              className="mt-2 h-12 rounded-xl border-2 focus:border-[#b8933d]"
+            />
+          </div>
+          <DialogFooter className="gap-2 sm:gap-0">
             <Button
-              onClick={handleNotifyAvailability}
-              disabled={!notifyEmail || isSubmittingNotification}
+              variant="outline"
+              onClick={() => setShowNotifyDialog(false)}
+              className="rounded-xl border-2"
             >
-              {isSubmittingNotification ? 'Inscription...' : 'Me notifier'}
+              Annuler
+            </Button>
+            <Button
+              onClick={handleNotifyMe}
+              className="bg-gradient-to-r from-[#b8933d] to-[#D4AF37] hover:from-[#a07c2f] hover:to-[#C6A15B] text-white rounded-xl font-bold shadow-md"
+            >
+              Me notifier
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
-      <div className="bg-gray-50 min-h-screen">
-        <div className="container mx-auto px-4 py-6">
-        <nav className="flex items-center gap-2 text-sm text-gray-600 mb-6">
-          <Link href="/" className="hover:text-[#b8933d] flex items-center gap-1">
-            <Home className="h-4 w-4" />
-            Accueil
-          </Link>
-          <span>/</span>
-          <span className="text-gray-900">{product.name}</span>
-        </nav>
-
-        <div className="bg-white rounded-lg overflow-hidden shadow-sm">
-          <div className="grid lg:grid-cols-2 gap-8 p-6 lg:p-10">
-            <div className="relative">
-              {hasHiddenDiamond && diamondPosition === 'image' && product.databaseId && (
-                <HiddenDiamond
-                  diamondId={`product-${product.databaseId}`}
-                  pageUrl={`/product/${product.slug}`}
-                  inline={false}
-                />
-              )}
-              <ProductGallery images={allImages} productName={product.name} />
-            </div>
-
-            <div className="space-y-6">
-              <div>
-                {hasHiddenDiamond && diamondPosition === 'title' && product.databaseId && (
-                  <div className="mb-4">
-                    <HiddenDiamond
-                      diamondId={`product-${product.databaseId}`}
-                      pageUrl={`/product/${product.slug}`}
-                      inline={true}
-                    />
-                  </div>
-                )}
-                <h1 className="text-3xl lg:text-4xl font-bold text-gray-900 mb-4">
-                  {product.name}
-                </h1>
-                <div className="flex items-baseline gap-3 flex-wrap">
-                  {isOnSale && displayRegularPrice ? (
-                    <>
-                      <p className="text-2xl text-gray-500 line-through">
-                        {formatPrice(displayRegularPrice)}
-                      </p>
-                      <p className="text-3xl lg:text-4xl font-bold text-[#b8933d]">
-                        {formatPrice(displayPrice)}
-                      </p>
-                      <span className="bg-[#DF30CF] text-white px-3 py-1 rounded-full text-sm font-bold">
-                        PROMO
-                      </span>
-                    </>
-                  ) : (
-                    <p className="text-3xl lg:text-4xl font-bold text-[#b8933d]">
-                      {formatPrice(displayPrice)}
-                    </p>
-                  )}
-                </div>
-                {isVariable && !selectedVariation && (
-                  <p className="text-sm text-gray-600 italic mt-2">
-                    Sélectionnez les options ci-dessous pour découvrir le prix
-                  </p>
-                )}
-              </div>
-
-              {!isVariable && displayStockQuantity !== null && displayStockQuantity !== undefined && (
-                <div className="flex items-center gap-2">
-                  <div
-                    className={`h-3 w-3 rounded-full ${
-                      displayStockQuantity > 0 ? 'bg-[#B6914A]' : 'bg-[#DF30CF]'
-                    }`}
-                  />
-                  <p className="text-sm font-medium">
-                    {displayStockQuantity > 0 ? (
-                      <span className="text-[#B6914A]">Produit disponible</span>
-                    ) : (
-                      <span className="text-[#DF30CF]">Rupture de stock</span>
-                    )}
-                  </p>
-                </div>
-              )}
-
-              {isVariable && variationAttributes.length > 0 && (
-                <div className="border-t border-gray-200 pt-6">
-                  <ProductVariationSelector
-                    variations={variations}
-                    attributes={variationAttributes.map((attr: any) => ({
-                      name: attr.name,
-                      options: attr.options || []
-                    }))}
-                    onVariationChange={wrappedHandleVariationChange}
-                    onAttributeSelect={wrappedHandleAttributeSelect}
-                    externalSelectedAttributes={selectedCharacteristics}
-                  />
-                </div>
-              )}
-
-              {!isVariable && (product.attributes?.nodes && product.attributes.nodes.filter((attr: any) => !attr.variation).length > 0) && (
-                <div className="border-t border-gray-200 pt-6">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-3">Sélectionnez vos options</h3>
-                  <div className="grid grid-cols-1 gap-4">
-                    {product.attributes.nodes.filter((attr: any) => !attr.variation).map((attr: any, index: number) => {
-                      const isSizeAttribute = attr.name.toLowerCase().includes('taille');
-                      const isColorAttr = isColorAttribute(attr.name);
-                      const sortedOptions = isSizeAttribute ? sortSizes(attr.options || []) : (attr.options || []);
-                      const normalizedAttrName = attr.name.replace(/^pa_/, '');
-                      const isSelected = selectedCharacteristics[normalizedAttrName];
-
-                      return (
-                        <div key={index} className="space-y-2">
-                          <div className="flex items-center justify-between">
-                            <label className="text-sm font-medium text-gray-700">
-                              {formatAttributeName(attr.name)} <span className="text-red-500">*</span>
-                            </label>
-                            {isSelected && (
-                              <span className="text-xs text-[#b8933d] font-medium">
-                                Sélectionné : {isSelected}
-                              </span>
-                            )}
-                          </div>
-                          <div className="flex flex-wrap gap-2">
-                            {sortedOptions.map((option: string, optIndex: number) => {
-                              const isOptionSelected = selectedCharacteristics[normalizedAttrName] === option;
-
-                              if (isColorAttr) {
-                                return (
-                                  <div key={optIndex} className="relative">
-                                    <ColorSwatch
-                                      color={option}
-                                      isSelected={isOptionSelected}
-                                      onClick={() => {
-                                        setSelectedCharacteristics(prev => ({
-                                          ...prev,
-                                          [normalizedAttrName]: option
-                                        }));
-                                      }}
-                                      size="md"
-                                    />
-                                  </div>
-                                );
-                              }
-
-                              return (
-                                <button
-                                  key={optIndex}
-                                  onClick={() => {
-                                    setSelectedCharacteristics(prev => ({
-                                      ...prev,
-                                      [normalizedAttrName]: option
-                                    }));
-                                  }}
-                                  className={`inline-flex items-center px-4 py-2 border-2 rounded-lg text-sm font-medium transition-all ${
-                                    isOptionSelected
-                                      ? 'border-[#b8933d] bg-[#b8933d] text-white shadow-md'
-                                      : 'border-gray-300 bg-white text-gray-700 hover:border-[#b8933d] hover:bg-[#b8933d]/5'
-                                  }`}
-                                >
-                                  {option}
-                                </button>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              <div className="border-t border-gray-200 pt-6 space-y-4">
-                <div className="flex items-center gap-4">
-                  <label htmlFor="quantity" className="text-sm font-medium text-gray-700">
-                    Quantité:
-                  </label>
-                  <div className="flex items-center border border-gray-300 rounded-md">
-                    <button
-                      onClick={() => setQuantity(Math.max(1, quantity - 1))}
-                      className="px-4 py-2 hover:bg-gray-50 transition-colors"
-                      aria-label="Diminuer la quantité"
-                    >
-                      -
-                    </button>
-                    <input
-                      id="quantity"
-                      type="number"
-                      min="1"
-                      value={quantity}
-                      onChange={(e) => setQuantity(Math.max(1, parseInt(e.target.value) || 1))}
-                      className="w-16 text-center border-x border-gray-300 py-2 focus:outline-none"
-                    />
-                    <button
-                      onClick={() => setQuantity(quantity + 1)}
-                      className="px-4 py-2 hover:bg-gray-50 transition-colors"
-                      aria-label="Augmenter la quantité"
-                    >
-                      +
-                    </button>
-                  </div>
-                </div>
-
-                {(() => {
-                  const simpleProductAttributes = !isVariable ? (product.attributes?.nodes?.filter((attr: any) => !attr.variation) || []) : [];
-                  const hasRequiredAttributes = simpleProductAttributes.length > 0;
-                  const allAttributesSelected = simpleProductAttributes.every((attr: any) => {
-                    const normalizedAttrName = attr.name.replace(/^pa_/, '');
-                    return selectedCharacteristics[normalizedAttrName];
-                  });
-
-                  if (isVariable && !selectedVariation) {
-                    return (
-                      <Button
-                        disabled
-                        className="w-full bg-gray-400 text-white h-12 text-lg font-semibold cursor-not-allowed"
-                      >
-                        Veuillez sélectionner une option
-                      </Button>
-                    );
-                  }
-
-                  if (!isVariable && hasRequiredAttributes && !allAttributesSelected) {
-                    return (
-                      <Button
-                        disabled
-                        className="w-full bg-gray-400 text-white h-12 text-lg font-semibold cursor-not-allowed"
-                      >
-                        Veuillez sélectionner toutes les options
-                      </Button>
-                    );
-                  }
-
-                  if (!isProductInStock) {
-                    return (
-                      <Button
-                        onClick={handleNotifyAvailability}
-                        className="w-full bg-[#B6914A] hover:bg-[#a07c2f] text-white h-12 text-lg font-semibold"
-                      >
-                        <Bell className="mr-2 h-5 w-5" />
-                        Me notifier quand disponible
-                      </Button>
-                    );
-                  }
-
-                  return (
-                    <Button
-                      onClick={handleAddToCart}
-                      className="w-full bg-[#b8933d] hover:bg-[#a07c2f] text-white h-12 text-lg font-semibold"
-                    >
-                      <ShoppingCart className="mr-2 h-5 w-5" />
-                      Ajouter au panier
-                    </Button>
-                  );
-                })()}
-
-                <div className="flex gap-3">
-                  <Button
-                    variant={inWishlist ? "default" : "outline"}
-                    className={`flex-1 ${
-                      inWishlist
-                        ? 'bg-[#DF30CF] hover:bg-[#c82bb7] text-white border-[#DF30CF]'
-                        : 'border-gray-300'
-                    }`}
-                    onClick={handleToggleWishlist}
-                  >
-                    <Heart className={`mr-2 h-4 w-4 ${inWishlist ? 'fill-current' : ''}`} />
-                    {inWishlist ? 'Dans mes coups de cœur' : 'Coups de cœur'}
-                  </Button>
-                  <ShareButtons
-                    title={product.name}
-                    description={product.description || ''}
-                    imageUrl={product.image?.sourceUrl}
-                    price={formatPrice(product.price)}
-                  />
-                </div>
-              </div>
-
-              {product.description && (
-                <Accordion type="single" collapsible defaultValue="description" className="border-t">
-                  {hasHiddenDiamond && diamondPosition === 'description' && product.databaseId && (
-                    <div className="pt-4 pb-2">
-                      <HiddenDiamond
-                        diamondId={`product-${product.databaseId}`}
-                        pageUrl={`/product/${product.slug}`}
-                        inline={true}
-                      />
-                    </div>
-                  )}
-                  <AccordionItem value="description">
-                    <AccordionTrigger className="text-lg font-semibold hover:text-[#b8933d]">
-                      Description
-                    </AccordionTrigger>
-                    <AccordionContent>
-                      <div
-                        className="prose prose-sm text-gray-600 max-w-none"
-                        dangerouslySetInnerHTML={{ __html: product.description }}
-                      />
-                    </AccordionContent>
-                  </AccordionItem>
-
-                  <AccordionItem value="composition">
-                    <AccordionTrigger className="text-lg font-semibold hover:text-[#b8933d]">
-                      Composition & Entretien
-                    </AccordionTrigger>
-                    <AccordionContent>
-                      <div className="text-gray-600 space-y-2">
-                        <p>Composition à définir dans WordPress</p>
-                        <p className="text-sm">Lavage: Suivre les instructions sur l&apos;étiquette</p>
-                      </div>
-                    </AccordionContent>
-                  </AccordionItem>
-
-                  <AccordionItem value="shipping">
-                    <AccordionTrigger className="text-lg font-semibold hover:text-[#b8933d]">
-                      Livraison & Retours
-                    </AccordionTrigger>
-                    <AccordionContent>
-                      <div className="text-gray-600 space-y-2">
-                        <p>Livraison standard : 1 à 5 jours ouvrés</p>
-                        <p>Retours sous 14 jours</p>
-                      </div>
-                    </AccordionContent>
-                  </AccordionItem>
-                </Accordion>
-              )}
-            </div>
-          </div>
-        </div>
-
-        <div className="container mx-auto px-4 py-8">
-          <ProductReviews productId={product.databaseId?.toString() || product.id} productName={product.name} />
-        </div>
-
-        <RelatedProductsDisplay productId={product.databaseId?.toString() || product.id} />
-      </div>
     </div>
-    </>
   );
 }

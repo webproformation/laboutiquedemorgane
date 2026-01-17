@@ -1,128 +1,153 @@
-"use client";
+'use client';
 
-import { useState, useEffect, Suspense } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Loader2, Mail, Lock, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
-import { LogIn, Loader2, Gift, Eye, EyeOff } from 'lucide-react';
+import { PasswordInput } from '@/components/PasswordInput';
 
-function LoginForm() {
+export default function LoginPage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const { signIn, user, loading: authLoading } = useAuth();
+
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const [hasPendingPrize, setHasPendingPrize] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
-  const { signIn } = useAuth();
-  const router = useRouter();
-  const searchParams = useSearchParams();
+  const [error, setError] = useState('');
+
+  const redirect = searchParams?.get('redirect') || '/account';
 
   useEffect(() => {
-    const prizePending = searchParams.get('prize_pending');
-    const pendingPrize = localStorage.getItem('pending_prize');
-    setHasPendingPrize(prizePending === 'true' && !!pendingPrize);
-  }, [searchParams]);
+    if (!authLoading && user) {
+      router.push(redirect);
+    }
+  }, [user, authLoading, router, redirect]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError('');
     setLoading(true);
 
-    const { error } = await signIn(email, password);
+    console.log('\n========== TENTATIVE DE CONNEXION ==========');
+    console.log('Email:', email);
+    console.log('URL Supabase:', process.env.NEXT_PUBLIC_SUPABASE_URL);
+    console.log('Timestamp:', new Date().toISOString());
+    console.log('=========================================\n');
 
-    if (error) {
-      toast.error('Email ou mot de passe incorrect');
-    } else {
-      if (hasPendingPrize) {
-        toast.success('Connexion réussie ! Votre gain a été ajouté à votre compte.');
-        router.push('/account/coupons');
-      } else {
-        toast.success('Connexion réussie !');
-        router.push('/account');
-      }
+    if (!email || !password) {
+      setError('Veuillez remplir tous les champs');
+      setLoading(false);
+      return;
     }
 
-    setLoading(false);
+    const { error: signInError } = await signIn(email, password);
+
+    if (signInError) {
+      console.error('\n========== ERREUR AUTHENTIFICATION ==========');
+      console.error('Message:', signInError.message);
+      console.error('Status:', (signInError as any).status);
+      console.error('Code:', (signInError as any).code);
+      console.error('Détails complets:', JSON.stringify(signInError, null, 2));
+      console.error('=========================================\n');
+
+      const errorMsg = signInError.message === 'Invalid login credentials'
+        ? 'Email ou mot de passe incorrect'
+        : signInError.message || 'Erreur lors de la connexion';
+
+      setError(`${errorMsg} (Code: ${(signInError as any).status || 'N/A'})`);
+      setLoading(false);
+      return;
+    }
+
+    console.log('\n========== CONNEXION RÉUSSIE ==========');
+    console.log('Redirection vers:', redirect);
+    console.log('=========================================\n');
+
+    toast.success('Connexion réussie!');
+    router.push(redirect);
   };
 
+  if (authLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-[#D4AF37]" />
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-gray-50 to-gray-100 px-4 py-12">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center p-4">
       <Card className="w-full max-w-md">
         <CardHeader className="space-y-1">
-          <div className="flex items-center justify-center mb-4">
-            <div className={`p-3 ${hasPendingPrize ? 'bg-yellow-500' : 'bg-[#b8933d]'} rounded-full`}>
-              {hasPendingPrize ? <Gift className="h-6 w-6 text-white" /> : <LogIn className="h-6 w-6 text-white" />}
-            </div>
+          <div className="flex justify-center mb-4">
+            <img src="/lbdm-icone.png" alt="Logo" className="h-16 w-auto" />
           </div>
-          <CardTitle className="text-2xl text-center">Connexion</CardTitle>
+          <CardTitle className="text-2xl font-bold text-center">Connexion</CardTitle>
           <CardDescription className="text-center">
-            {hasPendingPrize
-              ? 'Connectez-vous pour récupérer votre gain du jeu concours !'
-              : 'Connectez-vous à votre compte pour accéder à vos commandes'
-            }
+            Connectez-vous à votre compte pour continuer
           </CardDescription>
         </CardHeader>
-        {hasPendingPrize && (
-          <div className="mx-6 mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-            <p className="text-sm text-yellow-800 text-center">
-              Vous avez gagné un prix au jeu concours ! Connectez-vous pour le récupérer.
-            </p>
-          </div>
-        )}
-        <form onSubmit={handleSubmit}>
-          <CardContent className="space-y-4">
+        <CardContent>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            {error && (
+              <div className="bg-red-50 border border-red-200 rounded-lg p-3 flex items-start gap-2">
+                <AlertCircle className="h-5 w-5 text-red-600 flex-shrink-0 mt-0.5" />
+                <p className="text-sm text-red-600">{error}</p>
+              </div>
+            )}
+
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
-              <Input
-                id="email"
-                type="email"
-                placeholder="nom@exemple.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                disabled={loading}
-              />
-            </div>
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label htmlFor="password">Mot de passe</Label>
-                <Link
-                  href="/auth/forgot-password"
-                  className="text-sm text-[#b8933d] hover:text-[#a07c2f]"
-                >
-                  Mot de passe oublié ?
-                </Link>
-              </div>
               <div className="relative">
+                <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
                 <Input
-                  id="password"
-                  type={showPassword ? "text" : "password"}
-                  placeholder="••••••••"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                  id="email"
+                  type="email"
+                  placeholder="votre@email.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="pl-10"
                   required
                   disabled={loading}
-                  className="pr-10"
                 />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700"
-                  tabIndex={-1}
-                >
-                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                </button>
               </div>
             </div>
-          </CardContent>
-          <CardFooter className="flex flex-col gap-4">
+
+            <div className="space-y-2">
+              <Label htmlFor="password">Mot de passe</Label>
+              <div className="relative">
+                <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400 z-10" />
+                <PasswordInput
+                  id="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="pl-10 pr-10"
+                  required
+                  disabled={loading}
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between">
+              <Link
+                href="/auth/forgot-password"
+                className="text-sm text-[#D4AF37] hover:text-[#b8933d] transition-colors"
+              >
+                Mot de passe oublié?
+              </Link>
+            </div>
+
             <Button
               type="submit"
-              className="w-full bg-[#b8933d] hover:bg-[#a07c2f]"
               disabled={loading}
+              className="w-full bg-gradient-to-r from-[#b8933d] to-[#d4af37] hover:from-[#9a7a2f] hover:to-[#b8933d] text-white"
             >
               {loading ? (
                 <>
@@ -133,31 +158,19 @@ function LoginForm() {
                 'Se connecter'
               )}
             </Button>
-            <div className="text-sm text-center text-gray-600">
-              Pas encore de compte ?{' '}
-              <Link href="/auth/register" className="text-[#b8933d] hover:text-[#a07c2f] font-semibold">
+
+            <div className="text-center text-sm text-gray-600">
+              Pas encore de compte?{' '}
+              <Link
+                href="/auth/register"
+                className="text-[#D4AF37] hover:text-[#b8933d] font-medium transition-colors"
+              >
                 Créer un compte
               </Link>
             </div>
-          </CardFooter>
-        </form>
+          </form>
+        </CardContent>
       </Card>
     </div>
-  );
-}
-
-export default function LoginPage() {
-  return (
-    <Suspense fallback={
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-gray-50 to-gray-100 px-4 py-12">
-        <Card className="w-full max-w-md p-8">
-          <div className="flex items-center justify-center">
-            <Loader2 className="h-8 w-8 animate-spin text-[#b8933d]" />
-          </div>
-        </Card>
-      </div>
-    }>
-      <LoginForm />
-    </Suspense>
   );
 }

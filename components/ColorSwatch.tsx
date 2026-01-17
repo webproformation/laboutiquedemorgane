@@ -1,86 +1,115 @@
-"use client";
+'use client';
 
-import { Check } from 'lucide-react';
-import { getColorValue } from '@/lib/colors';
+import { useState, useEffect } from 'react';
+import { supabase } from '@/lib/supabase';
 
 interface ColorSwatchProps {
-  color: string;
+  colorName: string;
   isSelected: boolean;
   onClick: () => void;
-  size?: 'sm' | 'md' | 'lg';
+  imageUrl?: string | null;
 }
 
-export default function ColorSwatch({ color, isSelected, onClick, size = 'md' }: ColorSwatchProps) {
-  const colorValue = getColorValue(color);
+export function ColorSwatch({ colorName, isSelected, onClick, imageUrl }: ColorSwatchProps) {
+  const [colorHex, setColorHex] = useState<string | null>(null);
 
-  // If no color value is found, log it and render a text button instead
-  if (!colorValue) {
-    console.warn(`⚠️ ColorSwatch: No color mapping found for "${color}". Please add it to lib/colors.ts`);
-    return (
-      <button
-        type="button"
-        onClick={onClick}
-        className={`
-          px-3 py-2 rounded-lg border-2 text-sm font-medium transition-all
-          ${isSelected
-            ? 'border-[#b8933d] bg-[#b8933d] text-white'
-            : 'border-gray-300 hover:border-[#b8933d] bg-white text-gray-700'
-          }
-        `}
-        title={color}
-        aria-label={`Couleur ${color}`}
-      >
-        {color}
-      </button>
-    );
-  }
+  useEffect(() => {
+    loadColorInfo();
+  }, [colorName]);
 
-  const sizeClasses = {
-    sm: 'w-8 h-8',
-    md: 'w-10 h-10',
-    lg: 'w-12 h-12'
+  const loadColorInfo = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('product_attribute_terms')
+        .select('value, color_family')
+        .ilike('name', colorName)
+        .limit(1)
+        .maybeSingle();
+
+      if (!error && data?.value) {
+        setColorHex(data.value);
+      }
+    } catch (error) {
+      console.error('Error loading color info:', error);
+    }
   };
 
-  const checkSizes = {
-    sm: 'w-3 h-3',
-    md: 'w-4 h-4',
-    lg: 'w-5 h-5'
+  const getColorStyle = () => {
+    if (imageUrl) {
+      return {
+        backgroundImage: `url(${imageUrl})`,
+        backgroundSize: 'cover',
+        backgroundPosition: 'center'
+      };
+    }
+
+    if (colorHex) {
+      return {
+        backgroundColor: colorHex
+      };
+    }
+
+    const colorMap: Record<string, string> = {
+      'noir': '#000000',
+      'black': '#000000',
+      'blanc': '#FFFFFF',
+      'white': '#FFFFFF',
+      'rouge': '#DC2626',
+      'red': '#DC2626',
+      'bleu': '#2563EB',
+      'blue': '#2563EB',
+      'vert': '#16A34A',
+      'green': '#16A34A',
+      'jaune': '#EAB308',
+      'yellow': '#EAB308',
+      'rose': '#EC4899',
+      'pink': '#EC4899',
+      'violet': '#9333EA',
+      'purple': '#9333EA',
+      'orange': '#EA580C',
+      'marron': '#92400E',
+      'brown': '#92400E',
+      'gris': '#6B7280',
+      'grey': '#6B7280',
+      'gray': '#6B7280',
+      'beige': '#D2B48C',
+      'kaki': '#8B864E',
+      'navy': '#1E3A8A',
+      'marine': '#1E3A8A',
+    };
+
+    const colorNameLower = colorName.toLowerCase();
+    for (const [key, value] of Object.entries(colorMap)) {
+      if (colorNameLower.includes(key)) {
+        return { backgroundColor: value };
+      }
+    }
+
+    return {
+      backgroundColor: '#F3F4F6',
+      border: '1px solid #D1D5DB'
+    };
   };
 
-  const isGradient = colorValue.includes('gradient');
-  const isWhiteOrLight = colorValue.toLowerCase() === '#ffffff' || colorValue.toLowerCase() === '#f5f5dc';
+  const needsBorder = colorName.toLowerCase().includes('blanc') ||
+                      colorName.toLowerCase().includes('white') ||
+                      colorName.toLowerCase().includes('beige');
 
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`
-        ${sizeClasses[size]}
-        rounded-full
-        relative
-        transition-all
-        cursor-pointer
-        ${isSelected ? 'ring-2 ring-offset-2 ring-[#b8933d] scale-110' : 'hover:scale-105'}
-        ${isWhiteOrLight ? 'border-2 border-gray-300' : ''}
-      `}
-      style={{
-        background: colorValue,
-        boxShadow: isSelected ? '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)' : '0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06)'
-      }}
-      title={color}
-      aria-label={`Couleur ${color}`}
-    >
-      {isSelected && (
-        <div className="absolute inset-0 flex items-center justify-center">
-          <div className={`
-            rounded-full
-            ${isWhiteOrLight || isGradient ? 'bg-gray-900' : 'bg-white'}
-            p-0.5
-          `}>
-            <Check className={`${checkSizes[size]} ${isWhiteOrLight || isGradient ? 'text-white' : 'text-gray-900'}`} />
-          </div>
-        </div>
-      )}
-    </button>
+    <div className="flex flex-col items-center gap-2 group cursor-pointer" onClick={onClick}>
+      <div
+        className={`w-12 h-12 rounded-full transition-all ${
+          isSelected
+            ? 'ring-4 ring-[#D4AF37] ring-offset-2 scale-110'
+            : 'ring-2 ring-gray-300 hover:ring-[#D4AF37] hover:scale-105'
+        } ${needsBorder ? 'border border-gray-300' : ''}`}
+        style={getColorStyle()}
+      />
+      <span className={`text-xs text-center max-w-[80px] leading-tight ${
+        isSelected ? 'font-semibold text-[#D4AF37]' : 'text-gray-600 group-hover:text-[#D4AF37]'
+      }`}>
+        {colorName}
+      </span>
+    </div>
   );
 }

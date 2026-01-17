@@ -1,23 +1,29 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { useEffect, useState } from 'react';
+import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { FolderOpen, Plus, Edit2, Trash2, Loader2, ArrowLeft, Save, RefreshCw } from 'lucide-react';
-import Link from 'next/link';
-import { useQuery } from '@apollo/client/react';
-import { GET_POST_CATEGORIES } from '@/lib/queries';
-import { GetPostCategoriesResponse } from '@/types';
+import { Card, CardContent } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogFooter,
+  DialogTrigger,
 } from '@/components/ui/dialog';
 import {
   AlertDialog,
@@ -28,51 +34,57 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
+  AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
-import { Badge } from '@/components/ui/badge';
+import { Plus, Edit, Trash2, Tag } from 'lucide-react';
 import { toast } from 'sonner';
-import { supabase } from '@/lib/supabase-client';
 
-interface CategoryFormData {
+interface NewsCategory {
+  id: string;
   name: string;
   slug: string;
   description: string;
-}
-
-interface Category {
-  id: string;
-  databaseId?: string;
-  name: string;
-  slug: string;
-  description?: string;
-  count: number;
+  color: string;
+  display_order: number;
+  is_active: boolean;
+  created_at?: string;
 }
 
 export default function NewsCategoriesPage() {
+  const [categories, setCategories] = useState<NewsCategory[]>([]);
+  const [loading, setLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [editingCategory, setEditingCategory] = useState<Category | null>(null);
-  const [categoryToDelete, setCategoryToDelete] = useState<Category | null>(null);
-  const [isSaving, setIsSaving] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false);
-  const [isSyncing, setIsSyncing] = useState(false);
+  const [editingCategory, setEditingCategory] = useState<NewsCategory | null>(null);
 
-  const [formData, setFormData] = useState<CategoryFormData>({
+  const [formData, setFormData] = useState({
     name: '',
     slug: '',
     description: '',
+    color: '#C6A15B',
+    display_order: 0,
   });
 
-  const { loading, data, refetch } = useQuery<GetPostCategoriesResponse>(GET_POST_CATEGORIES);
-  const categories: Category[] = data?.categories?.nodes || [];
+  useEffect(() => {
+    loadCategories();
+  }, []);
+
+  const loadCategories = async () => {
+    try {
+      const { data: categoriesData, error } = await supabase
+        .from('news_categories')
+        .select('*')
+        .order('display_order', { ascending: true });
+
+      if (error) throw error;
+
+      setCategories(categoriesData || []);
+    } catch (error) {
+      console.error('Error loading categories:', error);
+      toast.error('Erreur lors du chargement');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const generateSlug = (name: string) => {
     return name
@@ -87,430 +99,345 @@ export default function NewsCategoriesPage() {
     setFormData({
       ...formData,
       name,
-      slug: editingCategory ? formData.slug : generateSlug(name),
+      slug: generateSlug(name),
     });
   };
 
-  const handleOpenDialog = (category?: Category) => {
-    if (category) {
-      setEditingCategory(category);
-      setFormData({
-        name: category.name,
-        slug: category.slug,
-        description: category.description || '',
-      });
-    } else {
-      setEditingCategory(null);
-      setFormData({ name: '', slug: '', description: '' });
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!formData.name || !formData.slug) {
+      toast.error('Le nom est requis');
+      return;
     }
+
+    try {
+      if (editingCategory) {
+        const { error } = await supabase
+          .from('news_categories')
+          .update({
+            name: formData.name,
+            slug: formData.slug,
+            description: formData.description || '',
+            color: formData.color,
+            display_order: formData.display_order,
+          })
+          .eq('id', editingCategory.id);
+
+        if (error) throw error;
+        toast.success('Catégorie modifiée');
+      } else {
+        const { error } = await supabase
+          .from('news_categories')
+          .insert({
+            id: crypto.randomUUID(),
+            name: formData.name,
+            slug: formData.slug,
+            description: formData.description || '',
+            color: formData.color,
+            display_order: formData.display_order,
+            is_active: true,
+          });
+
+        if (error) throw error;
+        toast.success('Catégorie créée');
+      }
+
+      resetForm();
+      loadCategories();
+    } catch (error: any) {
+      console.error('Error saving category:', error);
+      if (error.code === '23505') {
+        toast.error('Ce slug existe déjà');
+      } else {
+        toast.error('Erreur lors de la sauvegarde');
+      }
+    }
+  };
+
+  const handleEdit = (category: NewsCategory) => {
+    setEditingCategory(category);
+    setFormData({
+      name: category.name,
+      slug: category.slug,
+      description: category.description || '',
+      color: category.color,
+      display_order: category.display_order,
+    });
     setIsDialogOpen(true);
   };
 
-  const handleSave = async () => {
-    if (!formData.name.trim()) {
-      toast.error('Le nom est obligatoire');
-      return;
-    }
-
-    if (!formData.slug.trim()) {
-      toast.error('Le slug est obligatoire');
-      return;
-    }
-
-    setIsSaving(true);
+  const handleDelete = async (id: string, name: string) => {
     try {
-      const categoryData = {
-        name: formData.name,
-        slug: formData.slug,
-        description: formData.description,
-      };
+      const { data: articlesCheck, error: checkError } = await supabase
+        .from('news_articles')
+        .select('id')
+        .eq('category_id', id)
+        .limit(1);
 
-      let response;
-      if (editingCategory) {
-        response = await fetch(`/api/wordpress/categories?id=${editingCategory.databaseId}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(categoryData),
-        });
-      } else {
-        response = await fetch('/api/wordpress/categories', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(categoryData),
-        });
+      if (checkError) throw checkError;
+
+      if (articlesCheck && articlesCheck.length > 0) {
+        toast.error('Impossible de supprimer : des articles sont associés');
+        return;
       }
 
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Erreur lors de l\'enregistrement');
-      }
-
-      const savedCategory = await response.json();
-
-      await supabase.from('news_categories').upsert({
-        wordpress_id: savedCategory.id,
-        name: savedCategory.name,
-        slug: savedCategory.slug,
-        description: savedCategory.description || '',
-        count: savedCategory.count || 0,
-        is_active: true,
-      }, {
-        onConflict: 'wordpress_id'
-      });
-
-      toast.success(editingCategory ? 'Catégorie mise à jour avec succès' : 'Catégorie créée avec succès');
-      setIsDialogOpen(false);
-      setEditingCategory(null);
-      setFormData({ name: '', slug: '', description: '' });
-      refetch();
-    } catch (error: any) {
-      console.error('Error saving category:', error);
-      toast.error(error.message || 'Erreur lors de l\'enregistrement');
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const handleDeleteClick = (category: Category) => {
-    setCategoryToDelete(category);
-    setDeleteDialogOpen(true);
-  };
-
-  const handleDeleteConfirm = async () => {
-    if (!categoryToDelete || !categoryToDelete.databaseId) return;
-
-    if (categoryToDelete.count > 0) {
-      toast.error(`Impossible de supprimer cette catégorie car elle contient ${categoryToDelete.count} article(s)`);
-      setDeleteDialogOpen(false);
-      return;
-    }
-
-    setIsDeleting(true);
-    try {
-      const response = await fetch(`/api/wordpress/categories?id=${categoryToDelete.databaseId}`, {
-        method: 'DELETE',
-      });
-
-      if (!response.ok) {
-        throw new Error('Erreur lors de la suppression');
-      }
-
-      await supabase
+      const { error } = await supabase
         .from('news_categories')
         .delete()
-        .eq('wordpress_id', parseInt(categoryToDelete.databaseId));
+        .eq('id', id);
 
-      toast.success('Catégorie supprimée avec succès');
-      setDeleteDialogOpen(false);
-      setCategoryToDelete(null);
-      refetch();
+      if (error) throw error;
+      toast.success(`Catégorie "${name}" supprimée`);
+      loadCategories();
     } catch (error) {
-      console.error('Erreur:', error);
-      toast.error('Erreur lors de la suppression de la catégorie');
-    } finally {
-      setIsDeleting(false);
+      console.error('Error deleting category:', error);
+      toast.error('Erreur lors de la suppression');
     }
   };
 
-  const handleSyncCategories = async () => {
-    setIsSyncing(true);
-    try {
-      const { data: syncedCategories } = await supabase
-        .from('news_categories')
-        .select('wordpress_id');
-
-      const syncedIds = syncedCategories?.map(c => c.wordpress_id) || [];
-
-      for (const category of categories) {
-        if (!category.databaseId) continue;
-
-        const categoryId = parseInt(category.databaseId);
-
-        if (!syncedIds.includes(categoryId)) {
-          await supabase.from('news_categories').insert({
-            wordpress_id: categoryId,
-            name: category.name,
-            slug: category.slug,
-            description: category.description || '',
-            count: category.count || 0,
-            is_active: true,
-          });
-        } else {
-          await supabase
-            .from('news_categories')
-            .update({
-              name: category.name,
-              slug: category.slug,
-              description: category.description || '',
-              count: category.count || 0,
-            })
-            .eq('wordpress_id', categoryId);
-        }
-      }
-
-      toast.success('Synchronisation réussie');
-      refetch();
-    } catch (error) {
-      console.error('Erreur de synchronisation:', error);
-      toast.error('Erreur lors de la synchronisation');
-    } finally {
-      setIsSyncing(false);
-    }
+  const resetForm = () => {
+    setFormData({
+      name: '',
+      slug: '',
+      description: '',
+      color: '#C6A15B',
+      display_order: 0,
+    });
+    setEditingCategory(null);
+    setIsDialogOpen(false);
   };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <div className="text-gray-600">Chargement...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <Link href="/admin/actualites">
-            <Button variant="ghost" className="mb-4">
-              <ArrowLeft className="w-4 h-4 mr-2" />
-              Retour aux actualités
-            </Button>
-          </Link>
-          <h1 className="text-3xl font-bold flex items-center gap-2">
-            <FolderOpen className="h-8 w-8 text-[#b8933d]" />
-            Gestion des catégories d'actualités
-          </h1>
-          <p className="text-gray-600 mt-1">
-            Créer et gérer les catégories pour organiser vos articles
+          <h1 className="text-3xl font-bold text-gray-900">Catégories d'actualités</h1>
+          <p className="text-gray-600 mt-2">
+            Gérez les catégories du Carnet de Morgane ({categories.length} catégories)
           </p>
         </div>
-        <div className="flex gap-3">
-          <Button
-            onClick={handleSyncCategories}
-            disabled={isSyncing}
-            variant="outline"
-            className="border-[#b8933d] text-[#b8933d] hover:bg-[#b8933d]/10"
-          >
-            {isSyncing ? (
-              <>
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                Synchronisation...
-              </>
-            ) : (
-              <>
-                <RefreshCw className="h-4 w-4 mr-2" />
-                Synchroniser
-              </>
-            )}
-          </Button>
-          <Button
-            onClick={() => handleOpenDialog()}
-            className="bg-[#b8933d] hover:bg-[#a07c2f]"
-          >
-            <Plus className="h-4 w-4 mr-2" />
-            Nouvelle catégorie
-          </Button>
-        </div>
+        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+          <DialogTrigger asChild>
+            <Button
+              onClick={resetForm}
+              className="bg-gradient-to-r from-[#C6A15B] to-[#b8933d] hover:from-[#b8933d] hover:to-[#a88230] text-white shadow-lg"
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              Créer une catégorie
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>
+                {editingCategory ? 'Modifier la catégorie' : 'Créer une catégorie'}
+              </DialogTitle>
+              <DialogDescription>
+                Les catégories permettent d'organiser vos articles
+              </DialogDescription>
+            </DialogHeader>
+            <form onSubmit={handleSubmit} className="space-y-6">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="col-span-2">
+                  <Label htmlFor="name">Nom *</Label>
+                  <Input
+                    id="name"
+                    placeholder="Mode & Style"
+                    value={formData.name}
+                    onChange={(e) => handleNameChange(e.target.value)}
+                    required
+                  />
+                </div>
+
+                <div className="col-span-2">
+                  <Label htmlFor="slug">Slug (URL)</Label>
+                  <Input
+                    id="slug"
+                    placeholder="mode-style"
+                    value={formData.slug}
+                    onChange={(e) => setFormData({ ...formData, slug: e.target.value })}
+                    required
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Généré automatiquement à partir du nom
+                  </p>
+                </div>
+
+                <div className="col-span-2">
+                  <Label htmlFor="description">Description</Label>
+                  <Textarea
+                    id="description"
+                    placeholder="Tendances mode, looks et conseils style"
+                    value={formData.description}
+                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                    rows={3}
+                  />
+                </div>
+
+                <div>
+                  <Label htmlFor="color">Couleur</Label>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      id="color"
+                      type="color"
+                      value={formData.color}
+                      onChange={(e) => setFormData({ ...formData, color: e.target.value })}
+                      className="w-20 h-10"
+                    />
+                    <Input
+                      type="text"
+                      value={formData.color}
+                      onChange={(e) => setFormData({ ...formData, color: e.target.value })}
+                      className="flex-1"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <Label htmlFor="display_order">Ordre d'affichage</Label>
+                  <Input
+                    id="display_order"
+                    type="number"
+                    min="0"
+                    value={formData.display_order}
+                    onChange={(e) => setFormData({ ...formData, display_order: parseInt(e.target.value) })}
+                  />
+                </div>
+              </div>
+
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={resetForm}>
+                  Annuler
+                </Button>
+                <Button type="submit" className="bg-[#C6A15B] hover:bg-[#b8933d]">
+                  {editingCategory ? 'Modifier' : 'Créer'}
+                </Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
       </div>
 
       <Card>
-        <CardHeader>
-          <CardTitle>Catégories existantes</CardTitle>
-          <CardDescription>
-            Gérez les catégories de vos articles. Les catégories sont synchronisées avec WordPress.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {loading ? (
-            <div className="flex items-center justify-center py-12">
-              <Loader2 className="h-8 w-8 animate-spin text-[#b8933d]" />
-            </div>
-          ) : categories.length === 0 ? (
-            <div className="text-center py-12">
-              <FolderOpen className="h-16 w-16 mx-auto mb-4 text-gray-300" />
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                Aucune catégorie
-              </h3>
-              <p className="text-gray-600 mb-6">
-                Créez votre première catégorie pour commencer à organiser vos articles
+        <CardContent className="pt-6">
+          {categories.length === 0 ? (
+            <div className="text-center py-16">
+              <Tag className="h-16 w-16 mx-auto mb-4 text-gray-300" />
+              <p className="text-gray-500 text-lg">Aucune catégorie créée</p>
+              <p className="text-gray-400 text-sm mt-1">
+                Créez votre première catégorie pour organiser vos articles
               </p>
-              <Button
-                onClick={() => handleOpenDialog()}
-                className="bg-[#b8933d] hover:bg-[#a07c2f]"
-              >
-                <Plus className="h-4 w-4 mr-2" />
-                Créer une catégorie
-              </Button>
             </div>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Nom</TableHead>
-                  <TableHead>Slug</TableHead>
-                  <TableHead>Description</TableHead>
-                  <TableHead className="text-center">Articles</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {categories.map((category) => (
-                  <TableRow key={category.id}>
-                    <TableCell className="font-medium">
-                      {category.name}
-                    </TableCell>
-                    <TableCell>
-                      <code className="text-xs bg-gray-100 px-2 py-1 rounded">
-                        {category.slug}
-                      </code>
-                    </TableCell>
-                    <TableCell className="max-w-md">
-                      <p className="text-sm text-gray-600 line-clamp-2">
-                        {category.description || '—'}
-                      </p>
-                    </TableCell>
-                    <TableCell className="text-center">
-                      <Badge variant="secondary" className="bg-[#b8933d]/10 text-[#b8933d]">
-                        {category.count || 0}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex justify-end gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleOpenDialog(category)}
-                        >
-                          <Edit2 className="h-4 w-4 mr-2" />
-                          Modifier
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleDeleteClick(category)}
-                          className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                          disabled={category.count > 0}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </TableCell>
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-gray-50">
+                    <TableHead className="font-semibold">Nom</TableHead>
+                    <TableHead className="font-semibold">Slug</TableHead>
+                    <TableHead className="font-semibold">Couleur</TableHead>
+                    <TableHead className="font-semibold">Articles</TableHead>
+                    <TableHead className="font-semibold">Ordre</TableHead>
+                    <TableHead className="font-semibold">Statut</TableHead>
+                    <TableHead className="text-right font-semibold">Actions</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {categories.map((category) => (
+                    <TableRow key={category.id} className="hover:bg-gray-50">
+                      <TableCell>
+                        <div className="font-semibold text-gray-900">{category.name}</div>
+                        {category.description && (
+                          <div className="text-sm text-gray-500 line-clamp-1">
+                            {category.description}
+                          </div>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <code className="text-xs bg-gray-100 px-2 py-1 rounded">
+                          {category.slug}
+                        </code>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <div
+                            className="w-6 h-6 rounded border"
+                            style={{ backgroundColor: category.color }}
+                          />
+                          <span className="text-xs text-gray-600">{category.color}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="secondary">-</Badge>
+                      </TableCell>
+                      <TableCell>
+                        <span className="text-sm text-gray-600">{category.display_order}</span>
+                      </TableCell>
+                      <TableCell>
+                        <Badge
+                          variant={category.is_active ? 'default' : 'outline'}
+                          className={category.is_active ? 'bg-green-50 text-green-700 border-green-200' : ''}
+                        >
+                          {category.is_active ? 'Actif' : 'Inactif'}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleEdit(category)}
+                            className="hover:bg-blue-50 hover:text-blue-600"
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="hover:bg-red-50 hover:text-red-600"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>Supprimer la catégorie</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  Voulez-vous vraiment supprimer la catégorie "{category.name}" ?
+                                  Cette action est irréversible.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Annuler</AlertDialogCancel>
+                                <AlertDialogAction
+                                  onClick={() => handleDelete(category.id, category.name)}
+                                  className="bg-red-600 hover:bg-red-700"
+                                >
+                                  Supprimer
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
           )}
         </CardContent>
       </Card>
-
-      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>
-              {editingCategory ? 'Modifier la catégorie' : 'Nouvelle catégorie'}
-            </DialogTitle>
-            <DialogDescription>
-              {editingCategory
-                ? 'Modifiez les informations de la catégorie'
-                : 'Créez une nouvelle catégorie pour organiser vos articles'}
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="name">Nom de la catégorie *</Label>
-              <Input
-                id="name"
-                value={formData.name}
-                onChange={(e) => handleNameChange(e.target.value)}
-                placeholder="Ex: Mode, Beauté, Lifestyle..."
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="slug">Slug (URL) *</Label>
-              <Input
-                id="slug"
-                value={formData.slug}
-                onChange={(e) => setFormData({ ...formData, slug: e.target.value })}
-                placeholder="ex: mode-beaute"
-              />
-              <p className="text-xs text-gray-500">
-                Utilisé dans l'URL. Lettres minuscules, chiffres et tirets uniquement.
-              </p>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="description">Description</Label>
-              <Textarea
-                id="description"
-                value={formData.description}
-                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                placeholder="Décrivez brièvement cette catégorie..."
-                rows={3}
-              />
-            </div>
-          </div>
-
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => {
-                setIsDialogOpen(false);
-                setEditingCategory(null);
-                setFormData({ name: '', slug: '', description: '' });
-              }}
-              disabled={isSaving}
-            >
-              Annuler
-            </Button>
-            <Button
-              onClick={handleSave}
-              disabled={isSaving}
-              className="bg-[#b8933d] hover:bg-[#a07c2f]"
-            >
-              {isSaving ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Enregistrement...
-                </>
-              ) : (
-                <>
-                  <Save className="h-4 w-4 mr-2" />
-                  {editingCategory ? 'Mettre à jour' : 'Créer'}
-                </>
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Confirmer la suppression</AlertDialogTitle>
-            <AlertDialogDescription>
-              Êtes-vous sûr de vouloir supprimer la catégorie "{categoryToDelete?.name}" ?
-              {categoryToDelete && categoryToDelete.count > 0 && (
-                <span className="block mt-2 text-red-600 font-semibold">
-                  Cette catégorie contient {categoryToDelete.count} article(s) et ne peut pas être supprimée.
-                </span>
-              )}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={isDeleting}>Annuler</AlertDialogCancel>
-            {categoryToDelete && categoryToDelete.count === 0 && (
-              <AlertDialogAction
-                onClick={handleDeleteConfirm}
-                disabled={isDeleting}
-                className="bg-red-600 hover:bg-red-700"
-              >
-                {isDeleting ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Suppression...
-                  </>
-                ) : (
-                  'Supprimer'
-                )}
-              </AlertDialogAction>
-            )}
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   );
 }

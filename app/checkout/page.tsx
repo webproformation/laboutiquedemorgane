@@ -1,62 +1,30 @@
-"use client";
+'use client';
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { useCart } from '@/context/CartContext';
-import { supabase } from '@/lib/supabase-client';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { Separator } from '@/components/ui/separator';
-import { Switch } from '@/components/ui/switch';
+import { Checkbox } from '@/components/ui/checkbox';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Badge } from '@/components/ui/badge';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { toast } from 'sonner';
-import { MapPin, ShoppingBag, Loader as Loader2, Plus, ArrowLeft, Truck, CreditCard, Clock, Info, Shield } from 'lucide-react';
-import Image from 'next/image';
+import { ShoppingBag, ArrowLeft, CreditCard, MapPin, Truck, Wallet, Package, AlertCircle, Info, Gift, Clock, PiggyBank } from 'lucide-react';
 import Link from 'next/link';
-import { formatPrice, parsePrice } from '@/lib/utils';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import GDPRConsent from '@/components/GDPRConsent';
-import StripeCheckoutForm from '@/components/StripeCheckoutForm';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import dynamic from 'next/dynamic';
-
-const MondialRelaySelector = dynamic(
-  () => import('@/components/MondialRelaySelector'),
-  {
-    loading: () => (
-      <Card>
-        <CardContent className="p-8">
-          <div className="flex items-center justify-center">
-            <Loader2 className="h-6 w-6 animate-spin text-[#b8933d] mr-2" />
-            <span className="text-gray-600">Chargement du sélecteur de point relais...</span>
-          </div>
-        </CardContent>
-      </Card>
-    ),
-    ssr: false
-  }
-);
-
-const CouponSelector = dynamic(
-  () => import('@/components/CouponSelector'),
-  {
-    loading: () => (
-      <div className="py-2">
-        <Loader2 className="h-4 w-4 animate-spin text-[#b8933d]" />
-      </div>
-    ),
-    ssr: false
-  }
-);
-
-const WalletSelector = dynamic(
-  () => import('@/components/WalletSelector'),
-  {
-    ssr: false,
-  }
-);
+import { supabase } from '@/lib/supabase';
+import { useOpenPackage } from '@/hooks/use-open-package';
+import { useUserCoupons } from '@/hooks/use-user-coupons';
+import { PayPalButtons } from '@/components/PayPalButtons';
+import { RelayPointSelector } from '@/components/RelayPointSelector';
+import PageHeader from '@/components/PageHeader';
+import { StripePaymentForm } from '@/components/StripePaymentForm';
+import { CUSTOM_TEXTS } from '@/lib/texts';
 
 interface Address {
   id: string;
@@ -64,7 +32,7 @@ interface Address {
   first_name: string;
   last_name: string;
   address_line1: string;
-  address_line2: string;
+  address_line2?: string;
   city: string;
   postal_code: string;
   country: string;
@@ -74,1972 +42,1409 @@ interface Address {
 
 interface ShippingMethod {
   id: string;
-  zone_id: number;
-  zone_name: string;
-  instance_id: number;
-  method_id: string;
-  title: string;
-  cost: string;
-  description: string;
-  is_relay?: boolean;
-}
-
-interface PaymentGateway {
-  id: string;
-  title: string;
-  description: string;
-  order: number;
-}
-
-interface TaxRate {
-  id: number;
-  country: string;
-  state: string;
-  rate: string;
   name: string;
-  shipping: boolean;
-  class: string;
-}
-
-interface UserCoupon {
-  id: string;
   code: string;
-  coupon_type_id: string;
-  source: string;
-  is_used: boolean;
-  used_at: string | null;
-  obtained_at: string;
-  valid_until: string;
-  coupon_types: {
-    id: string;
-    code: string;
-    type: string;
-    value: number;
-    description: string;
-    valid_until: string;
-  };
+  description: string;
+  cost: number;
+  is_relay: boolean;
+  is_active: boolean;
+  delivery_time: string;
+  type: string;
 }
 
-const MINIMUM_ORDER_AMOUNT = 10;
+interface PaymentMethod {
+  id: string;
+  name: string;
+  code: string;
+  description: string;
+  icon: string;
+  is_active: boolean;
+  processing_fee_percentage: number;
+  processing_fee_fixed: number;
+  type: string;
+}
 
-const stripHtmlTags = (html: string) => {
-  if (!html) return '';
-  return html.replace(/<[^>]*>/g, '');
-};
+const TVA_RATE = 0.20;
 
 export default function CheckoutPage() {
-  const { user } = useAuth();
-  const { cart, cartTotal, clearCart } = useCart();
   const router = useRouter();
+  const { user, profile } = useAuth();
+  const { cart, cartTotal, clearCart } = useCart();
+  const { openPackage, loading: packageLoading } = useOpenPackage();
+  const { coupons: userCoupons, loading: couponsLoading, markCouponAsUsed } = useUserCoupons(user?.id);
+  const [loading, setLoading] = useState(false);
+
   const [addresses, setAddresses] = useState<Address[]>([]);
   const [selectedAddressId, setSelectedAddressId] = useState<string>('');
   const [shippingMethods, setShippingMethods] = useState<ShippingMethod[]>([]);
-  const [selectedShippingMethod, setSelectedShippingMethod] = useState<string>('');
-  const [paymentGateways, setPaymentGateways] = useState<PaymentGateway[]>([]);
-  const [taxRates, setTaxRates] = useState<TaxRate[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [processing, setProcessing] = useState(false);
-  const [useDeliveryBatch, setUseDeliveryBatch] = useState(false);
-  const [activeBatch, setActiveBatch] = useState<any>(null);
-  const [selectedCoupon, setSelectedCoupon] = useState<UserCoupon | null>(null);
-  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<string>('');
-  const [gdprConsent, setGdprConsent] = useState(false);
-  const [gdprError, setGdprError] = useState('');
-  const [selectedInsurance, setSelectedInsurance] = useState<string>('none');
-  const [selectedRelayPoint, setSelectedRelayPoint] = useState<any>(null);
-  const [showStripeModal, setShowStripeModal] = useState(false);
-  const [stripeClientSecret, setStripeClientSecret] = useState<string | null>(null);
-  const [pendingOrderNumber, setPendingOrderNumber] = useState<string>('');
-  const [walletAmount, setWalletAmount] = useState(0);
-  const [isFirstOrder, setIsFirstOrder] = useState(true);
+  const [selectedShippingMethodId, setSelectedShippingMethodId] = useState<string>('');
+  const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
+  const [selectedPaymentMethodId, setSelectedPaymentMethodId] = useState<string>('');
+  const [relayPointData, setRelayPointData] = useState<any>(null);
 
-  const insuranceOptions = [
-    { id: 'none', label: 'Sans assurance', description: 'Pas de protection supplémentaire', price: 0 },
-    { id: 'standard', label: 'Garantie Sérénité ✨', description: 'Protection en cas de perte, remboursement après enquête du transporteur (délai : 30 jours)', price: 1 },
-    { id: 'premium', label: 'Protection Diamant 💎', description: 'La plus choisie. Remboursement ou renvoi immédiat sous 48h en cas de perte/casse, sans attendre l\'enquête', price: 2.90 },
-  ];
+  const [useWallet, setUseWallet] = useState(false);
+  const [walletAmountToUse, setWalletAmountToUse] = useState(0);
+  const [useLoyalty, setUseLoyalty] = useState(false);
+  const [loyaltyAmountToUse, setLoyaltyAmountToUse] = useState(0);
+  const [couponCode, setCouponCode] = useState('');
+  const [selectedUserCouponId, setSelectedUserCouponId] = useState<string>('');
+  const [appliedCoupon, setAppliedCoupon] = useState<any>(null);
+  const [discountAmount, setDiscountAmount] = useState(0);
+  const [referralCode, setReferralCode] = useState('');
+  const [appliedReferral, setAppliedReferral] = useState<any>(null);
+  const [referralDiscount, setReferralDiscount] = useState(0);
+
+  const [addToOpenPackage, setAddToOpenPackage] = useState(false);
+  const [notes, setNotes] = useState('');
+  const [newsletterConsent, setNewsletterConsent] = useState(false);
+  const [rgpdConsent, setRgpdConsent] = useState(false);
+  const [shippingInsurance, setShippingInsurance] = useState('0');
+  const [bankDialogOpen, setBankDialogOpen] = useState(false);
+  const [createPendingPackage, setCreatePendingPackage] = useState(false);
+  const [showStripePayment, setShowStripePayment] = useState(false);
+  const [createdOrderId, setCreatedOrderId] = useState<string | null>(null);
+  const [createdOrderNumber, setCreatedOrderNumber] = useState<string | null>(null);
 
   useEffect(() => {
+    if (user) {
+      loadAddresses();
+      loadShippingMethods();
+      loadPaymentMethods();
+    }
+  }, [user]);
+
+  useEffect(() => {
+    if (cart.length === 0 && !loading) {
+      router.push('/cart');
+    }
+  }, [cart, loading, router]);
+
+  useEffect(() => {
+    if (addToOpenPackage) {
+      setSelectedShippingMethodId('');
+    }
+  }, [addToOpenPackage]);
+
+  const loadAddresses = async () => {
+    const { data, error } = await supabase
+      .from('addresses')
+      .select('*')
+      .eq('user_id', user?.id)
+      .order('is_default', { ascending: false });
+
+    if (error) {
+      console.error('Error loading addresses:', error);
+    } else if (data && data.length > 0) {
+      setAddresses(data);
+      const defaultAddress = data.find((addr: Address) => addr.is_default) || data[0];
+      setSelectedAddressId(defaultAddress.id);
+    }
+  };
+
+  const loadShippingMethods = async () => {
+    const { data, error } = await supabase
+      .from('shipping_methods')
+      .select('*')
+      .eq('is_active', true)
+      .order('sort_order', { ascending: true });
+
+    if (error) {
+      console.error('Error loading shipping methods:', error);
+    } else if (data) {
+      setShippingMethods(data);
+      if (data.length > 0 && !addToOpenPackage) {
+        setSelectedShippingMethodId(data[0].id);
+      }
+    }
+  };
+
+  const loadPaymentMethods = async () => {
+    const { data, error } = await supabase
+      .from('payment_methods')
+      .select('*')
+      .eq('is_active', true)
+      .order('sort_order', { ascending: true });
+
+    if (error) {
+      console.error('Error loading payment methods:', error);
+    } else if (data) {
+      setPaymentMethods(data);
+      if (data.length > 0) {
+        setSelectedPaymentMethodId(data[0].id);
+      }
+    }
+  };
+
+  const selectedShippingMethod = shippingMethods.find(m => m.id === selectedShippingMethodId);
+  const selectedPaymentMethod = paymentMethods.find(m => m.id === selectedPaymentMethodId);
+  const selectedAddress = addresses.find(a => a.id === selectedAddressId);
+
+  const subtotal = cartTotal;
+  const shippingCost = addToOpenPackage ? 0 : (selectedShippingMethod?.cost || 0);
+  const insuranceCost = parseFloat(shippingInsurance);
+  const paymentFee = selectedPaymentMethod
+    ? (subtotal * selectedPaymentMethod.processing_fee_percentage / 100) + selectedPaymentMethod.processing_fee_fixed
+    : 0;
+
+  const totalBeforeDiscount = subtotal + shippingCost + insuranceCost + paymentFee;
+  const totalAfterDiscount = Math.max(0, totalBeforeDiscount - discountAmount - referralDiscount);
+  const totalAfterWallet = Math.max(0, totalAfterDiscount - walletAmountToUse - loyaltyAmountToUse);
+  const tvaAmount = totalAfterWallet * TVA_RATE / (1 + TVA_RATE);
+  const totalHT = totalAfterWallet - tvaAmount;
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+
     if (!user) {
+      toast.error('Vous devez être connecté pour passer commande');
       router.push('/auth/login');
       return;
     }
 
     if (cart.length === 0) {
-      router.push('/cart');
+      toast.error('Votre panier est vide');
       return;
     }
 
-    // Clear old cache versions
-    localStorage.removeItem('checkout_options_cache');
-    localStorage.removeItem('checkout_options_cache_time');
-    localStorage.removeItem('checkout_options_cache_v2');
-    localStorage.removeItem('checkout_options_cache_time_v2');
-
-    loadCheckoutData();
-  }, [user, cart]);
-
-  useEffect(() => {
-    const savedWalletAmount = localStorage.getItem('cart_wallet_amount');
-    if (savedWalletAmount) {
-      const amount = parseFloat(savedWalletAmount);
-      if (amount > 0 && amount <= cartTotal) {
-        setWalletAmount(amount);
-      } else {
-        localStorage.removeItem('cart_wallet_amount');
-      }
-    }
-  }, [cartTotal]);
-
-  const loadCheckoutData = async () => {
-    if (!user) return;
-
-    try {
-      // Load checkout options and addresses in parallel
-      await Promise.all([
-        loadAddresses(),
-        loadCheckoutOptions(),
-        checkActiveBatch(),
-        checkIfFirstOrder(),
-      ]);
-
-      // Check customer status directly from Supabase
-      try {
-        const { data: profile, error: profileError } = await supabase
-          .from('profiles')
-          .select('blocked, blocked_reason')
-          .eq('id', user.id)
-          .maybeSingle();
-
-        if (!profileError && profile && profile.blocked) {
-          toast.error(profile.blocked_reason || 'Votre compte est bloqué. Contactez le service client.');
-          router.push('/account');
-          return;
-        }
-      } catch (statusError) {
-        console.error('Error checking customer status:', statusError);
-        // Continue with checkout even if status check fails
-      }
-    } catch (error) {
-      console.error('Error loading checkout data:', error);
-      toast.error('Erreur lors du chargement des données. Veuillez réessayer.');
-    }
-
-    setLoading(false);
-  };
-
-  const checkIfFirstOrder = async () => {
-    if (!user) return;
-
-    try {
-      const { data, error } = await supabase
-        .from('orders')
-        .select('id', { count: 'exact', head: true })
-        .eq('user_id', user.id)
-        .in('status', ['processing', 'completed', 'shipped']);
-
-      if (!error) {
-        setIsFirstOrder((data?.length || 0) === 0);
-      }
-    } catch (error) {
-      console.error('Error checking first order:', error);
-      setIsFirstOrder(true);
-    }
-  };
-
-  const checkActiveBatch = async () => {
-    if (!user) return;
-
-    try {
-      const { data, error } = await supabase
-        .from('delivery_batches')
-        .select('*')
-        .eq('user_id', user.id)
-        .eq('status', 'pending')
-        .gte('validate_at', new Date().toISOString())
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      if (!error && data) {
-        setActiveBatch(data);
-        setUseDeliveryBatch(true);
-      }
-    } catch (error) {
-      console.error('Error checking active batch:', error);
-    }
-  };
-
-  const loadAddresses = async () => {
-    if (!user) return;
-
-    const { data } = await supabase
-      .from('addresses')
-      .select('*')
-      .eq('user_id', user.id)
-      .order('is_default', { ascending: false })
-      .order('created_at', { ascending: false });
-
-    if (data && data.length > 0) {
-      setAddresses(data);
-      const defaultAddress = data.find((addr) => addr.is_default);
-      setSelectedAddressId(defaultAddress?.id || data[0].id);
-    }
-  };
-
-  const loadCheckoutOptions = async () => {
-    try {
-      // Ne plus utiliser le cache - toujours charger depuis l'API
-      console.log('Loading checkout options from API...');
-      const response = await fetch('/api/woocommerce/checkout-options');
-
-      console.log('Checkout options API response:', response.status, response.statusText);
-
-      if (response.ok) {
-        const data = await response.json();
-
-        console.log('Checkout options data received:', {
-          shippingMethodsCount: data.shippingMethods?.length || 0,
-          paymentGatewaysCount: data.paymentGateways?.length || 0,
-          taxRatesCount: data.taxRates?.length || 0,
-        });
-
-        setShippingMethods(data.shippingMethods || []);
-        setPaymentGateways(data.paymentGateways || []);
-        setTaxRates(data.taxRates || []);
-
-        console.log('Shipping methods set:', data.shippingMethods?.length || 0);
-
-        if (data.shippingMethods && data.shippingMethods.length > 0) {
-          const availableMethods = data.shippingMethods.filter((m: ShippingMethod) => m.method_id !== 'free_shipping');
-          console.log('Available shipping methods:', availableMethods.length);
-          if (availableMethods.length > 0) {
-            setSelectedShippingMethod(availableMethods[0].id);
-            console.log('Selected shipping method:', availableMethods[0].id);
-          }
-        } else {
-          console.warn('No shipping methods received from API!');
-        }
-
-        if (data.paymentGateways && data.paymentGateways.length > 0) {
-          setSelectedPaymentMethod(data.paymentGateways[0].id);
-        }
-      } else {
-        console.error('Failed to fetch checkout options:', response.status, response.statusText);
-        const errorText = await response.text();
-        console.error('Error response:', errorText);
-      }
-    } catch (error) {
-      console.error('Error loading checkout options:', error);
-    }
-  };
-
-  const calculateShippingCost = () => {
-    if (selectedCoupon?.coupon_types.type === 'free_delivery') {
-      return 0;
-    }
-    const method = shippingMethods.find(m => m.id === selectedShippingMethod);
-    return method ? parseFloat(method.cost) : 0;
-  };
-
-  const calculateInsuranceCost = () => {
-    const insurance = insuranceOptions.find(opt => opt.id === selectedInsurance);
-    return insurance ? insurance.price : 0;
-  };
-
-  const calculateCartDiscount = () => {
-    if (!selectedCoupon) return 0;
-
-    const couponType = selectedCoupon.coupon_types;
-    if (couponType.type === 'discount_amount') {
-      return Math.min(couponType.value, cartTotal);
-    } else if (couponType.type === 'discount_percentage') {
-      return (cartTotal * couponType.value) / 100;
-    }
-    return 0;
-  };
-
-  const calculateDiscount = () => {
-    if (!selectedCoupon) return 0;
-
-    const couponType = selectedCoupon.coupon_types;
-    if (couponType.type === 'discount_amount') {
-      return Math.min(couponType.value, cartTotal);
-    } else if (couponType.type === 'discount_percentage') {
-      return (cartTotal * couponType.value) / 100;
-    } else if (couponType.type === 'free_delivery') {
-      const method = shippingMethods.find(m => m.id === selectedShippingMethod);
-      return method ? parseFloat(method.cost) : 0;
-    }
-    return 0;
-  };
-
-  const calculateTax = () => {
-    const subtotalAfterDiscount = cartTotal - calculateCartDiscount();
-    const totalTTC = subtotalAfterDiscount + calculateShippingCost() + calculateInsuranceCost();
-    const taxAmount = totalTTC - (totalTTC / 1.20);
-    return taxAmount;
-  };
-
-  const calculateTotal = () => {
-    const subtotalAfterDiscount = cartTotal - calculateCartDiscount();
-    const totalTTC = subtotalAfterDiscount + calculateShippingCost() + calculateInsuranceCost();
-    const totalAfterWallet = Math.max(0, totalTTC - walletAmount);
-    return totalAfterWallet;
-  };
-
-  const calculateTotalBeforeWallet = () => {
-    const subtotalAfterDiscount = cartTotal - calculateCartDiscount();
-    const totalTTC = subtotalAfterDiscount + calculateShippingCost() + calculateInsuranceCost();
-    return totalTTC;
-  };
-
-  const handleWalletAmountChange = (amount: number) => {
-    setWalletAmount(amount);
-    if (amount > 0) {
-      localStorage.setItem('cart_wallet_amount', amount.toString());
-    } else {
-      localStorage.removeItem('cart_wallet_amount');
-    }
-  };
-
-  const generateOrderNumber = () => {
-    const timestamp = Date.now();
-    const random = Math.floor(Math.random() * 10000);
-    return `CMD-${timestamp}-${random}`;
-  };
-
-  const createDeliveryBatch = async () => {
-    if (isFirstOrder && cartTotal < MINIMUM_ORDER_AMOUNT) {
-      toast.error(`Le montant minimum pour votre première commande est de ${MINIMUM_ORDER_AMOUNT.toFixed(2)} €`);
-      return;
-    }
-
-    if (!selectedAddressId) {
-      toast.error('Veuillez sélectionner une adresse de livraison');
-      return;
-    }
-
-    if (!activeBatch) {
-      if (!selectedShippingMethod) {
-        toast.error('Veuillez sélectionner un mode de livraison');
-        return;
-      }
-
-      const method = shippingMethods.find(m => m.id === selectedShippingMethod);
-      const isRelayDelivery = method?.is_relay === true;
-
-      if (isRelayDelivery && !selectedRelayPoint) {
-        toast.error('Veuillez sélectionner un point relais');
-        return;
-      }
-    }
-
-    if (!selectedPaymentMethod) {
-      toast.error('Veuillez sélectionner un mode de paiement');
-      return;
-    }
-
-    setProcessing(true);
-
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const shippingCost = calculateShippingCost();
-      const selectedAddress = addresses.find((addr) => addr.id === selectedAddressId);
-      const selectedShipping = shippingMethods.find(m => m.id === selectedShippingMethod);
-
-      const items = cart.map(item => ({
-        product_id: item.id,
-        product_name: item.name,
-        product_slug: item.slug,
-        quantity: item.quantity,
-        unit_price: parsePrice(item.price),
-        total_price: parsePrice(item.price) * item.quantity,
-        image_url: item.image?.sourceUrl || null,
-      }));
-
-      let batchId = activeBatch?.id;
-      const subtotalAfterDiscount = cartTotal - calculateCartDiscount();
-      let paymentAmount = cartTotal;
-      const selectedPaymentGateway = paymentGateways.find(g => g.id === selectedPaymentMethod);
-
-      // Si c'est la première commande avec livraison groupée
-      if (!activeBatch) {
-        // Payer produits + frais de livraison + TVA
-        const baseHT = subtotalAfterDiscount + shippingCost + calculateInsuranceCost();
-        const tva = baseHT * 0.20;
-        paymentAmount = baseHT + tva;
-
-        let paymentIntentId = null;
-
-        // Si c'est Stripe, créer un Payment Intent
-        if (selectedPaymentMethod === 'stripe') {
-          const paymentResponse = await fetch(
-            `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/create-payment-intent`,
-            {
-              method: 'POST',
-              headers: {
-                'Authorization': `Bearer ${session?.access_token}`,
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({
-                amount: paymentAmount,
-                currency: 'eur',
-                description: 'Mon colis ouvert - Première commande',
-              }),
-            }
-          );
-
-          if (!paymentResponse.ok) {
-            throw new Error('Erreur lors de la création du paiement');
-          }
-
-          const paymentData = await paymentResponse.json();
-          paymentIntentId = paymentData.paymentIntentId;
-        }
-
-        // Créer le batch
-        const { data: newBatch, error: batchError } = await supabase
-          .from('delivery_batches')
-          .insert({
-            user_id: user!.id,
-            shipping_cost: shippingCost,
-            shipping_address_id: selectedAddressId,
-            status: 'pending',
-          })
-          .select()
-          .single();
-
-        if (batchError) throw batchError;
-        batchId = newBatch.id;
-
-        // Créer commande WooCommerce
-        const wooOrderData = {
-          status: selectedPaymentMethod === 'stripe' ? 'processing' : 'pending',
-          payment_method: selectedPaymentMethod,
-          payment_method_title: selectedPaymentGateway?.title || 'Paiement',
-          set_paid: selectedPaymentMethod === 'stripe',
-          billing: {
-            first_name: selectedAddress!.first_name,
-            last_name: selectedAddress!.last_name,
-            address_1: selectedAddress!.address_line1,
-            address_2: selectedAddress!.address_line2 || '',
-            city: selectedAddress!.city,
-            postcode: selectedAddress!.postal_code,
-            country: selectedAddress!.country,
-            email: user!.email || '',
-            phone: selectedAddress!.phone,
-          },
-          shipping: selectedRelayPoint ? {
-            first_name: selectedAddress!.first_name,
-            last_name: selectedAddress!.last_name,
-            address_1: selectedRelayPoint.LgAdr1 || selectedRelayPoint.LgAdr3,
-            address_2: selectedRelayPoint.LgAdr2 || '',
-            city: selectedRelayPoint.Ville,
-            postcode: selectedRelayPoint.CP,
-            country: selectedRelayPoint.Pays,
-          } : {
-            first_name: selectedAddress!.first_name,
-            last_name: selectedAddress!.last_name,
-            address_1: selectedAddress!.address_line1,
-            address_2: selectedAddress!.address_line2 || '',
-            city: selectedAddress!.city,
-            postcode: selectedAddress!.postal_code,
-            country: selectedAddress!.country,
-          },
-          line_items: items.map(item => ({
-            product_id: parseInt(item.product_id),
-            quantity: item.quantity,
-          })),
-          shipping_lines: [{
-            method_id: selectedShipping!.method_id,
-            method_title: 'Mon colis ouvert (5 jours)',
-            total: shippingCost.toString(),
-          }],
-          meta_data: [
-            {
-              key: '_supabase_batch_id',
-              value: batchId,
-            },
-            ...(paymentIntentId ? [{
-              key: '_stripe_payment_intent_id',
-              value: paymentIntentId,
-            }] : []),
-            ...(selectedRelayPoint ? [
-              {
-                key: '_mondial_relay_id',
-                value: selectedRelayPoint.Num,
-              },
-              {
-                key: '_mondial_relay_name',
-                value: selectedRelayPoint.LgAdr1 || selectedRelayPoint.LgAdr3,
-              },
-              {
-                key: '_mondial_relay_address',
-                value: `${selectedRelayPoint.LgAdr3 || ''} ${selectedRelayPoint.CP} ${selectedRelayPoint.Ville}`,
-              },
-            ] : []),
-          ],
-        };
-
-        const wooResponse = await fetch('/api/woocommerce/create-order', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              orderData: wooOrderData,
-              localOrderId: null,
-            }),
-          }
-        );
-
-        if (!wooResponse.ok) {
-          const errorText = await wooResponse.text();
-          console.error('WooCommerce order creation failed:', errorText);
-          throw new Error('Erreur lors de la création de la commande WooCommerce');
-        }
-
-        const wooResult = await wooResponse.json();
-
-        // Mettre à jour le batch avec l'ID WooCommerce
-        const { error: updateError } = await supabase
-          .from('delivery_batches')
-          .update({
-            woocommerce_order_id: wooResult.woocommerceOrderId?.toString(),
-          })
-          .eq('id', batchId);
-
-        if (updateError) {
-          console.error('Failed to update batch with WooCommerce order ID:', updateError);
-        }
-
-      } else {
-        // Commande suivante : payer uniquement les produits + assurance + TVA
-        const baseHT = subtotalAfterDiscount + calculateInsuranceCost();
-        const tva = baseHT * 0.20;
-        paymentAmount = baseHT + tva;
-
-        let paymentIntentId = null;
-
-        // Si c'est Stripe, créer un Payment Intent
-        if (selectedPaymentMethod === 'stripe') {
-          const paymentResponse = await fetch(
-            `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/create-payment-intent`,
-            {
-              method: 'POST',
-              headers: {
-                'Authorization': `Bearer ${session?.access_token}`,
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({
-                amount: paymentAmount,
-                currency: 'eur',
-                description: 'Mon colis ouvert - Produits supplémentaires',
-              }),
-            }
-          );
-
-          if (!paymentResponse.ok) {
-            throw new Error('Erreur lors de la création du paiement');
-          }
-
-          const paymentData = await paymentResponse.json();
-          paymentIntentId = paymentData.paymentIntentId;
-        }
-
-        // Créer commande WooCommerce pour les nouveaux produits
-        const wooOrderData = {
-          status: selectedPaymentMethod === 'stripe' ? 'processing' : 'pending',
-          payment_method: selectedPaymentMethod,
-          payment_method_title: selectedPaymentGateway?.title || 'Paiement',
-          set_paid: selectedPaymentMethod === 'stripe',
-          billing: {
-            first_name: selectedAddress!.first_name,
-            last_name: selectedAddress!.last_name,
-            address_1: selectedAddress!.address_line1,
-            address_2: selectedAddress!.address_line2 || '',
-            city: selectedAddress!.city,
-            postcode: selectedAddress!.postal_code,
-            country: selectedAddress!.country,
-            email: user!.email || '',
-            phone: selectedAddress!.phone,
-          },
-          shipping: selectedRelayPoint ? {
-            first_name: selectedAddress!.first_name,
-            last_name: selectedAddress!.last_name,
-            address_1: selectedRelayPoint.LgAdr1 || selectedRelayPoint.LgAdr3,
-            address_2: selectedRelayPoint.LgAdr2 || '',
-            city: selectedRelayPoint.Ville,
-            postcode: selectedRelayPoint.CP,
-            country: selectedRelayPoint.Pays,
-          } : {
-            first_name: selectedAddress!.first_name,
-            last_name: selectedAddress!.last_name,
-            address_1: selectedAddress!.address_line1,
-            address_2: selectedAddress!.address_line2 || '',
-            city: selectedAddress!.city,
-            postcode: selectedAddress!.postal_code,
-            country: selectedAddress!.country,
-          },
-          line_items: items.map(item => ({
-            product_id: parseInt(item.product_id),
-            quantity: item.quantity,
-          })),
-          shipping_lines: [{
-            method_id: 'flat_rate',
-            method_title: 'Mon colis ouvert (déjà payée)',
-            total: '0',
-          }],
-          meta_data: [
-            {
-              key: '_supabase_batch_id',
-              value: batchId,
-            },
-            ...(paymentIntentId ? [{
-              key: '_stripe_payment_intent_id',
-              value: paymentIntentId,
-            }] : []),
-            ...(selectedRelayPoint ? [
-              {
-                key: '_mondial_relay_id',
-                value: selectedRelayPoint.Num,
-              },
-              {
-                key: '_mondial_relay_name',
-                value: selectedRelayPoint.LgAdr1 || selectedRelayPoint.LgAdr3,
-              },
-              {
-                key: '_mondial_relay_address',
-                value: `${selectedRelayPoint.LgAdr3 || ''} ${selectedRelayPoint.CP} ${selectedRelayPoint.Ville}`,
-              },
-            ] : []),
-          ],
-        };
-
-        const wooResponse = await fetch('/api/woocommerce/create-order', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              orderData: wooOrderData,
-              localOrderId: null,
-            }),
-          }
-        );
-
-        if (!wooResponse.ok) {
-          const errorText = await wooResponse.text();
-          console.error('WooCommerce order creation failed:', errorText);
-          throw new Error('Erreur lors de la création de la commande WooCommerce');
-        }
-      }
-
-      // Ajouter les items au batch
-      const batchItems = items.map(item => ({
-        ...item,
-        batch_id: batchId,
-      }));
-
-      const { error: itemsError } = await supabase
-        .from('delivery_batch_items')
-        .insert(batchItems);
-
-      if (itemsError) throw itemsError;
-
-      clearCart();
-      toast.success('Articles ajoutés à votre colis ouvert !');
-      router.push('/account/pending-deliveries');
-    } catch (error) {
-      console.error('Error creating delivery batch:', error);
-      toast.error('Erreur lors de la création du colis ouvert');
-    } finally {
-      setProcessing(false);
-    }
-  };
-
-  const handleStripePayment = async (
-    orderNumber: string,
-    selectedAddress: Address,
-    selectedShipping: ShippingMethod,
-    shippingCost: number,
-    taxAmount: number,
-    totalAmount: number
-  ) => {
-    try {
-      const { data: order, error: orderError } = await supabase
-        .from('orders')
-        .insert({
-          user_id: user!.id,
-          order_number: orderNumber,
-          status: 'pending',
-          total_amount: totalAmount,
-          shipping_address: selectedAddress,
-          shipping_method_id: selectedShippingMethod,
-          shipping_cost: shippingCost,
-          tax_amount: taxAmount,
-        })
-        .select()
-        .single();
-
-      if (orderError || !order) {
-        throw new Error('Erreur lors de la création de la commande');
-      }
-
-      const orderItems = cart.map((item) => ({
-        order_id: order.id,
-        product_name: item.name,
-        product_slug: item.slug,
-        product_image: item.image?.sourceUrl || '',
-        price: item.price,
-        quantity: item.quantity,
-      }));
-
-      const { error: itemsError } = await supabase
-        .from('order_items')
-        .insert(orderItems);
-
-      if (itemsError) {
-        throw new Error('Erreur lors de l\'enregistrement des articles');
-      }
-
-      if (selectedCoupon) {
-        await supabase
-          .from('user_coupons')
-          .update({
-            is_used: true,
-            used_at: new Date().toISOString(),
-            order_id: order.id,
-          })
-          .eq('id', selectedCoupon.id);
-      }
-
-      if (walletAmount > 0) {
-        await supabase
-          .from('loyalty_transactions')
-          .insert({
-            user_id: user!.id,
-            amount: -walletAmount,
-            type: 'admin_adjustment',
-            description: `Utilisation de la cagnotte pour la commande ${orderNumber}`,
-            reference_id: order.id,
-          });
-
-        localStorage.removeItem('cart_wallet_amount');
-      }
-
-      const { data: { session } } = await supabase.auth.getSession();
-
-      const paymentResponse = await fetch(
-        `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/create-payment-intent`,
-        {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${session?.access_token}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            amount: totalAmount,
-            currency: 'eur',
-            orderId: order.id,
-          }),
-        }
-      );
-
-      if (!paymentResponse.ok) {
-        throw new Error('Erreur lors de la création du paiement Stripe');
-      }
-
-      const paymentData = await paymentResponse.json();
-
-      setPendingOrderNumber(orderNumber);
-      setStripeClientSecret(paymentData.clientSecret);
-      setShowStripeModal(true);
-
-    } catch (error) {
-      console.error('Stripe payment error:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Une erreur est survenue lors du paiement Stripe';
-      toast.error(errorMessage);
-      setProcessing(false);
-    }
-  };
-
-  const handleStripeSuccess = async () => {
-    try {
-      const selectedAddress = addresses.find((addr) => addr.id === selectedAddressId);
-      const selectedShipping = shippingMethods.find(m => m.id === selectedShippingMethod);
-
-      const wooOrderData = {
-        status: 'processing',
-        payment_method: 'stripe',
-        payment_method_title: 'Carte bancaire (Stripe)',
-        set_paid: true,
-        billing: {
-          first_name: selectedAddress!.first_name,
-          last_name: selectedAddress!.last_name,
-          address_1: selectedAddress!.address_line1,
-          address_2: selectedAddress!.address_line2 || '',
-          city: selectedAddress!.city,
-          postcode: selectedAddress!.postal_code,
-          country: selectedAddress!.country,
-          email: user!.email || '',
-          phone: selectedAddress!.phone,
-        },
-        shipping: selectedRelayPoint ? {
-          first_name: selectedAddress!.first_name,
-          last_name: selectedAddress!.last_name,
-          address_1: selectedRelayPoint.LgAdr1 || selectedRelayPoint.LgAdr3,
-          address_2: selectedRelayPoint.LgAdr2 || '',
-          city: selectedRelayPoint.Ville,
-          postcode: selectedRelayPoint.CP,
-          country: selectedRelayPoint.Pays,
-        } : {
-          first_name: selectedAddress!.first_name,
-          last_name: selectedAddress!.last_name,
-          address_1: selectedAddress!.address_line1,
-          address_2: selectedAddress!.address_line2 || '',
-          city: selectedAddress!.city,
-          postcode: selectedAddress!.postal_code,
-          country: selectedAddress!.country,
-        },
-        line_items: cart.map(item => ({
-          product_id: item.databaseId || parseInt(item.id) || 0,
-          quantity: item.quantity,
-        })),
-        shipping_lines: [{
-          method_id: selectedShipping!.method_id,
-          method_title: selectedShipping!.title,
-          total: selectedShipping!.cost,
-        }],
-        meta_data: [
-          ...(selectedRelayPoint ? [
-            {
-              key: '_mondial_relay_id',
-              value: selectedRelayPoint.Num,
-            },
-            {
-              key: '_mondial_relay_name',
-              value: selectedRelayPoint.LgAdr1 || selectedRelayPoint.LgAdr3,
-            },
-            {
-              key: '_mondial_relay_address',
-              value: `${selectedRelayPoint.LgAdr3 || ''} ${selectedRelayPoint.CP} ${selectedRelayPoint.Ville}`,
-            },
-          ] : []),
-        ],
-      };
-
-      const wooResponse = await fetch('/api/woocommerce/create-order', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(wooOrderData),
-      });
-
-      if (!wooResponse.ok) {
-        console.error('WooCommerce order creation failed');
-      }
-
-      clearCart();
-      setShowStripeModal(false);
-      toast.success('Paiement réussi !');
-      router.push(`/order-confirmation/${pendingOrderNumber}`);
-    } catch (error) {
-      console.error('Error completing Stripe order:', error);
-      toast.error('Paiement effectué mais erreur lors de la finalisation de la commande');
-      setShowStripeModal(false);
-      setProcessing(false);
-    }
-  };
-
-  const handleStripeError = (error: string) => {
-    toast.error(`Erreur de paiement: ${error}`);
-    setProcessing(false);
-  };
-
-  const handlePayPalPayment = async (
-    orderNumber: string,
-    selectedAddress: Address,
-    selectedShipping: ShippingMethod,
-    shippingCost: number,
-    taxAmount: number,
-    totalAmount: number
-  ) => {
-    try {
-      const { data: order, error: orderError } = await supabase
-        .from('orders')
-        .insert({
-          user_id: user!.id,
-          order_number: orderNumber,
-          status: 'pending',
-          total_amount: totalAmount,
-          shipping_address: selectedAddress,
-          shipping_method_id: selectedShippingMethod,
-          shipping_cost: shippingCost,
-          tax_amount: taxAmount,
-        })
-        .select()
-        .single();
-
-      if (orderError || !order) {
-        throw new Error('Erreur lors de la création de la commande');
-      }
-
-      const orderItems = cart.map((item) => ({
-        order_id: order.id,
-        product_name: item.name,
-        product_slug: item.slug,
-        product_image: item.image?.sourceUrl || '',
-        price: item.price,
-        quantity: item.quantity,
-      }));
-
-      const { error: itemsError } = await supabase
-        .from('order_items')
-        .insert(orderItems);
-
-      if (itemsError) {
-        throw new Error('Erreur lors de l\'enregistrement des articles');
-      }
-
-      if (selectedCoupon) {
-        await supabase
-          .from('user_coupons')
-          .update({
-            is_used: true,
-            used_at: new Date().toISOString(),
-            order_id: order.id,
-          })
-          .eq('id', selectedCoupon.id);
-      }
-
-      if (walletAmount > 0) {
-        await supabase
-          .from('loyalty_transactions')
-          .insert({
-            user_id: user!.id,
-            amount: -walletAmount,
-            type: 'admin_adjustment',
-            description: `Utilisation de la cagnotte pour la commande ${orderNumber}`,
-            reference_id: order.id,
-          });
-
-        localStorage.removeItem('cart_wallet_amount');
-      }
-
-      const paypalResponse = await fetch('/api/paypal/create-order', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          amount: totalAmount,
-          currency: 'EUR',
-          description: `Commande ${orderNumber} - La Boutique de Morgane`,
-          returnUrl: `${window.location.origin}/order-confirmation/${orderNumber}?paypal=success`,
-          cancelUrl: `${window.location.origin}/order-confirmation/${orderNumber}?paypal=cancelled`,
-        }),
-      });
-
-      const paypalData = await paypalResponse.json();
-
-      if (!paypalResponse.ok) {
-        console.error('PayPal API error:', paypalData);
-        throw new Error(paypalData.error || 'Erreur lors de la création de la commande PayPal');
-      }
-
-      localStorage.setItem('pending_order_id', order.id);
-      localStorage.setItem('pending_order_number', orderNumber);
-      localStorage.setItem('paypal_order_id', paypalData.orderId);
-
-      const popup = window.open(
-        paypalData.approvalUrl,
-        'PayPal',
-        'width=600,height=700,scrollbars=yes,resizable=yes'
-      );
-
-      if (!popup) {
-        toast.error('Veuillez autoriser les popups pour continuer avec PayPal');
-        setProcessing(false);
-        return;
-      }
-
-      const checkPopup = setInterval(() => {
-        if (!popup || popup.closed) {
-          clearInterval(checkPopup);
-          setProcessing(false);
-
-          const storedOrderNumber = localStorage.getItem('pending_order_number');
-          if (storedOrderNumber) {
-            router.push(`/order-confirmation/${storedOrderNumber}?paypal=check`);
-          }
-        }
-      }, 500);
-
-    } catch (error) {
-      console.error('PayPal payment error:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Une erreur est survenue lors du paiement PayPal';
-      toast.error(errorMessage);
-      setProcessing(false);
-    }
-  };
-
-  const proceedToPayment = async () => {
-    if (!gdprConsent) {
-      setGdprError('Vous devez accepter les conditions pour valider votre commande');
-      toast.error('Veuillez accepter les conditions générales de vente');
-      return;
-    }
-
-    setGdprError('');
-
-    const finalTotal = calculateTotal();
-    if (isFirstOrder && finalTotal < MINIMUM_ORDER_AMOUNT) {
-      toast.error(`Le montant minimum pour votre première commande est de ${MINIMUM_ORDER_AMOUNT.toFixed(2)} €`);
-      return;
-    }
-
-    if (useDeliveryBatch) {
-      await createDeliveryBatch();
-      return;
-    }
-
-    if (!selectedAddressId) {
-      toast.error('Veuillez sélectionner une adresse de livraison');
-      return;
-    }
-
-    if (!selectedShippingMethod) {
+    if (!addToOpenPackage && !selectedShippingMethodId) {
       toast.error('Veuillez sélectionner un mode de livraison');
       return;
     }
 
-    const method = shippingMethods.find(m => m.id === selectedShippingMethod);
-    const isRelayDelivery = method?.is_relay === true;
-
-    if (isRelayDelivery && !selectedRelayPoint) {
-      toast.error('Veuillez sélectionner un point relais');
+    if (!addToOpenPackage && !selectedAddressId) {
+      toast.error('Veuillez sélectionner une adresse de livraison');
       return;
     }
 
-    setProcessing(true);
+    if (!selectedPaymentMethodId) {
+      toast.error('Veuillez sélectionner un mode de paiement');
+      return;
+    }
+
+    if (!rgpdConsent) {
+      toast.error('Vous devez accepter la politique de confidentialité');
+      return;
+    }
+
+    setLoading(true);
 
     try {
-      const selectedAddress = addresses.find((addr) => addr.id === selectedAddressId);
-      const selectedShipping = shippingMethods.find(m => m.id === selectedShippingMethod);
-      const orderNumber = generateOrderNumber();
-      const shippingCost = calculateShippingCost();
-      const taxAmount = calculateTax();
-      const totalAmount = calculateTotal();
+      const orderNumber = `CMD-${Date.now()}`;
 
-      if (selectedPaymentMethod === 'paypal') {
-        await handlePayPalPayment(orderNumber, selectedAddress!, selectedShipping!, shippingCost, taxAmount, totalAmount);
-        return;
-      }
+      const orderData = {
+        user_id: user.id,
+        order_number: orderNumber,
+        status: 'pending',
+        payment_status: 'pending',
+        subtotal: subtotal.toFixed(2),
+        shipping_cost: shippingCost.toFixed(2),
+        tax_amount: tvaAmount.toFixed(2),
+        discount_amount: discountAmount.toFixed(2),
+        wallet_amount_used: (walletAmountToUse + loyaltyAmountToUse).toFixed(2),
+        total: totalAfterWallet.toFixed(2),
+        shipping_address: selectedAddress,
+        shipping_street: selectedAddress?.address_line1 || '',
+        shipping_phone: selectedAddress?.phone || '',
+        shipping_method_id: selectedShippingMethodId || null,
+        payment_method_id: selectedPaymentMethodId,
+        relay_point_data: relayPointData,
+        insurance_type: shippingInsurance === '0' ? 'none' : shippingInsurance === '1.00' ? 'serenity' : 'diamond',
+        insurance_cost: insuranceCost,
+        coupon_code: couponCode || null,
+        notes: notes || null,
+        newsletter_consent: newsletterConsent,
+        rgpd_consent: rgpdConsent,
+        is_open_package: addToOpenPackage,
+      };
 
-      if (selectedPaymentMethod === 'stripe') {
-        await handleStripePayment(orderNumber, selectedAddress!, selectedShipping!, shippingCost, taxAmount, totalAmount);
-        return;
-      }
-
-      const { data: order, error: orderError } = await supabase
+      const { data: newOrder, error: orderError } = await supabase
         .from('orders')
-        .insert({
-          user_id: user!.id,
-          order_number: orderNumber,
-          status: 'processing',
-          total_amount: totalAmount,
-          shipping_address: selectedAddress,
-          shipping_method_id: selectedShippingMethod,
-          shipping_cost: shippingCost,
-          tax_amount: taxAmount,
-        })
+        .insert([orderData])
         .select()
         .single();
 
-      if (orderError || !order) {
-        throw new Error('Erreur lors de la création de la commande');
-      }
+      if (orderError) throw orderError;
 
-      const orderItems = cart.map((item) => ({
-        order_id: order.id,
-        product_name: item.name,
-        product_slug: item.slug,
-        product_image: item.image?.sourceUrl || '',
-        price: item.price,
-        quantity: item.quantity,
+      // Insérer les items de la commande
+      const orderItems = cart.map(item => ({
+        order_id: newOrder.id,
+        product_name: item.name || 'Produit',
+        product_slug: item.slug || '',
+        product_image: item.image?.sourceUrl || item.variationImage?.sourceUrl || '',
+        price: String(item.price || 0),
+        quantity: item.quantity || 1,
+        variation_data: item.selectedAttributes || null,
       }));
 
       const { error: itemsError } = await supabase
         .from('order_items')
         .insert(orderItems);
 
-      if (itemsError) {
-        throw new Error('Erreur lors de l\'enregistrement des articles');
+      if (itemsError) throw itemsError;
+
+      if (addToOpenPackage && openPackage) {
+        const { error: packageError } = await supabase
+          .from('open_package_orders')
+          .insert([{
+            open_package_id: openPackage.id,
+            order_id: newOrder.id,
+            is_paid: false,
+          }]);
+
+        if (packageError) throw packageError;
       }
 
-      if (selectedCoupon) {
+      if (createPendingPackage && !addToOpenPackage) {
+        const openedAt = new Date();
+        const closesAt = new Date(openedAt.getTime() + (5 * 24 * 60 * 60 * 1000));
+
+        const { data: newPackage, error: packageError } = await supabase
+          .from('open_packages')
+          .insert([{
+            user_id: user.id,
+            status: 'active',
+            shipping_cost_paid: shippingCost,
+            shipping_method_id: selectedShippingMethodId || null,
+            shipping_address_id: selectedAddressId || null,
+            opened_at: openedAt.toISOString(),
+            closes_at: closesAt.toISOString(),
+          }])
+          .select()
+          .single();
+
+        if (packageError) throw packageError;
+
+        const { error: linkError } = await supabase
+          .from('open_package_orders')
+          .insert([{
+            open_package_id: newPackage.id,
+            order_id: newOrder.id,
+            is_paid: false,
+          }]);
+
+        if (linkError) throw linkError;
+
+        toast.success('Colis ouvert créé avec succès ! Expédition dans 5 jours.');
+      }
+
+      if (newsletterConsent && profile?.email) {
+        const { error: newsletterError } = await supabase
+          .from('newsletter_subscriptions')
+          .insert([{ email: profile.email }])
+          .select();
+
+        if (newsletterError && newsletterError.code !== '23505') {
+          console.error('Newsletter error:', newsletterError);
+        }
+      }
+
+      if (useWallet && walletAmountToUse > 0) {
+        const newBalance = (profile?.wallet_balance || 0) - walletAmountToUse;
         await supabase
-          .from('user_coupons')
-          .update({
-            is_used: true,
-            used_at: new Date().toISOString(),
-            order_id: order.id,
-          })
-          .eq('id', selectedCoupon.id);
+          .from('profiles')
+          .update({ wallet_balance: newBalance })
+          .eq('id', user.id);
       }
 
-      if (walletAmount > 0) {
+      if (useLoyalty && loyaltyAmountToUse > 0) {
+        const newLoyaltyBalance = (profile?.loyalty_euros || 0) - loyaltyAmountToUse;
         await supabase
-          .from('loyalty_transactions')
-          .insert({
-            user_id: user!.id,
-            amount: -walletAmount,
-            type: 'admin_adjustment',
-            description: `Utilisation de la cagnotte pour la commande ${orderNumber}`,
-            reference_id: order.id,
-          });
-
-        localStorage.removeItem('cart_wallet_amount');
+          .from('profiles')
+          .update({ loyalty_euros: newLoyaltyBalance })
+          .eq('id', user.id);
       }
 
-      const { data: { session } } = await supabase.auth.getSession();
+      if (selectedUserCouponId) {
+        await markCouponAsUsed(selectedUserCouponId, newOrder.id);
+      }
 
-      const wooOrderData = {
-        payment_method: 'bacs',
-        payment_method_title: 'Virement bancaire',
-        set_paid: false,
-        billing: {
-          first_name: selectedAddress!.first_name,
-          last_name: selectedAddress!.last_name,
-          address_1: selectedAddress!.address_line1,
-          address_2: selectedAddress!.address_line2 || '',
-          city: selectedAddress!.city,
-          postcode: selectedAddress!.postal_code,
-          country: selectedAddress!.country,
-          email: user!.email || '',
-          phone: selectedAddress!.phone,
-        },
-        shipping: selectedRelayPoint ? {
-          first_name: selectedAddress!.first_name,
-          last_name: selectedAddress!.last_name,
-          address_1: selectedRelayPoint.LgAdr1 || selectedRelayPoint.LgAdr3,
-          address_2: selectedRelayPoint.LgAdr2 || '',
-          city: selectedRelayPoint.Ville,
-          postcode: selectedRelayPoint.CP,
-          country: selectedRelayPoint.Pays,
-        } : {
-          first_name: selectedAddress!.first_name,
-          last_name: selectedAddress!.last_name,
-          address_1: selectedAddress!.address_line1,
-          address_2: selectedAddress!.address_line2 || '',
-          city: selectedAddress!.city,
-          postcode: selectedAddress!.postal_code,
-          country: selectedAddress!.country,
-        },
-        line_items: cart.map(item => ({
-          product_id: item.databaseId || parseInt(item.id) || 0,
-          quantity: item.quantity,
-        })),
-        shipping_lines: [{
-          method_id: selectedShipping!.method_id,
-          method_title: selectedShipping!.title,
-          total: selectedShipping!.cost,
-        }],
-        meta_data: [
-          ...(selectedRelayPoint ? [
-            {
-              key: '_mondial_relay_id',
-              value: selectedRelayPoint.Num,
-            },
-            {
-              key: '_mondial_relay_name',
-              value: selectedRelayPoint.LgAdr1 || selectedRelayPoint.LgAdr3,
-            },
-            {
-              key: '_mondial_relay_address',
-              value: `${selectedRelayPoint.LgAdr3 || ''} ${selectedRelayPoint.CP} ${selectedRelayPoint.Ville}`,
-            },
-          ] : []),
-        ],
-      };
-
-      const wooResponse = await fetch('/api/woocommerce/create-order', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(wooOrderData),
-      });
-
-      if (!wooResponse.ok) {
-        const errorText = await wooResponse.text();
-        console.error('WooCommerce order creation failed:', errorText);
-        throw new Error('Erreur lors de la création de la commande WooCommerce');
+      if (selectedPaymentMethod?.code === 'stripe') {
+        setCreatedOrderId(newOrder.id);
+        setCreatedOrderNumber(orderNumber);
+        setShowStripePayment(true);
+        setLoading(false);
+        return;
       }
 
       clearCart();
-      toast.success('Commande validée avec succès !');
-      router.push(`/order-confirmation/${orderNumber}`);
+
+      toast.success(`Commande ${orderNumber} validée avec succès !`, {
+        position: 'bottom-right'
+      });
+      router.push(`/checkout/confirmation?order_id=${newOrder.id}`);
     } catch (error) {
-      console.error('Checkout error:', error);
-      toast.error('Une erreur est survenue lors de la commande');
+      console.error('Error processing order:', error);
+      toast.error('Erreur lors du traitement de la commande');
     } finally {
-      setProcessing(false);
+      setLoading(false);
     }
   };
 
-  if (loading) {
+  if (!user) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-[#b8933d]" />
+      <div className="container mx-auto px-4 py-12">
+        <Card className="max-w-md mx-auto">
+          <CardHeader>
+            <CardTitle>Connexion requise</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-gray-600">
+              Vous devez être connecté pour accéder au processus de commande.
+            </p>
+            <div className="flex gap-3">
+              <Button asChild className="flex-1">
+                <Link href="/auth/login">Se connecter</Link>
+              </Button>
+              <Button asChild variant="outline" className="flex-1">
+                <Link href="/auth/register">Créer un compte</Link>
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  if (showStripePayment && createdOrderId) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-white via-[#F2F2E8] to-[#F2F2E8] py-8">
+        <div className="container mx-auto px-4">
+          <div className="mb-6">
+            <button
+              onClick={() => {
+                setShowStripePayment(false);
+                setCreatedOrderId(null);
+                setCreatedOrderNumber(null);
+              }}
+              className="inline-flex items-center text-gray-600 hover:text-[#D4AF37] transition-colors"
+            >
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Retour au récapitulatif
+            </button>
+          </div>
+
+          <PageHeader
+            icon={CreditCard}
+            title="Paiement sécurisé"
+            description="Finalisez votre paiement avec Stripe"
+          />
+
+          <div className="max-w-2xl mx-auto mt-8">
+            <StripePaymentForm
+              orderId={createdOrderId}
+              userId={user.id}
+              total={totalAfterWallet}
+              onSuccess={() => {
+                clearCart();
+              }}
+              customerEmail={profile?.email}
+              orderNumber={createdOrderNumber || undefined}
+            />
+          </div>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="container mx-auto px-4 py-8">
-        <Link
-          href="/cart"
-          className="mb-6 inline-flex items-center text-sm text-gray-600 hover:text-[#b8933d]"
-        >
-          <ArrowLeft className="mr-1 h-4 w-4" />
-          Retour au panier
-        </Link>
+    <div className="min-h-screen bg-gradient-to-b from-white via-[#F2F2E8] to-[#F2F2E8] py-8">
+      <div className="container mx-auto px-4">
+        <div className="mb-6">
+          <Link
+            href="/cart"
+            className="inline-flex items-center text-gray-600 hover:text-[#D4AF37] transition-colors"
+          >
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Retour au panier
+          </Link>
+        </div>
 
-        <h1 className="mb-8 text-3xl font-bold text-gray-900">
-          Validation de la commande
-        </h1>
+        <PageHeader
+          icon={ShoppingBag}
+          title="Finaliser ma commande"
+          description="Complétez les informations ci-dessous pour valider votre commande"
+        />
 
-        <div className="max-w-4xl mx-auto">
-            <div className="space-y-6">
-              <Card className="border-2 border-blue-200 bg-blue-50">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-blue-900">
-                    <Clock className="h-5 w-5 text-blue-600" />
-                    Mon colis ouvert (5 jours)
-                  </CardTitle>
-                  <CardDescription className="text-blue-800">
-                    Économisez sur les frais de livraison en groupant vos achats
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  {activeBatch && (
-                    <Alert className="bg-green-50 border-green-200">
-                      <Info className="h-4 w-4 text-green-600" />
-                      <AlertDescription className="text-green-800">
-                        Vous avez déjà un colis ouvert. Ces articles seront ajoutés sans frais de livraison supplémentaires !
-                      </AlertDescription>
-                    </Alert>
-                  )}
+        <div className="max-w-4xl mx-auto mb-6">
+          <Card className="border-4 border-[#D4AF37] bg-gradient-to-br from-[#D4AF37]/20 via-[#F2F2E8] to-white shadow-2xl relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-40 h-40 bg-gradient-to-br from-[#D4AF37]/30 to-transparent rounded-full -mr-20 -mt-20" />
+            <div className="absolute bottom-0 left-0 w-32 h-32 bg-gradient-to-tr from-[#b8933d]/20 to-transparent rounded-full -ml-16 -mb-16" />
 
-                  <div className="flex items-center justify-between p-4 bg-white rounded-lg">
-                    <div className="flex-1">
-                      <Label htmlFor="delivery-batch" className="text-base font-semibold text-gray-900 cursor-pointer">
-                        Activer mon colis ouvert
-                      </Label>
-                      <p className="text-sm text-gray-600 mt-1">
-                        {activeBatch
-                          ? 'Ajouter à votre colis existant sans frais supplémentaires'
-                          : 'Vous aurez 5 jours pour ajouter d\'autres produits sans payer de nouveaux frais de livraison'
-                        }
-                      </p>
+            <CardHeader className="relative z-10">
+              <CardTitle className="flex items-center gap-3 text-2xl bg-gradient-to-r from-[#b8933d] to-[#d4af37] bg-clip-text text-transparent">
+                <div className="flex items-center justify-center w-12 h-12 bg-gradient-to-br from-[#b8933d] to-[#d4af37] rounded-full shadow-lg">
+                  <Clock className="h-6 w-6 text-white" />
+                </div>
+                Mettre ma commande en attente
+              </CardTitle>
+              <CardDescription className="text-base text-gray-700 ml-15">
+                Payez les frais de livraison maintenant, mais l'expédition sera effectuée dans 5 jours (ou validée manuellement avant).
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="relative z-10">
+              <div className="flex items-start space-x-4 bg-white/80 backdrop-blur-sm rounded-xl p-5 border-2 border-[#D4AF37]/40 shadow-lg">
+                <Checkbox
+                  id="createPendingPackage"
+                  checked={createPendingPackage}
+                  onCheckedChange={(checked) => setCreatePendingPackage(checked as boolean)}
+                  className="mt-1 border-[#D4AF37] data-[state=checked]:bg-[#D4AF37]"
+                />
+                <div className="space-y-3 flex-1">
+                  <label
+                    htmlFor="createPendingPackage"
+                    className="text-base font-semibold leading-none cursor-pointer text-gray-900"
+                  >
+                    Créer un colis en attente pour cette commande
+                  </label>
+                  {createPendingPackage && (
+                    <div className="p-4 bg-gradient-to-br from-[#D4AF37]/10 to-[#b8933d]/5 border-2 border-[#D4AF37]/50 rounded-lg shadow-md">
+                      <ul className="text-sm text-gray-800 space-y-2">
+                        <li className="flex items-start gap-3">
+                          <div className="flex items-center justify-center w-6 h-6 bg-[#D4AF37] rounded-full flex-shrink-0 mt-0.5">
+                            <Info className="h-4 w-4 text-white" />
+                          </div>
+                          <span className="font-medium">Les frais de livraison seront payés aujourd'hui</span>
+                        </li>
+                        <li className="flex items-start gap-3">
+                          <div className="flex items-center justify-center w-6 h-6 bg-[#D4AF37] rounded-full flex-shrink-0 mt-0.5">
+                            <Info className="h-4 w-4 text-white" />
+                          </div>
+                          <span className="font-medium">Votre colis sera expédié automatiquement dans 5 jours</span>
+                        </li>
+                        <li className="flex items-start gap-3">
+                          <div className="flex items-center justify-center w-6 h-6 bg-[#D4AF37] rounded-full flex-shrink-0 mt-0.5">
+                            <Info className="h-4 w-4 text-white" />
+                          </div>
+                          <span className="font-medium">Vous pouvez valider l'expédition manuellement depuis votre compte avant cette date</span>
+                        </li>
+                      </ul>
                     </div>
-                    <Switch
-                      id="delivery-batch"
-                      checked={useDeliveryBatch}
-                      onCheckedChange={setUseDeliveryBatch}
-                      className="ml-4"
-                    />
-                  </div>
-
-                  {useDeliveryBatch && (
-                    <Alert className="bg-white border-blue-200">
-                      <Info className="h-4 w-4 text-blue-600" />
-                      <AlertDescription className="text-blue-800">
-                        {activeBatch ? (
-                          <>
-                            <strong>Colis ouvert actif :</strong> Vos articles seront ajoutés à votre colis en cours.
-                            Vous pourrez valider le colis à tout moment depuis votre espace client.
-                          </>
-                        ) : (
-                          <>
-                            <strong>Comment ça marche ?</strong> Vos articles seront mis en attente pendant 5 jours.
-                            Vous pourrez ajouter d&apos;autres produits sans payer de frais de livraison supplémentaires,
-                            puis valider le colis quand vous le souhaitez depuis votre espace client.
-                          </>
-                        )}
-                      </AlertDescription>
-                    </Alert>
                   )}
-                </CardContent>
-              </Card>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
 
+        <form onSubmit={handleSubmit} className="max-w-4xl mx-auto">
+          <div className="space-y-6">
+            {openPackage && !packageLoading && (
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
-                    <MapPin className="h-5 w-5 text-[#b8933d]" />
-                    Adresse de livraison
+                    <Package className="h-5 w-5 text-[#D4AF37]" />
+                    Colis ouvert disponible
                   </CardTitle>
+                  <CardDescription>
+                    Vous avez un colis ouvert actif. Ajoutez cette commande pour économiser les frais de port !
+                  </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  {addresses.length === 0 ? (
-                    <div className="text-center py-8">
-                      <p className="text-gray-600 mb-4">
-                        Vous n'avez pas encore d'adresse de livraison
-                      </p>
-                      <Button
-                        onClick={() => router.push('/account/addresses')}
-                        className="bg-[#b8933d] hover:bg-[#a07c2f]"
-                      >
-                        <Plus className="h-4 w-4 mr-2" />
-                        Ajouter une adresse
-                      </Button>
-                    </div>
-                  ) : (
-                    <RadioGroup value={selectedAddressId} onValueChange={setSelectedAddressId}>
-                      <div className="space-y-4">
-                        {addresses.map((address) => (
-                          <div
-                            key={address.id}
-                            className={`flex items-start space-x-3 p-4 rounded-lg border-2 transition-colors cursor-pointer ${
-                              selectedAddressId === address.id
-                                ? 'border-[#b8933d] bg-[#b8933d]/5'
-                                : 'border-gray-200 hover:border-gray-300'
-                            }`}
-                            onClick={() => setSelectedAddressId(address.id)}
-                          >
-                            <RadioGroupItem value={address.id} id={address.id} className="mt-1" />
-                            <div className="flex-1">
-                              <Label htmlFor={address.id} className="cursor-pointer">
-                                <div className="space-y-1">
-                                  {address.label && (
-                                    <p className="font-semibold text-gray-900">{address.label}</p>
-                                  )}
-                                  <p className="text-sm text-gray-900">
-                                    {address.first_name} {address.last_name}
-                                  </p>
-                                  <p className="text-sm text-gray-600">{address.address_line1}</p>
-                                  {address.address_line2 && (
-                                    <p className="text-sm text-gray-600">{address.address_line2}</p>
-                                  )}
-                                  <p className="text-sm text-gray-600">
-                                    {address.postal_code} {address.city}
-                                  </p>
-                                  <p className="text-sm text-gray-600">{address.country}</p>
-                                  <p className="text-sm text-gray-600">{address.phone}</p>
-                                </div>
-                              </Label>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </RadioGroup>
-                  )}
-
-                  {addresses.length > 0 && (
-                    <Button
-                      variant="outline"
-                      onClick={() => router.push('/account/addresses')}
-                      className="mt-4"
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="addToOpenPackage"
+                      checked={addToOpenPackage}
+                      onCheckedChange={(checked) => setAddToOpenPackage(checked as boolean)}
+                    />
+                    <label
+                      htmlFor="addToOpenPackage"
+                      className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
                     >
-                      <Plus className="h-4 w-4 mr-2" />
-                      Ajouter une nouvelle adresse
-                    </Button>
+                      Ajouter au colis ouvert (économisez {selectedShippingMethod?.cost.toFixed(2) || '0.00'} € de frais de port)
+                    </label>
+                  </div>
+                  {addToOpenPackage && (
+                    <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded-md">
+                      <p className="text-sm text-green-800">
+                        <Info className="h-4 w-4 inline mr-1" />
+                        Cette commande sera ajoutée à votre colis ouvert. Les frais de port ont déjà été payés.
+                      </p>
+                    </div>
                   )}
                 </CardContent>
               </Card>
+            )}
 
-              {(!useDeliveryBatch || (useDeliveryBatch && !activeBatch)) && (
-                <>
-                  {shippingMethods.length === 0 ? (
-                    <Alert className="border-orange-200 bg-orange-50">
-                      <Info className="h-4 w-4 text-orange-600" />
-                      <AlertDescription className="text-orange-800">
-                        <strong>Aucune méthode de livraison disponible.</strong>
-                        <br />
-                        Veuillez actualiser la page ou contacter le support si le problème persiste.
-                        <br />
-                        <button
-                          onClick={() => window.location.reload()}
-                          className="mt-2 underline font-semibold"
-                        >
-                          Actualiser la page
-                        </button>
-                      </AlertDescription>
-                    </Alert>
-                  ) : (
-                    <Card>
-                      <CardHeader>
-                        <CardTitle className="flex items-center gap-2">
-                          <Truck className="h-5 w-5 text-[#b8933d]" />
-                          Mode de livraison
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <RadioGroup value={selectedShippingMethod} onValueChange={(value) => {
-                          setSelectedShippingMethod(value);
-                          setSelectedRelayPoint(null);
-                        }}>
-                          <div className="space-y-4">
-                            {shippingMethods.filter(method => method.method_id !== 'free_shipping').map((method) => (
-                              <div
-                                key={method.id}
-                                className={`flex items-start space-x-3 p-4 rounded-lg border-2 transition-colors cursor-pointer ${
-                                  selectedShippingMethod === method.id
-                                    ? 'border-[#b8933d] bg-[#b8933d]/5'
-                                    : 'border-gray-200 hover:border-gray-300'
-                                }`}
-                                onClick={() => {
-                                  setSelectedShippingMethod(method.id);
-                                  setSelectedRelayPoint(null);
-                                }}
-                          >
-                            <RadioGroupItem value={method.id} id={method.id} className="mt-1" />
-                            <div className="flex-1">
-                              <Label htmlFor={method.id} className="cursor-pointer">
-                                <div className="flex items-center justify-between">
-                                  <div>
-                                    <p className="font-semibold text-gray-900">{method.title}</p>
-                                    {method.description && (
-                                      <p className="text-sm text-gray-600">{stripHtmlTags(method.description)}</p>
-                                    )}
-                                  </div>
-                                  <p className="font-bold text-[#b8933d]">
-                                    {parseFloat(method.cost) === 0 ? 'Gratuit' : `${parseFloat(method.cost).toFixed(2)} €`}
-                                  </p>
-                                </div>
-                              </Label>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </RadioGroup>
-                      </CardContent>
-                    </Card>
-                  )}
-                </>
-              )}
-
-              {(!useDeliveryBatch || (useDeliveryBatch && !activeBatch)) && selectedShippingMethod &&
-               selectedAddressId &&
-               (() => {
-                 const method = shippingMethods.find(m => m.id === selectedShippingMethod);
-                 const isRelayDelivery = method?.is_relay === true;
-                 const selectedAddress = addresses.find(addr => addr.id === selectedAddressId);
-
-                 if (!isRelayDelivery || !selectedAddress) return null;
-
-                 return (
-                   <div className="space-y-6">
-                     <MondialRelaySelector
-                       postalCode={selectedAddress.postal_code}
-                       country={selectedAddress.country}
-                       onRelaySelected={setSelectedRelayPoint}
-                       selectedRelay={selectedRelayPoint}
-                       deliveryMode="24R"
-                     />
-                     <MondialRelaySelector
-                       postalCode={selectedAddress.postal_code}
-                       country={selectedAddress.country}
-                       onRelaySelected={setSelectedRelayPoint}
-                       selectedRelay={selectedRelayPoint}
-                       deliveryMode="24L"
-                     />
-                   </div>
-                 );
-               })()
-              }
-
-              {(!useDeliveryBatch || (useDeliveryBatch && !activeBatch)) && (
+            {!addToOpenPackage && (
+              <>
                 <Card>
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
-                      <Shield className="h-5 w-5 text-[#b8933d]" />
-                      Assurance facultative
+                      <MapPin className="h-5 w-5 text-[#D4AF37]" />
+                      Adresse de livraison
                     </CardTitle>
-                    <CardDescription>
-                      Protégez votre commande contre la casse et la perte
-                    </CardDescription>
                   </CardHeader>
                   <CardContent>
-                    <RadioGroup value={selectedInsurance} onValueChange={setSelectedInsurance}>
-                      <div className="space-y-4">
-                        {insuranceOptions.map((option) => (
-                          <div
-                            key={option.id}
-                            className={`flex items-start space-x-3 p-4 rounded-lg border-2 transition-colors cursor-pointer ${
-                              selectedInsurance === option.id
-                                ? 'border-[#b8933d] bg-[#b8933d]/5'
-                                : 'border-gray-200 hover:border-gray-300'
-                            }`}
-                            onClick={() => setSelectedInsurance(option.id)}
-                          >
-                            <RadioGroupItem value={option.id} id={option.id} className="mt-1" />
-                            <div className="flex-1">
-                              <Label htmlFor={option.id} className="cursor-pointer">
-                                <div className="flex items-center justify-between">
-                                  <div>
-                                    <p className="font-semibold text-gray-900">{option.label}</p>
-                                    <p className="text-sm text-gray-600">{option.description}</p>
-                                  </div>
-                                  <p className="font-bold text-[#b8933d]">
-                                    {option.price === 0 ? 'Gratuit' : `+${option.price.toFixed(2)} €`}
-                                  </p>
+                    {addresses.length > 0 ? (
+                      <RadioGroup value={selectedAddressId} onValueChange={setSelectedAddressId}>
+                        <div className="space-y-3">
+                          {addresses.map((address) => (
+                            <div key={address.id} className="flex items-start space-x-3 border p-4 rounded-lg hover:border-[#D4AF37] transition-colors">
+                              <RadioGroupItem value={address.id} id={address.id} />
+                              <label htmlFor={address.id} className="flex-1 cursor-pointer">
+                                <div className="font-medium">{address.label || 'Adresse'}</div>
+                                <div className="text-sm text-gray-600">
+                                  {address.first_name} {address.last_name}<br />
+                                  {address.address_line1}<br />
+                                  {address.address_line2 && <>{address.address_line2}<br /></>}
+                                  {address.postal_code} {address.city}<br />
+                                  {address.country}<br />
+                                  Tél: {address.phone}
                                 </div>
-                              </Label>
+                                {address.is_default && (
+                                  <Badge variant="outline" className="mt-2">Par défaut</Badge>
+                                )}
+                              </label>
                             </div>
+                          ))}
+                        </div>
+                      </RadioGroup>
+                    ) : (
+                      <div className="text-center py-6">
+                        <p className="text-gray-600 mb-4">Aucune adresse enregistrée</p>
+                        <Button asChild variant="outline">
+                          <Link href="/account/addresses">Ajouter une adresse</Link>
+                        </Button>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Truck className="h-5 w-5 text-[#D4AF37]" />
+                      Mode de livraison
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <RadioGroup value={selectedShippingMethodId} onValueChange={setSelectedShippingMethodId}>
+                      <div className="space-y-3">
+                        {shippingMethods.map((method) => (
+                          <div key={method.id} className="flex items-start space-x-3 border p-4 rounded-lg hover:border-[#D4AF37] transition-colors">
+                            <RadioGroupItem value={method.id} id={method.id} />
+                            <label htmlFor={method.id} className="flex-1 cursor-pointer">
+                              <div className="flex items-center justify-between mb-1">
+                                <span className="font-medium">{method.name}</span>
+                                <span className="font-semibold text-[#D4AF37]">
+                                  {method.cost === 0 ? 'Gratuit' : `${method.cost.toFixed(2)} €`}
+                                </span>
+                              </div>
+                              <div className="text-sm text-gray-600">
+                                {method.description}
+                              </div>
+                              <div className="text-xs text-gray-500 mt-1">
+                                Délai: {method.delivery_time}
+                              </div>
+                            </label>
                           </div>
                         ))}
                       </div>
                     </RadioGroup>
+
+                    {selectedShippingMethod?.is_relay && (
+                      <div className="mt-4">
+                        <RelayPointSelector
+                          provider={(() => {
+                            const code = selectedShippingMethod.code;
+                            if (code === 'mondial_relay') return 'mondial-relay';
+                            if (code === 'chronopost_relay') return 'chronopost';
+                            if (code === 'gls_relay') return 'gls';
+                            return code as 'mondial-relay' | 'chronopost' | 'gls';
+                          })()}
+                          onSelect={(point) => {
+                            setRelayPointData({
+                              name: point.name,
+                              address: `${point.address}, ${point.postalCode} ${point.city}`,
+                              id: point.id,
+                              provider: point.provider
+                            });
+                          }}
+                          selectedPoint={relayPointData}
+                          customerAddress={selectedAddress ? {
+                            postalCode: selectedAddress.postal_code,
+                            city: selectedAddress.city
+                          } : undefined}
+                        />
+
+                        {relayPointData && (
+                          <div className="mt-2 p-3 bg-green-50 border border-green-200 rounded-md">
+                            <p className="text-sm text-green-800 font-medium">
+                              <MapPin className="h-4 w-4 inline mr-1" />
+                              Point relais sélectionné
+                            </p>
+                            <p className="text-sm text-green-800 mt-1">{relayPointData.name}</p>
+                            <p className="text-xs text-green-700">{relayPointData.address}</p>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
-              )}
+              </>
+            )}
 
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <CreditCard className="h-5 w-5 text-[#D4AF37]" />
+                  Mode de paiement
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <RadioGroup value={selectedPaymentMethodId} onValueChange={setSelectedPaymentMethodId}>
+                  <div className="space-y-3">
+                    {paymentMethods.map((method) => (
+                      <div key={method.id} className="flex items-start space-x-3 border p-4 rounded-lg hover:border-[#D4AF37] transition-colors">
+                        <RadioGroupItem value={method.id} id={`payment-${method.id}`} />
+                        <label htmlFor={`payment-${method.id}`} className="flex-1 cursor-pointer">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="text-2xl">{method.icon}</span>
+                            <span className="font-medium">{method.name}</span>
+                          </div>
+                          <div className="text-sm text-gray-600">
+                            {method.description}
+                          </div>
+                          {(method.processing_fee_percentage > 0 || method.processing_fee_fixed > 0) && (
+                            <div className="text-xs text-gray-500 mt-1">
+                              Frais: {method.processing_fee_percentage > 0 && `${method.processing_fee_percentage}%`}
+                              {method.processing_fee_percentage > 0 && method.processing_fee_fixed > 0 && ' + '}
+                              {method.processing_fee_fixed > 0 && `${method.processing_fee_fixed.toFixed(2)} €`}
+                            </div>
+                          )}
+                        </label>
+                      </div>
+                    ))}
+                  </div>
+                </RadioGroup>
+
+                {selectedPaymentMethod?.code === 'bank_transfer' && (
+                  <div className="mt-4">
+                    <Dialog open={bankDialogOpen} onOpenChange={setBankDialogOpen}>
+                      <DialogTrigger asChild>
+                        <Button type="button" variant="outline" className="w-full">
+                          <Wallet className="h-4 w-4 mr-2" />
+                          Voir les coordonnées bancaires
+                        </Button>
+                      </DialogTrigger>
+                      <DialogContent>
+                        <DialogHeader>
+                          <DialogTitle>Coordonnées bancaires pour virement</DialogTitle>
+                          <DialogDescription>
+                            Utilisez ces informations pour effectuer votre virement bancaire
+                          </DialogDescription>
+                        </DialogHeader>
+                        <div className="space-y-4 mt-4">
+                          <div className="p-4 bg-blue-50 rounded-lg space-y-3">
+                            <div>
+                              <p className="text-xs font-medium text-blue-800 uppercase">Compte Courant</p>
+                              <p className="text-blue-900 font-semibold">31822952121 - SAS A U MORGANE DEWANIN</p>
+                            </div>
+                            <Separator />
+                            <div>
+                              <p className="text-xs font-medium text-blue-800 uppercase">IBAN</p>
+                              <p className="text-blue-900 font-mono text-sm break-all">FR76 1350 7000 4331 8229 5212 127</p>
+                            </div>
+                            <div>
+                              <p className="text-xs font-medium text-blue-800 uppercase">BIC</p>
+                              <p className="text-blue-900 font-mono text-sm">CCBPFRPPLIL</p>
+                            </div>
+                            <div className="grid grid-cols-2 gap-2">
+                              <div>
+                                <p className="text-xs font-medium text-blue-800 uppercase">Code banque</p>
+                                <p className="text-blue-900 font-mono text-sm">13507</p>
+                              </div>
+                              <div>
+                                <p className="text-xs font-medium text-blue-800 uppercase">Code guichet</p>
+                                <p className="text-blue-900 font-mono text-sm">00043</p>
+                              </div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-2">
+                              <div>
+                                <p className="text-xs font-medium text-blue-800 uppercase">N° du compte</p>
+                                <p className="text-blue-900 font-mono text-sm">31822952121</p>
+                              </div>
+                              <div>
+                                <p className="text-xs font-medium text-blue-800 uppercase">Clé RIB</p>
+                                <p className="text-blue-900 font-mono text-sm">27</p>
+                              </div>
+                            </div>
+                            <Separator />
+                            <div>
+                              <p className="text-xs font-medium text-blue-800 uppercase">Banque</p>
+                              <p className="text-blue-900 font-semibold">BANQUE POPULAIRE DU NORD</p>
+                              <p className="text-blue-700 text-xs mt-1">Agence: AG CENTRALE</p>
+                            </div>
+                          </div>
+
+                          <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                            <p className="text-sm text-amber-800 flex items-start gap-2">
+                              <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                              <span>
+                                Pensez à indiquer votre <strong>numéro de commande</strong> comme référence du virement pour un traitement rapide
+                              </span>
+                            </p>
+                          </div>
+
+                          <Button
+                            type="button"
+                            className="w-full"
+                            onClick={() => setBankDialogOpen(false)}
+                          >
+                            J'ai noté les informations
+                          </Button>
+                        </div>
+                      </DialogContent>
+                    </Dialog>
+
+                    <div className="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-md">
+                      <p className="text-sm text-blue-800">
+                        <Info className="h-4 w-4 inline mr-1" />
+                        Votre commande sera validée après réception du virement
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {!addToOpenPackage && selectedShippingMethodId && (
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
-                    <CreditCard className="h-5 w-5 text-[#b8933d]" />
-                    Mode de paiement
+                    <AlertCircle className="h-5 w-5 text-[#D4AF37]" />
+                    Assurance livraison (facultative)
                   </CardTitle>
                   <CardDescription>
-                    {useDeliveryBatch
-                      ? activeBatch
-                        ? 'Choisissez votre méthode de paiement pour ces articles supplémentaires'
-                        : 'Choisissez votre méthode de paiement pour votre colis ouvert'
-                      : 'Choisissez votre méthode de paiement'
-                    }
+                    Protégez votre colis contre la perte, le vol ou les dommages pendant le transport
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <RadioGroup value={selectedPaymentMethod} onValueChange={setSelectedPaymentMethod}>
-                    <div className="space-y-4">
-                      <div
-                        className={`flex items-start space-x-3 p-4 rounded-lg border-2 transition-colors cursor-pointer ${
-                          selectedPaymentMethod === 'stripe'
-                            ? 'border-[#b8933d] bg-[#b8933d]/5'
-                            : 'border-gray-200 hover:border-gray-300'
-                        }`}
-                        onClick={() => setSelectedPaymentMethod('stripe')}
-                      >
-                        <RadioGroupItem value="stripe" id="stripe" className="mt-1" />
-                        <div className="flex-1">
-                          <Label htmlFor="stripe" className="cursor-pointer">
-                            <div className="flex items-center gap-2">
-                              <p className="font-semibold text-gray-900">Carte bancaire</p>
-                              <svg className="h-6 w-auto" viewBox="0 0 60 25" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                <rect width="60" height="25" rx="4" fill="#635BFF"/>
-                                <path d="M13.3 11.5c0-.4.3-.7.7-.7h2.6c.4 0 .7.3.7.7v2.2c0 .4-.3.7-.7.7H14c-.4 0-.7-.3-.7-.7v-2.2zm4 0c0-.4.3-.7.7-.7h2.6c.4 0 .7.3.7.7v2.2c0 .4-.3.7-.7.7h-2.6c-.4 0-.7-.3-.7-.7v-2.2zm4 0c0-.4.3-.7.7-.7h2.6c.4 0 .7.3.7.7v2.2c0 .4-.3.7-.7.7h-2.6c-.4 0-.7-.3-.7-.7v-2.2z" fill="white"/>
-                                <path d="M36.2 11.8h-2.3l1.5 5h2.3l1.5-5h-2.3l-.7 3.3-.7-3.3z" fill="white"/>
-                                <path d="M41.8 11.8h-2v5h2v-5zm8.5 0h-2.3l-1.5 5h2.3l.2-.8h1.3l.2.8h2.3l-2.5-5zm-.8 3.2l.3-1.2.3 1.2h-.6z" fill="white"/>
-                              </svg>
+                  <RadioGroup value={shippingInsurance} onValueChange={setShippingInsurance}>
+                    <div className="space-y-3">
+                      <div className="flex items-center space-x-3 border p-4 rounded-lg hover:border-[#D4AF37] transition-colors">
+                        <RadioGroupItem value="0" id="insurance-none" />
+                        <label htmlFor="insurance-none" className="flex-1 cursor-pointer">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <span className="font-medium">Sans assurance</span>
+                              <p className="text-sm text-gray-600 mt-1">
+                                Pas de protection supplémentaire
+                              </p>
                             </div>
-                            <p className="text-sm text-gray-600 mt-1">Paiement sécurisé par carte bancaire (Stripe)</p>
-                          </Label>
-                        </div>
+                            <span className="font-semibold text-[#D4AF37]">Gratuit</span>
+                          </div>
+                        </label>
                       </div>
 
-                      <div
-                        className={`flex items-start space-x-3 p-4 rounded-lg border-2 transition-colors cursor-pointer ${
-                          selectedPaymentMethod === 'paypal'
-                            ? 'border-[#b8933d] bg-[#b8933d]/5'
-                            : 'border-gray-200 hover:border-gray-300'
-                        }`}
-                        onClick={() => setSelectedPaymentMethod('paypal')}
-                      >
-                        <RadioGroupItem value="paypal" id="paypal" className="mt-1" />
-                        <div className="flex-1">
-                          <Label htmlFor="paypal" className="cursor-pointer">
-                            <div className="flex items-center gap-2">
-                              <p className="font-semibold text-gray-900">PayPal</p>
-                              <svg className="h-6 w-auto" viewBox="0 0 124 33" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                <path d="M46.211 6.749h-6.839a.95.95 0 0 0-.939.802l-2.766 17.537a.57.57 0 0 0 .564.658h3.265a.95.95 0 0 0 .939-.803l.746-4.73a.95.95 0 0 1 .938-.803h2.165c4.505 0 7.105-2.18 7.784-6.5.306-1.89.013-3.375-.872-4.415-.972-1.142-2.696-1.746-4.985-1.746zm.789 6.405c-.374 2.454-2.249 2.454-4.062 2.454h-1.032l.724-4.583a.57.57 0 0 1 .563-.481h.473c1.235 0 2.4 0 3.002.704.359.42.469 1.044.332 1.906zM66.654 13.075h-3.275a.57.57 0 0 0-.563.481l-.145.916-.229-.332c-.709-1.029-2.29-1.373-3.868-1.373-3.619 0-6.71 2.741-7.312 6.586-.313 1.918.132 3.752 1.22 5.031.998 1.176 2.426 1.666 4.125 1.666 2.916 0 4.533-1.875 4.533-1.875l-.146.91a.57.57 0 0 0 .562.66h2.95a.95.95 0 0 0 .939-.803l1.77-11.209a.568.568 0 0 0-.561-.658zm-4.565 6.374c-.316 1.871-1.801 3.127-3.695 3.127-.951 0-1.711-.305-2.199-.883-.484-.574-.668-1.391-.514-2.301.295-1.855 1.805-3.152 3.67-3.152.93 0 1.686.309 2.184.892.499.589.697 1.411.554 2.317zM84.096 13.075h-3.291a.954.954 0 0 0-.787.417l-4.539 6.686-1.924-6.425a.953.953 0 0 0-.912-.678h-3.234a.57.57 0 0 0-.541.754l3.625 10.638-3.408 4.811a.57.57 0 0 0 .465.9h3.287a.949.949 0 0 0 .781-.408l10.946-15.8a.57.57 0 0 0-.468-.895z" fill="#253B80"/>
-                                <path d="M94.992 6.749h-6.84a.95.95 0 0 0-.938.802l-2.766 17.537a.569.569 0 0 0 .562.658h3.51a.665.665 0 0 0 .656-.562l.785-4.971a.95.95 0 0 1 .938-.803h2.164c4.506 0 7.105-2.18 7.785-6.5.307-1.89.012-3.375-.873-4.415-.971-1.142-2.694-1.746-4.983-1.746zm.789 6.405c-.373 2.454-2.248 2.454-4.062 2.454h-1.031l.725-4.583a.568.568 0 0 1 .562-.481h.473c1.234 0 2.4 0 3.002.704.359.42.468 1.044.331 1.906zM115.434 13.075h-3.273a.567.567 0 0 0-.562.481l-.145.916-.23-.332c-.709-1.029-2.289-1.373-3.867-1.373-3.619 0-6.709 2.741-7.311 6.586-.312 1.918.131 3.752 1.219 5.031 1 1.176 2.426 1.666 4.125 1.666 2.916 0 4.533-1.875 4.533-1.875l-.146.91a.57.57 0 0 0 .564.66h2.949a.95.95 0 0 0 .938-.803l1.771-11.209a.571.571 0 0 0-.565-.658zm-4.565 6.374c-.314 1.871-1.801 3.127-3.695 3.127-.949 0-1.711-.305-2.199-.883-.484-.574-.666-1.391-.514-2.301.297-1.855 1.805-3.152 3.67-3.152.93 0 1.686.309 2.184.892.501.589.699 1.411.554 2.317zM119.295 7.23l-2.807 17.858a.569.569 0 0 0 .562.658h2.822c.469 0 .867-.34.939-.803l2.768-17.536a.57.57 0 0 0-.562-.659h-3.16a.571.571 0 0 0-.562.482z" fill="#179BD7"/>
-                                <path d="M7.266 29.154l.523-3.322-1.165-.027H1.061L4.927 1.292a.316.316 0 0 1 .314-.268h9.38c3.114 0 5.263.648 6.385 1.927.526.6.861 1.227 1.023 1.917.17.724.173 1.589.007 2.644l-.012.077v.676l.526.298a3.69 3.69 0 0 1 1.065.812c.45.513.741 1.165.864 1.938.127.795.085 1.741-.123 2.812-.24 1.232-.628 2.305-1.152 3.183a6.547 6.547 0 0 1-1.825 2c-.696.494-1.523.869-2.458 1.109-.906.236-1.939.355-3.072.355h-.73c-.522 0-1.029.188-1.427.525a2.21 2.21 0 0 0-.744 1.328l-.055.299-.924 5.855-.042.215c-.011.068-.03.102-.058.125a.155.155 0 0 1-.096.035H7.266z" fill="#253B80"/>
-                                <path d="M23.048 7.667c-.028.179-.06.362-.096.55-1.237 6.351-5.469 8.545-10.874 8.545H9.326c-.661 0-1.218.48-1.321 1.132L6.596 26.83l-.399 2.533a.704.704 0 0 0 .695.814h4.881c.578 0 1.069-.42 1.16-.99l.048-.248.919-5.832.059-.32c.09-.572.582-.992 1.16-.992h.73c4.729 0 8.431-1.92 9.513-7.476.452-2.321.218-4.259-.978-5.622a4.667 4.667 0 0 0-1.336-1.03z" fill="#179BD7"/>
-                                <path d="M21.754 7.151a9.757 9.757 0 0 0-1.203-.267 15.284 15.284 0 0 0-2.426-.177h-7.352a1.172 1.172 0 0 0-1.159.992L8.05 17.605l-.045.289a1.336 1.336 0 0 1 1.321-1.132h2.752c5.405 0 9.637-2.195 10.874-8.545.037-.188.068-.371.096-.55a6.594 6.594 0 0 0-1.017-.429 9.045 9.045 0 0 0-.277-.087z" fill="#222D65"/>
-                                <path d="M9.614 7.699a1.169 1.169 0 0 1 1.159-.991h7.352c.871 0 1.684.057 2.426.177a9.757 9.757 0 0 1 1.481.353c.365.121.704.264 1.017.429.368-2.347-.003-3.945-1.272-5.392C20.378.682 17.853 0 14.622 0h-9.38c-.66 0-1.223.48-1.325 1.133L.01 25.898a.806.806 0 0 0 .795.932h5.791l1.454-9.225 1.564-9.906z" fill="#253B80"/>
-                              </svg>
+                      <div className="flex items-center space-x-3 border p-4 rounded-lg hover:border-[#D4AF37] transition-colors">
+                        <RadioGroupItem value="1.00" id="insurance-serenity" />
+                        <label htmlFor="insurance-serenity" className="flex-1 cursor-pointer">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <span className="font-medium">Garantie Sérénité</span>
+                              <p className="text-sm text-gray-600 mt-1">
+                                Protection perte, remboursement après enquête (30 jours)
+                              </p>
                             </div>
-                            <p className="text-sm text-gray-600 mt-1">Paiement sécurisé via PayPal</p>
-                          </Label>
-                        </div>
-                      </div>
-                      {paymentGateways.map((gateway) => (
-                        <div
-                          key={gateway.id}
-                          className={`flex items-start space-x-3 p-4 rounded-lg border-2 transition-colors cursor-pointer ${
-                            selectedPaymentMethod === gateway.id
-                              ? 'border-[#b8933d] bg-[#b8933d]/5'
-                              : 'border-gray-200 hover:border-gray-300'
-                          }`}
-                          onClick={() => setSelectedPaymentMethod(gateway.id)}
-                        >
-                          <RadioGroupItem value={gateway.id} id={gateway.id} className="mt-1" />
-                          <div className="flex-1">
-                            <Label htmlFor={gateway.id} className="cursor-pointer">
-                              <div>
-                                <p className="font-semibold text-gray-900">{gateway.title}</p>
-                                {gateway.description && (
-                                  <p className="text-sm text-gray-600">{stripHtmlTags(gateway.description)}</p>
-                                )}
-                              </div>
-                            </Label>
+                            <span className="font-semibold text-[#D4AF37]">1,00 €</span>
                           </div>
-                        </div>
-                      ))}
+                        </label>
+                      </div>
+
+                      <div className="flex items-center space-x-3 border-2 border-[#D4AF37]/40 p-4 rounded-lg bg-gradient-to-br from-[#F2F2E8] to-white relative">
+                        <RadioGroupItem value="2.90" id="insurance-diamond" />
+                        <Badge
+                          className="absolute -top-2 right-4 bg-gradient-to-r from-[#b8933d] to-[#d4af37] text-white px-2 py-0.5 text-xs"
+                        >
+                          La plus choisie
+                        </Badge>
+                        <label htmlFor="insurance-diamond" className="flex-1 cursor-pointer">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <span className="font-semibold text-[#D4AF37]">Protection Diamant</span>
+                              <p className="text-sm text-gray-700 mt-1 font-medium">
+                                Remboursement ou renvoi immédiat sous 48h (Perte/Casse), sans enquête
+                              </p>
+                            </div>
+                            <span className="font-bold text-[#D4AF37] text-lg">2,90 €</span>
+                          </div>
+                        </label>
+                      </div>
                     </div>
                   </RadioGroup>
                 </CardContent>
               </Card>
+            )}
 
-              {selectedPaymentMethod === 'bacs' && (
-                <Card className="border-2 border-blue-200 bg-blue-50">
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2 text-blue-900">
-                      <Info className="h-5 w-5 text-blue-600" />
-                      Coordonnées bancaires pour le virement
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-3">
-                    <div className="bg-white rounded-lg p-4 space-y-3">
-                      <div>
-                        <p className="text-sm font-semibold text-gray-700">Compte Courant</p>
-                        <p className="text-base font-medium text-gray-900">31822952121 - SAS A U MORGANE DEWANIN</p>
-                      </div>
-
-                      <Separator />
-
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        <div>
-                          <p className="text-sm font-semibold text-gray-700">IBAN</p>
-                          <p className="text-base font-mono text-gray-900">FR76 1350 7000 4331 8229 5212 127</p>
-                        </div>
-
-                        <div>
-                          <p className="text-sm font-semibold text-gray-700">BIC</p>
-                          <p className="text-base font-mono text-gray-900">CCBPFRPPLIL</p>
-                        </div>
-                      </div>
-
-                      <Separator />
-
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                        <div>
-                          <p className="text-xs font-semibold text-gray-700">Code banque</p>
-                          <p className="text-sm font-mono text-gray-900">13507</p>
-                        </div>
-
-                        <div>
-                          <p className="text-xs font-semibold text-gray-700">Code guichet</p>
-                          <p className="text-sm font-mono text-gray-900">00043</p>
-                        </div>
-
-                        <div>
-                          <p className="text-xs font-semibold text-gray-700">N° du compte</p>
-                          <p className="text-sm font-mono text-gray-900">31822952121</p>
-                        </div>
-
-                        <div>
-                          <p className="text-xs font-semibold text-gray-700">Clé RIB</p>
-                          <p className="text-sm font-mono text-gray-900">27</p>
-                        </div>
-                      </div>
-
-                      <Separator />
-
-                      <div>
-                        <p className="text-sm font-semibold text-gray-700">Banque</p>
-                        <p className="text-base font-medium text-gray-900">BANQUE POPULAIRE DU NORD</p>
-                        <p className="text-sm text-gray-600">Agence : AG CENTRALE</p>
-                      </div>
+            <Card className="border-[#D4AF37]/20 shadow-lg">
+              <CardHeader className="bg-gradient-to-r from-[#F2F2E8] to-white border-b border-[#D4AF37]/10">
+                <CardTitle className="flex items-center gap-2 text-xl">
+                  <Gift className="h-6 w-6 text-[#D4AF37]" />
+                  Réductions & Fidélité
+                </CardTitle>
+                <CardDescription>
+                  Profitez de vos avantages pour réduire le montant de votre commande
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6 pt-6">
+                {/* Porte-monnaie */}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <Wallet className="h-5 w-5 text-[#D4AF37]" />
+                      <Label className="text-base font-semibold">Mon porte-monnaie</Label>
                     </div>
+                    <Badge
+                      variant="outline"
+                      className="bg-[#D4AF37]/10 text-[#D4AF37] border-[#D4AF37]/30 font-semibold px-3 py-1"
+                    >
+                      {(profile?.wallet_balance || 0).toFixed(2)} € disponible
+                    </Badge>
+                  </div>
 
-                    <Alert className="bg-blue-100 border-blue-300">
-                      <Info className="h-4 w-4 text-blue-700" />
-                      <AlertDescription className="text-blue-900">
-                        Veuillez effectuer le virement en indiquant votre numéro de commande en référence.
-                        Votre commande sera expédiée dès réception du paiement.
-                      </AlertDescription>
-                    </Alert>
-                  </CardContent>
-                </Card>
-              )}
-
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <ShoppingBag className="h-5 w-5 text-[#b8933d]" />
-                    Récapitulatif de la commande
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    {cart.map((item) => {
-                      const price = parseFloat(
-                        item.price?.replace('€', '').replace(',', '.').replace(/\s/g, '') || '0'
-                      );
-                      const total = price * item.quantity;
-
-                      return (
-                        <div key={item.id} className="flex gap-4">
-                          <div className="relative h-16 w-16 flex-shrink-0 overflow-hidden rounded-md bg-gray-100">
-                            {item.image?.sourceUrl ? (
-                              <Image
-                                src={item.image.sourceUrl}
-                                alt={item.name}
-                                fill
-                                sizes="64px"
-                                className="object-cover"
-                              />
-                            ) : (
-                              <div className="flex h-full items-center justify-center">
-                                <ShoppingBag className="h-6 w-6 text-gray-300" />
-                              </div>
-                            )}
-                          </div>
-                          <div className="flex flex-1 justify-between">
-                            <div>
-                              <p className="text-sm font-medium text-gray-900">{item.name}</p>
-                              {item.selectedAttributes && Object.keys(item.selectedAttributes).length > 0 && (
-                                <div className="mt-1 space-y-0.5">
-                                  {Object.entries(item.selectedAttributes).map(([key, value]) => {
-                                    const formattedKey = key
-                                      .replace(/^pa_/, '')
-                                      .replace(/-/g, ' ')
-                                      .replace(/_/g, ' ')
-                                      .split(' ')
-                                      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-                                      .join(' ');
-
-                                    return (
-                                      <div key={key} className="text-xs text-gray-600">
-                                        <span className="font-semibold">{formattedKey}:</span> {value}
-                                      </div>
-                                    );
-                                  })}
-                                </div>
-                              )}
-                              <p className="text-sm text-gray-500 mt-1">Quantité: {item.quantity}</p>
-                            </div>
-                            <p className="text-sm font-semibold text-gray-900">
-                              {total.toFixed(2)} €
+                  {(profile?.wallet_balance || 0) > 0 ? (
+                    <div className="border border-[#D4AF37]/20 rounded-lg p-4 bg-gradient-to-br from-[#F2F2E8] to-white hover:border-[#D4AF37]/40 transition-all">
+                      <div className="flex items-start space-x-3">
+                        <Checkbox
+                          id="useWallet"
+                          checked={useWallet}
+                          onCheckedChange={(checked) => {
+                            setUseWallet(checked as boolean);
+                            if (!checked) {
+                              setWalletAmountToUse(0);
+                            }
+                          }}
+                          className="mt-1"
+                        />
+                        <div className="flex-1">
+                          <label htmlFor="useWallet" className="cursor-pointer">
+                            <p className="font-medium text-gray-900">
+                              Utiliser mon solde de {(profile?.wallet_balance || 0).toFixed(2)} €
                             </p>
-                          </div>
+                            <p className="text-sm text-gray-600 mt-1">
+                              Économisez jusqu'à {Math.min(profile?.wallet_balance || 0, totalAfterDiscount).toFixed(2)} € sur cette commande
+                            </p>
+                          </label>
+
+                          {useWallet && (
+                            <div className="mt-3 space-y-2">
+                              <Label htmlFor="walletAmount" className="text-sm font-medium text-gray-700">
+                                Montant à utiliser
+                              </Label>
+                              <div className="flex items-center gap-2">
+                                <Input
+                                  id="walletAmount"
+                                  type="number"
+                                  min="0"
+                                  max={Math.min(profile?.wallet_balance || 0, totalAfterDiscount)}
+                                  step="0.01"
+                                  value={walletAmountToUse}
+                                  onChange={(e) => {
+                                    const value = parseFloat(e.target.value) || 0;
+                                    const maxAmount = Math.min(profile?.wallet_balance || 0, totalAfterDiscount);
+                                    setWalletAmountToUse(Math.min(Math.max(0, value), maxAmount));
+                                  }}
+                                  className="flex-1 border-purple-300 focus:border-purple-500 focus:ring-purple-500"
+                                />
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => {
+                                    const maxAmount = Math.min(profile?.wallet_balance || 0, totalAfterDiscount);
+                                    setWalletAmountToUse(maxAmount);
+                                  }}
+                                  className="border-purple-500 text-purple-600 hover:bg-purple-500 hover:text-white whitespace-nowrap"
+                                >
+                                  Tout utiliser
+                                </Button>
+                              </div>
+                              <p className="text-xs text-gray-500">
+                                Maximum disponible : {Math.min(profile?.wallet_balance || 0, totalAfterDiscount).toFixed(2)} €
+                              </p>
+                            </div>
+                          )}
                         </div>
-                      );
-                    })}
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardContent className="p-6 space-y-4">
-                  <h2 className="text-xl font-bold text-gray-900">Total</h2>
-                  <Separator />
-
-                  <div className="space-y-2">
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-600">Sous-total TTC</span>
-                      <span className="font-medium">{cartTotal.toFixed(2)} €</span>
-                    </div>
-                    {selectedCoupon && calculateDiscount() > 0 && (
-                      <div className="flex justify-between text-sm">
-                        <span className="text-green-600">Réduction ({selectedCoupon.coupon_types.description})</span>
-                        <span className="font-medium text-green-600">-{calculateDiscount().toFixed(2)} €</span>
                       </div>
-                    )}
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-600">Frais de port</span>
-                      <span className="font-medium">
-                        {useDeliveryBatch && activeBatch ? (
-                          <span className="text-green-600 font-semibold">Offerts</span>
-                        ) : calculateShippingCost() === 0 ? (
-                          selectedCoupon?.coupon_types.type === 'free_delivery' ? (
-                            <span className="text-green-600 font-semibold">Offerts (coupon)</span>
-                          ) : (
-                            '0.00 €'
-                          )
-                        ) : (
-                          `${calculateShippingCost().toFixed(2)} €`
-                        )}
-                      </span>
-                    </div>
-                    {calculateInsuranceCost() > 0 && (
-                      <div className="flex justify-between text-sm">
-                        <span className="text-gray-600">Assurance</span>
-                        <span className="font-medium">{calculateInsuranceCost().toFixed(2)} €</span>
-                      </div>
-                    )}
-                    <Separator className="my-2" />
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-600">Total HT</span>
-                      <span className="font-medium">
-                        {useDeliveryBatch ? (() => {
-                          const subtotalAfterDiscount = cartTotal - calculateCartDiscount();
-                          const totalTTC = activeBatch
-                            ? (subtotalAfterDiscount + calculateInsuranceCost())
-                            : (subtotalAfterDiscount + calculateShippingCost() + calculateInsuranceCost());
-                          return (totalTTC / 1.20).toFixed(2);
-                        })() : (calculateTotal() / 1.20).toFixed(2)} €
-                      </span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-600">TVA (20%)</span>
-                      <span className="font-medium">
-                        {useDeliveryBatch ? (() => {
-                          const subtotalAfterDiscount = cartTotal - calculateCartDiscount();
-                          const totalTTC = activeBatch
-                            ? (subtotalAfterDiscount + calculateInsuranceCost())
-                            : (subtotalAfterDiscount + calculateShippingCost() + calculateInsuranceCost());
-                          return (totalTTC - (totalTTC / 1.20)).toFixed(2);
-                        })() : calculateTax().toFixed(2)} €
-                      </span>
-                    </div>
-                  </div>
-
-                  <CouponSelector
-                    selectedCouponId={selectedCoupon?.id || null}
-                    onSelectCoupon={setSelectedCoupon}
-                    subtotal={cartTotal}
-                  />
-
-                  <Separator />
-
-                  {useDeliveryBatch ? (
-                    <div className="space-y-2">
-                      <div className="flex justify-between text-lg font-bold">
-                        <span>Total TTC</span>
-                        <span className="text-[#b8933d]">
-                          {(() => {
-                            const subtotalAfterDiscount = cartTotal - calculateCartDiscount();
-                            const totalTTC = activeBatch
-                              ? (subtotalAfterDiscount + calculateInsuranceCost())
-                              : (subtotalAfterDiscount + calculateShippingCost() + calculateInsuranceCost());
-                            return totalTTC.toFixed(2);
-                          })()
-                          } €
-                        </span>
-                      </div>
-                      <p className="text-xs text-gray-500">
-                        {activeBatch
-                          ? 'Pas de frais de livraison supplémentaires'
-                          : 'Frais de livraison inclus - Valable 5 jours'
-                        }
-                      </p>
                     </div>
                   ) : (
-                    <div className="flex justify-between text-lg font-bold">
-                      <span>Total TTC</span>
-                      <span className="text-[#b8933d]">{calculateTotalBeforeWallet().toFixed(2)} €</span>
+                    <div className="border border-gray-200 rounded-lg p-4 bg-gray-50">
+                      <p className="text-sm text-gray-600 text-center">
+                        Votre porte-monnaie est vide. Gagnez des points lors de vos achats ou en participant à nos jeux !
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                <Separator />
+
+                {/* Cagnotte fidélité */}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <PiggyBank className="h-5 w-5 text-[#D4AF37]" />
+                      <Label className="text-base font-semibold">Ma cagnotte fidélité</Label>
+                    </div>
+                    <Badge
+                      variant="outline"
+                      className="bg-[#D4AF37]/10 text-[#D4AF37] border-[#D4AF37]/30 font-semibold px-3 py-1"
+                    >
+                      {(profile?.loyalty_euros || 0).toFixed(2)} € disponible
+                    </Badge>
+                  </div>
+
+                  {(profile?.loyalty_euros || 0) > 0 ? (
+                    <div className="border border-[#D4AF37]/20 rounded-lg p-4 bg-gradient-to-br from-[#F2F2E8] to-white hover:border-[#D4AF37]/40 transition-all">
+                      <div className="flex items-start space-x-3">
+                        <Checkbox
+                          id="useLoyalty"
+                          checked={useLoyalty}
+                          onCheckedChange={(checked) => {
+                            setUseLoyalty(checked as boolean);
+                            if (!checked) {
+                              setLoyaltyAmountToUse(0);
+                            }
+                          }}
+                          className="mt-1 border-[#D4AF37] data-[state=checked]:bg-[#D4AF37]"
+                        />
+                        <div className="flex-1">
+                          <label htmlFor="useLoyalty" className="cursor-pointer">
+                            <p className="font-medium text-gray-900">
+                              Utiliser ma cagnotte de {(profile?.loyalty_euros || 0).toFixed(2)} €
+                            </p>
+                            <p className="text-sm text-gray-600 mt-1">
+                              Économisez jusqu'à {Math.min(profile?.loyalty_euros || 0, Math.max(0, totalAfterDiscount - walletAmountToUse)).toFixed(2)} € sur cette commande
+                            </p>
+                          </label>
+
+                          {useLoyalty && (
+                            <div className="mt-3 space-y-2">
+                              <Label htmlFor="loyaltyAmount" className="text-sm font-medium text-gray-700">
+                                Montant à utiliser
+                              </Label>
+                              <div className="flex items-center gap-2">
+                                <Input
+                                  id="loyaltyAmount"
+                                  type="number"
+                                  min="0"
+                                  max={Math.min(profile?.loyalty_euros || 0, Math.max(0, totalAfterDiscount - walletAmountToUse))}
+                                  step="0.01"
+                                  value={loyaltyAmountToUse}
+                                  onChange={(e) => {
+                                    const value = parseFloat(e.target.value) || 0;
+                                    const afterWallet = Math.max(0, totalAfterDiscount - walletAmountToUse);
+                                    const maxAmount = Math.min(profile?.loyalty_euros || 0, afterWallet);
+                                    setLoyaltyAmountToUse(Math.min(Math.max(0, value), maxAmount));
+                                  }}
+                                  className="flex-1 border-[#D4AF37]/30 focus:border-[#D4AF37] focus:ring-[#D4AF37]"
+                                />
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => {
+                                    const afterWallet = Math.max(0, totalAfterDiscount - walletAmountToUse);
+                                    const maxAmount = Math.min(profile?.loyalty_euros || 0, afterWallet);
+                                    setLoyaltyAmountToUse(maxAmount);
+                                  }}
+                                  className="border-[#D4AF37] text-[#D4AF37] hover:bg-[#D4AF37] hover:text-white whitespace-nowrap"
+                                >
+                                  Tout utiliser
+                                </Button>
+                              </div>
+                              <p className="text-xs text-gray-500">
+                                Maximum disponible : {Math.min(profile?.loyalty_euros || 0, Math.max(0, totalAfterDiscount - walletAmountToUse)).toFixed(2)} €
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="border border-gray-200 rounded-lg p-4 bg-gray-50">
+                      <p className="text-sm text-gray-600 text-center">
+                        Votre cagnotte est vide. Gagnez des euros en participant à nos jeux, lives et achats !
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                <Separator />
+
+                {/* Coupons gagnés */}
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Gift className="h-5 w-5 text-[#D4AF37]" />
+                    <Label className="text-base font-semibold">Mes coupons gagnés</Label>
+                  </div>
+
+                  {couponsLoading ? (
+                    <div className="border border-gray-200 rounded-lg p-4 bg-gray-50">
+                      <p className="text-sm text-gray-600 text-center">Chargement de vos coupons...</p>
+                    </div>
+                  ) : userCoupons.length > 0 ? (
+                    <div className="space-y-3">
+                      <RadioGroup
+                        value={selectedUserCouponId}
+                        onValueChange={(value) => {
+                          setSelectedUserCouponId(value);
+                          const selectedCoupon = userCoupons.find(c => c.id === value);
+                          if (selectedCoupon && selectedCoupon.coupon) {
+                            const discount = selectedCoupon.coupon.discount_type === 'percentage'
+                              ? (subtotal * selectedCoupon.coupon.discount_value / 100)
+                              : Number(selectedCoupon.coupon.discount_value);
+                            setDiscountAmount(discount);
+                          } else {
+                            setDiscountAmount(0);
+                          }
+                        }}
+                      >
+                        {userCoupons.map((coupon) => (
+                          <div
+                            key={coupon.id}
+                            className="border border-[#D4AF37]/20 rounded-lg p-4 bg-gradient-to-br from-white to-[#F2F2E8] hover:border-[#D4AF37]/50 transition-all cursor-pointer relative overflow-hidden"
+                          >
+                            <div className="absolute top-0 right-0 w-20 h-20 bg-[#D4AF37]/5 rounded-full -mr-10 -mt-10" />
+                            <div className="flex items-start space-x-3 relative">
+                              <RadioGroupItem value={coupon.id} id={coupon.id} className="mt-1" />
+                              <label htmlFor={coupon.id} className="flex-1 cursor-pointer">
+                                <div className="flex items-start justify-between gap-3">
+                                  <div className="flex-1">
+                                    <div className="flex items-center gap-2 mb-1">
+                                      <p className="font-semibold text-gray-900">
+                                        {coupon.coupon?.name || 'Coupon'}
+                                      </p>
+                                      <Badge className="bg-[#D4AF37] text-white border-0 text-xs">
+                                        {coupon.code}
+                                      </Badge>
+                                    </div>
+                                    <p className="text-sm text-gray-600 mb-2">
+                                      {coupon.coupon?.description || 'Réduction applicable'}
+                                    </p>
+                                    <p className="text-xs text-gray-500">
+                                      Valable jusqu'au {new Date(coupon.valid_until).toLocaleDateString('fr-FR')}
+                                    </p>
+                                  </div>
+                                  <div className="text-right">
+                                    <p className="text-2xl font-bold text-[#D4AF37]">
+                                      {coupon.coupon?.discount_type === 'percentage'
+                                        ? `-${coupon.coupon.discount_value}%`
+                                        : `-${Number(coupon.coupon?.discount_value || 0).toFixed(2)}€`
+                                      }
+                                    </p>
+                                  </div>
+                                </div>
+                              </label>
+                            </div>
+                          </div>
+                        ))}
+                      </RadioGroup>
+                    </div>
+                  ) : (
+                    <div className="border border-gray-200 rounded-lg p-4 bg-gray-50">
+                      <p className="text-sm text-gray-600 text-center">
+                        Vous n'avez pas encore de coupons. Participez à nos jeux pour en gagner !
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                <Separator />
+
+                {/* Code promo manuel */}
+                <div className="space-y-2">
+                  <Label htmlFor="coupon" className="text-base font-semibold">Code promo</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      id="coupon"
+                      value={couponCode}
+                      onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
+                      placeholder="Entrez votre code"
+                      className="border-[#D4AF37]/20 focus:border-[#D4AF37]"
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="border-[#D4AF37] text-[#D4AF37] hover:bg-[#D4AF37] hover:text-white transition-colors"
+                    >
+                      Appliquer
+                    </Button>
+                  </div>
+                </div>
+
+                <Separator />
+
+                <div className="space-y-2">
+                  <Label htmlFor="referralCode">Code parrainage</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      id="referralCode"
+                      value={referralCode}
+                      onChange={(e) => setReferralCode(e.target.value.toUpperCase())}
+                      placeholder="Code parrainage (5€ offerts)"
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={async () => {
+                        if (!referralCode.trim()) {
+                          toast.error('Veuillez saisir un code parrainage');
+                          return;
+                        }
+
+                        const { data: hasOrders } = await supabase
+                          .from('orders')
+                          .select('id')
+                          .eq('user_id', user?.id)
+                          .limit(1)
+                          .maybeSingle();
+
+                        if (hasOrders) {
+                          toast.error('Le code parrainage est réservé aux nouveaux clients');
+                          return;
+                        }
+
+                        const { data: referralData, error } = await supabase
+                          .from('referral_codes')
+                          .select('id, code, user_id, is_active')
+                          .eq('code', referralCode.toUpperCase())
+                          .eq('is_active', true)
+                          .maybeSingle();
+
+                        if (error || !referralData) {
+                          toast.error('Code parrainage invalide');
+                          return;
+                        }
+
+                        if (referralData.user_id === user?.id) {
+                          toast.error('Vous ne pouvez pas utiliser votre propre code');
+                          return;
+                        }
+
+                        setAppliedReferral(referralData);
+                        setReferralDiscount(5);
+                        toast.success('Code parrainage appliqué ! -5€');
+                      }}
+                    >
+                      Appliquer
+                    </Button>
+                  </div>
+                  {appliedReferral && (
+                    <p className="text-sm text-green-600 flex items-center gap-1">
+                      <Gift className="h-4 w-4" />
+                      Code parrainage appliqué : -5,00 €
+                    </p>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Informations complémentaires</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div>
+                  <Label htmlFor="notes">Notes de commande (optionnel)</Label>
+                  <Textarea
+                    id="notes"
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                    placeholder="Instructions de livraison, précisions, etc."
+                    rows={3}
+                  />
+                </div>
+
+                <Separator />
+
+                <div className="space-y-3">
+                  <div className="flex items-start space-x-2">
+                    <Checkbox
+                      id="newsletter"
+                      checked={newsletterConsent}
+                      onCheckedChange={(checked) => setNewsletterConsent(checked as boolean)}
+                    />
+                    <label htmlFor="newsletter" className="text-sm leading-tight cursor-pointer">
+                      Je souhaite recevoir les offres et actualités de La Boutique de Morgane
+                    </label>
+                  </div>
+
+                  <div className="flex items-start space-x-2">
+                    <Checkbox
+                      id="rgpd"
+                      checked={rgpdConsent}
+                      onCheckedChange={(checked) => setRgpdConsent(checked as boolean)}
+                    />
+                    <label htmlFor="rgpd" className="text-sm leading-tight cursor-pointer">
+                      <span className="text-red-500">*</span> J'accepte la{' '}
+                      <Link href="/politique-confidentialite" className="text-[#D4AF37] hover:underline">
+                        politique de confidentialité
+                      </Link>{' '}
+                      et le traitement de mes données personnelles
+                    </label>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Récapitulatif de votre commande</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  {cart.map((item) => (
+                    <div key={item.id} className="flex justify-between text-sm">
+                      <div className="flex-1">
+                        <div className="text-gray-600">
+                          {item.name} × {item.quantity}
+                        </div>
+                        {item.sku && (
+                          <div className="text-xs text-gray-400 mt-0.5">
+                            Réf: {item.sku}
+                          </div>
+                        )}
+                      </div>
+                      <span className="font-medium ml-2">
+                        {(parseFloat(item.price) * item.quantity).toFixed(2)} €
+                      </span>
+                    </div>
+                  ))}
+                </div>
+
+                <Separator />
+
+                <div className="space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-600">Sous-total</span>
+                    <span className="font-medium">{subtotal.toFixed(2)} €</span>
+                  </div>
+
+                  {!addToOpenPackage && (
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-600">Livraison</span>
+                      <span className="font-medium">
+                        {shippingCost === 0 ? 'Gratuit' : `${shippingCost.toFixed(2)} €`}
+                      </span>
                     </div>
                   )}
 
-                  <WalletSelector
-                    cartTotal={calculateTotalBeforeWallet()}
-                    onWalletAmountChange={handleWalletAmountChange}
-                    currentWalletAmount={walletAmount}
-                  />
-
-                  {walletAmount > 0 && (
-                    <div className="bg-green-50 border border-green-200 rounded-md p-3">
-                      <div className="flex justify-between text-sm">
-                        <span className="text-green-800">Cagnotte utilisée</span>
-                        <span className="font-semibold text-green-900">-{walletAmount.toFixed(2)} €</span>
-                      </div>
-                      <Separator className="my-2 bg-green-200" />
-                      <div className="flex justify-between text-base font-bold">
-                        <span className="text-gray-900">Reste à payer</span>
-                        <span className="text-[#b8933d]">{calculateTotal().toFixed(2)} €</span>
-                      </div>
+                  {insuranceCost > 0 && (
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-600">Assurance</span>
+                      <span className="font-medium">{insuranceCost.toFixed(2)} €</span>
                     </div>
                   )}
 
-                  {isFirstOrder && calculateTotal() < MINIMUM_ORDER_AMOUNT && (
-                    <Alert className="bg-orange-50 border-orange-200">
-                      <Info className="h-4 w-4 text-orange-600" />
-                      <AlertDescription className="text-orange-800">
-                        Pour votre première commande, le montant minimum est de {MINIMUM_ORDER_AMOUNT.toFixed(2)} €.
-                        Il vous manque {(MINIMUM_ORDER_AMOUNT - calculateTotal()).toFixed(2)} €.
-                      </AlertDescription>
-                    </Alert>
+                  {paymentFee > 0 && (
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-600">Frais de paiement</span>
+                      <span className="font-medium">{paymentFee.toFixed(2)} €</span>
+                    </div>
                   )}
 
-                  <GDPRConsent
-                    type="order"
-                    checked={gdprConsent}
-                    onCheckedChange={setGdprConsent}
-                    error={gdprError}
-                  />
+                  {discountAmount > 0 && (
+                    <div className="flex justify-between text-sm text-green-600">
+                      <span>Remise {couponCode && `(${couponCode})`}</span>
+                      <span className="font-medium">-{discountAmount.toFixed(2)} €</span>
+                    </div>
+                  )}
 
+                  {referralDiscount > 0 && (
+                    <div className="flex justify-between text-sm text-green-600">
+                      <span>Parrainage</span>
+                      <span className="font-medium">-{referralDiscount.toFixed(2)} €</span>
+                    </div>
+                  )}
+
+                  {walletAmountToUse > 0 && (
+                    <div className="flex justify-between text-sm text-purple-600">
+                      <span>Avoirs utilisés</span>
+                      <span className="font-medium">-{walletAmountToUse.toFixed(2)} €</span>
+                    </div>
+                  )}
+
+                  {loyaltyAmountToUse > 0 && (
+                    <div className="flex justify-between text-sm text-[#D4AF37] font-semibold">
+                      <span>Cagnotte fidélité utilisée</span>
+                      <span className="font-medium">-{loyaltyAmountToUse.toFixed(2)} €</span>
+                    </div>
+                  )}
+                </div>
+
+                <Separator />
+
+                <div className="space-y-1">
+                  <div className="flex justify-between">
+                    <span className="font-semibold">Total TTC</span>
+                    <span className="font-bold text-xl text-[#D4AF37]">
+                      {totalAfterWallet.toFixed(2)} €
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-xs text-gray-500">
+                    <span>dont TVA (20%)</span>
+                    <span>{tvaAmount.toFixed(2)} €</span>
+                  </div>
+                  <div className="flex justify-between text-xs text-gray-500">
+                    <span>Total HT</span>
+                    <span>{totalHT.toFixed(2)} €</span>
+                  </div>
+                </div>
+
+                <Separator />
+
+                {selectedPaymentMethod?.code === 'paypal' ? (
+                  <>
+                    {!rgpdConsent && (
+                      <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-md text-amber-800 text-sm">
+                        <AlertCircle className="h-4 w-4 inline mr-1" />
+                        Vous devez accepter la politique de confidentialité pour continuer
+                      </div>
+                    )}
+                    <PayPalButtons
+                      amount={totalAfterWallet}
+                      disabled={!rgpdConsent || loading}
+                      onSuccess={(orderId) => {
+                        clearCart();
+                        toast.success('Paiement PayPal réussi !');
+                        router.push(`/checkout/confirmation?paypal=${orderId}`);
+                      }}
+                      onError={(error) => {
+                        console.error('PayPal error:', error);
+                        toast.error('Erreur lors du paiement PayPal');
+                      }}
+                    />
+                  </>
+                ) : (
                   <Button
-                    onClick={proceedToPayment}
-                    disabled={
-                      processing ||
-                      addresses.length === 0 ||
-                      !selectedAddressId ||
-                      (!useDeliveryBatch && !selectedShippingMethod) ||
-                      (useDeliveryBatch && !activeBatch && !selectedShippingMethod) ||
-                      !selectedPaymentMethod ||
-                      (isFirstOrder && calculateTotal() < MINIMUM_ORDER_AMOUNT)
-                    }
-                    className="w-full bg-[#b8933d] hover:bg-[#a07c2f] text-white"
-                    size="lg"
+                    type="submit"
+                    disabled={loading || !rgpdConsent}
+                    className="w-full bg-gradient-to-r from-[#b8933d] to-[#d4af37] hover:from-[#9a7a2f] hover:to-[#b8933d] text-white"
                   >
-                    {processing ? (
+                    {loading ? (
                       <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
                         Traitement en cours...
                       </>
-                    ) : useDeliveryBatch ? (
-                      activeBatch ? (
-                        <>
-                          <Clock className="mr-2 h-4 w-4" />
-                          Ajouter au colis ouvert
-                        </>
-                      ) : (
-                        <>
-                          <Clock className="mr-2 h-4 w-4" />
-                          Créer un colis ouvert
-                        </>
-                      )
                     ) : (
-                      'Valider la commande'
+                      <>
+                        <CreditCard className="h-4 w-4 mr-2" />
+                        {CUSTOM_TEXTS.buttons.checkout}
+                      </>
                     )}
                   </Button>
-                </CardContent>
-              </Card>
-            </div>
+                )}
+
+                <div className="text-xs text-gray-500 text-center">
+                  <AlertCircle className="h-3 w-3 inline mr-1" />
+                  Paiement sécurisé
+                </div>
+              </CardContent>
+            </Card>
           </div>
+        </form>
       </div>
-
-      <Dialog open={showStripeModal} onOpenChange={setShowStripeModal}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-2xl">
-              <CreditCard className="h-6 w-6 text-[#b8933d]" />
-              Paiement sécurisé par carte bancaire
-            </DialogTitle>
-            <DialogDescription>
-              Complétez votre paiement pour valider votre commande #{pendingOrderNumber}
-            </DialogDescription>
-          </DialogHeader>
-
-          {stripeClientSecret && (
-            <StripeCheckoutForm
-              clientSecret={stripeClientSecret}
-              amount={calculateTotal()}
-              onSuccess={handleStripeSuccess}
-              onError={handleStripeError}
-              returnUrl={`${window.location.origin}/order-confirmation/${pendingOrderNumber}`}
-            />
-          )}
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

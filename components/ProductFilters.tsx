@@ -1,400 +1,424 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
+import { useAuth } from '@/context/AuthContext';
+import { supabase } from '@/lib/supabase';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
-import { Button } from '@/components/ui/button';
-import { Slider } from '@/components/ui/slider';
-import { Input } from '@/components/ui/input';
-import { Loader2, X, Ruler } from 'lucide-react';
-import { useAuth } from '@/context/AuthContext';
-import { useClientSize } from '@/hooks/use-client-size';
-import { supabase } from '@/lib/supabase-client';
-import { parsePrice } from '@/lib/utils';
-import { isColorAttribute } from '@/lib/colors';
-import ColorSwatch from '@/components/ColorSwatch';
+import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
+import { X } from 'lucide-react';
 
-interface AttributeTerm {
-  id: number;
+interface FilterOption {
+  id: string;
   name: string;
   slug: string;
-  count: number;
-}
-
-interface Attribute {
-  id: number;
-  name: string;
-  slug: string;
-  terms: AttributeTerm[];
-}
-
-interface ProductAttribute {
-  __typename?: string;
-  name: string;
-  slug?: string;
-  options?: string[];
-}
-
-interface ProductAttributesConnection {
-  __typename?: string;
-  nodes?: ProductAttribute[];
+  count?: number;
 }
 
 interface ProductFiltersProps {
-  onFilterChange: (filters: Record<string, string[]>, priceRange?: { min: number; max: number }) => void;
-  initialFilters?: Record<string, string[]>;
-  products?: Array<{
-    price: string;
-    attributes?: ProductAttributesConnection;
-  }>;
+  categorySlug?: string;
+  onFiltersChange: (filters: FilterState) => void;
 }
 
-export default function ProductFilters({ onFilterChange, initialFilters = {}, products = [] }: ProductFiltersProps) {
-  const { user } = useAuth();
-  const { preferredSizeBottom, preferredSizeTop } = useClientSize();
-  const [attributes, setAttributes] = useState<Attribute[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [selectedFilters, setSelectedFilters] = useState<Record<string, string[]>>(initialFilters);
-  const [showMySize, setShowMySize] = useState<boolean>(false);
-  const isFirstRender = useRef(true);
+export interface FilterState {
+  sizes: number[];
+  colorFamilies: string[];
+  comfort: string[];
+  coupe: string[];
+  live: boolean;
+  nouveautes: boolean;
+}
 
-  const prices = products
-    .map(p => parsePrice(p.price))
-    .filter(p => p > 0);
+export function ProductFilters({ categorySlug, onFiltersChange }: ProductFiltersProps) {
+  const { profile } = useAuth();
+  const [filters, setFilters] = useState<FilterState>({
+    sizes: [],
+    colorFamilies: [],
+    comfort: [],
+    coupe: [],
+    live: false,
+    nouveautes: false,
+  });
 
-  const minPrice = prices.length > 0 ? Math.floor(Math.min(...prices)) : 0;
-  const maxPrice = prices.length > 0 ? Math.ceil(Math.max(...prices)) : 1000;
-
-  const [priceRange, setPriceRange] = useState<[number, number]>([minPrice, maxPrice]);
-  const [maxPriceFilter, setMaxPriceFilter] = useState<number>(maxPrice);
-
-  useEffect(() => {
-    const extractAttributes = () => {
-      try {
-        if (!products || products.length === 0) {
-          setAttributes([]);
-          setLoading(false);
-          return;
-        }
-
-        const attributesMap = new Map<string, { id: number; name: string; slug: string; terms: Map<string, { id: number; name: string; slug: string; count: number }> }>();
-
-        products.forEach((product) => {
-          const productAttributes = product.attributes?.nodes || [];
-
-          productAttributes.forEach((attr: any) => {
-            const attrSlug = attr.slug || attr.name.toLowerCase().replace(/\s+/g, '-');
-            const attrName = attr.name.replace('pa_', '').replace(/-/g, ' ')
-              .split(' ')
-              .map((word: string) => word.charAt(0).toUpperCase() + word.slice(1))
-              .join(' ');
-
-            if (!attributesMap.has(attrSlug)) {
-              attributesMap.set(attrSlug, {
-                id: Math.abs(attrSlug.split('').reduce((acc: number, char: string) => acc + char.charCodeAt(0), 0)),
-                name: attrName,
-                slug: attrSlug,
-                terms: new Map()
-              });
-            }
-
-            const attribute = attributesMap.get(attrSlug)!;
-
-            if (attr.options && Array.isArray(attr.options)) {
-              attr.options.forEach((option: string) => {
-                const termSlug = option.toLowerCase().trim();
-                const termName = option.trim();
-
-                if (!attribute.terms.has(termSlug)) {
-                  attribute.terms.set(termSlug, {
-                    id: Math.abs(termSlug.split('').reduce((acc: number, char: string) => acc + char.charCodeAt(0), 0)),
-                    name: termName,
-                    slug: termSlug,
-                    count: 0
-                  });
-                }
-
-                const term = attribute.terms.get(termSlug)!;
-                term.count++;
-              });
-            }
-          });
-        });
-
-        const extractedAttributes = Array.from(attributesMap.values()).map(attr => ({
-          ...attr,
-          terms: Array.from(attr.terms.values())
-        })).filter(attr => attr.terms.length > 0);
-
-        setAttributes(extractedAttributes);
-      } catch (error) {
-        console.error('Error extracting attributes:', error);
-        setAttributes([]);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    extractAttributes();
-  }, [products]);
+  const [availableColorFamilies, setAvailableColorFamilies] = useState<string[]>([]);
+  const [confortOptions, setConfortOptions] = useState<FilterOption[]>([]);
+  const [coupeOptions, setCoupeOptions] = useState<FilterOption[]>([]);
+  const [enabledFilters, setEnabledFilters] = useState<string[]>([]);
+  const [categoryId, setCategoryId] = useState<string | null>(null);
 
   useEffect(() => {
-    if (prices.length > 0) {
-      setPriceRange([minPrice, maxPrice]);
-      setMaxPriceFilter(maxPrice);
-    }
-  }, [minPrice, maxPrice, prices.length]);
+    loadCategoryConfig();
+  }, [categorySlug]);
 
   useEffect(() => {
-    if (isFirstRender.current) {
-      isFirstRender.current = false;
+    onFiltersChange(filters);
+  }, [filters]);
+
+  const loadCategoryConfig = async () => {
+    if (!categorySlug) {
+      setEnabledFilters(['size', 'color', 'comfort', 'fit', 'live']);
+      loadFilterOptions(['size', 'color', 'comfort', 'fit', 'live']);
       return;
     }
-    const filtersWithMySize = showMySize && (preferredSizeBottom || preferredSizeTop)
-      ? { ...selectedFilters, my_size: ['enabled'] }
-      : selectedFilters;
-    onFilterChange(filtersWithMySize, { min: minPrice, max: maxPriceFilter });
-  }, [selectedFilters, maxPriceFilter, minPrice, showMySize, preferredSizeBottom, preferredSizeTop, onFilterChange]);
 
-  const handleFilterChange = (attributeSlug: string, termName: string, checked: boolean) => {
-    setSelectedFilters((prev) => {
-      const newFilters = { ...prev };
+    try {
+      const { data: category } = await supabase
+        .from('categories')
+        .select('id')
+        .eq('slug', categorySlug)
+        .maybeSingle();
 
-      if (checked) {
-        if (!newFilters[attributeSlug]) {
-          newFilters[attributeSlug] = [];
-        }
-        newFilters[attributeSlug] = [...newFilters[attributeSlug], termName];
+      if (!category) {
+        setEnabledFilters(['size', 'color', 'comfort', 'fit', 'live']);
+        loadFilterOptions(['size', 'color', 'comfort', 'fit', 'live']);
+        return;
+      }
+
+      setCategoryId(category.id);
+
+      const { data: config } = await supabase
+        .from('category_filter_config')
+        .select('enabled_filters')
+        .eq('category_id', category.id)
+        .maybeSingle();
+
+      const filters = config?.enabled_filters || ['size', 'color', 'comfort', 'fit', 'live'];
+      setEnabledFilters(filters);
+      loadFilterOptions(filters);
+    } catch (error) {
+      console.error('Error loading category config:', error);
+      setEnabledFilters(['size', 'color', 'comfort', 'fit', 'live']);
+      loadFilterOptions(['size', 'color', 'comfort', 'fit', 'live']);
+    }
+  };
+
+  const loadFilterOptions = async (filters: string[]) => {
+    try {
+      const promises = [];
+
+      if (filters.includes('color')) {
+        promises.push(
+          supabase
+            .from('product_attribute_terms')
+            .select('color_family')
+            .not('color_family', 'is', null)
+            .order('color_family')
+        );
       } else {
-        if (newFilters[attributeSlug]) {
-          newFilters[attributeSlug] = newFilters[attributeSlug].filter((name) => name !== termName);
-          if (newFilters[attributeSlug].length === 0) {
-            delete newFilters[attributeSlug];
-          }
+        promises.push(Promise.resolve({ data: null }));
+      }
+
+      if (filters.includes('comfort')) {
+        promises.push(
+          supabase
+            .from('product_attributes')
+            .select('id, name, slug')
+            .eq('slug', 'confort')
+            .maybeSingle()
+        );
+      } else {
+        promises.push(Promise.resolve({ data: null }));
+      }
+
+      if (filters.includes('fit')) {
+        promises.push(
+          supabase
+            .from('product_attributes')
+            .select('id, name, slug')
+            .eq('slug', 'coupe')
+            .maybeSingle()
+        );
+      } else {
+        promises.push(Promise.resolve({ data: null }));
+      }
+
+      const [colorResult, confortResult, coupeResult] = await Promise.all(promises);
+
+      if (colorResult.data && Array.isArray(colorResult.data)) {
+        const uniqueFamilies = Array.from(new Set(
+          colorResult.data.map((item: any) => item.color_family).filter(Boolean)
+        )) as string[];
+        setAvailableColorFamilies(uniqueFamilies);
+      }
+
+      if (confortResult.data && 'id' in confortResult.data) {
+        const { data: terms } = await supabase
+          .from('product_attribute_terms')
+          .select('id, name, slug')
+          .eq('attribute_id', confortResult.data.id)
+          .order('order_by');
+
+        if (terms) {
+          setConfortOptions(terms.map(t => ({ id: t.id, name: t.name, slug: t.slug })));
         }
       }
 
-      return newFilters;
+      if (coupeResult.data && 'id' in coupeResult.data) {
+        const { data: terms } = await supabase
+          .from('product_attribute_terms')
+          .select('id, name, slug')
+          .eq('attribute_id', coupeResult.data.id)
+          .order('order_by');
+
+        if (terms) {
+          setCoupeOptions(terms.map(t => ({ id: t.id, name: t.name, slug: t.slug })));
+        }
+      }
+    } catch (error) {
+      console.error('Error loading filter options:', error);
+    }
+  };
+
+  const handleSizeToggle = (size: number) => {
+    setFilters(prev => ({
+      ...prev,
+      sizes: prev.sizes.includes(size)
+        ? prev.sizes.filter(s => s !== size)
+        : [...prev.sizes, size]
+    }));
+  };
+
+  const handleColorFamilyToggle = (family: string) => {
+    setFilters(prev => ({
+      ...prev,
+      colorFamilies: prev.colorFamilies.includes(family)
+        ? prev.colorFamilies.filter(f => f !== family)
+        : [...prev.colorFamilies, family]
+    }));
+  };
+
+  const handleComfortToggle = (slug: string) => {
+    setFilters(prev => ({
+      ...prev,
+      comfort: prev.comfort.includes(slug)
+        ? prev.comfort.filter(c => c !== slug)
+        : [...prev.comfort, slug]
+    }));
+  };
+
+  const handleCoupeToggle = (slug: string) => {
+    setFilters(prev => ({
+      ...prev,
+      coupe: prev.coupe.includes(slug)
+        ? prev.coupe.filter(c => c !== slug)
+        : [...prev.coupe, slug]
+    }));
+  };
+
+  const clearFilters = () => {
+    setFilters({
+      sizes: [],
+      colorFamilies: [],
+      comfort: [],
+      coupe: [],
+      live: false,
+      nouveautes: false,
     });
   };
 
-  const handleMaxPriceChange = (value: number[]) => {
-    setMaxPriceFilter(value[0]);
-  };
-
-  const applyPriceFilter = () => {
-    // The useEffect will handle calling onFilterChange
-  };
-
-  const clearAllFilters = () => {
-    setSelectedFilters({});
-    setMaxPriceFilter(maxPrice);
-    setShowMySize(false);
-  };
-
-  const hasActiveFilters = Object.keys(selectedFilters).length > 0 ||
-    maxPriceFilter !== maxPrice ||
-    showMySize;
-
-  if (loading) {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg">Filtres</CardTitle>
-        </CardHeader>
-        <CardContent className="flex items-center justify-center py-8">
-          <Loader2 className="h-6 w-6 animate-spin text-[#D4AF37]" />
-        </CardContent>
-      </Card>
-    );
-  }
+  const hasActiveFilters =
+    filters.sizes.length > 0 ||
+    filters.colorFamilies.length > 0 ||
+    filters.comfort.length > 0 ||
+    filters.coupe.length > 0 ||
+    filters.live ||
+    filters.nouveautes;
 
   return (
-    <Card>
+    <Card className="sticky top-4">
       <CardHeader>
         <div className="flex items-center justify-between">
           <CardTitle className="text-lg">Filtres</CardTitle>
           {hasActiveFilters && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={clearAllFilters}
-              className="h-auto p-1 text-muted-foreground hover:text-foreground"
+            <button
+              onClick={clearFilters}
+              className="text-sm text-gray-500 hover:text-gray-700 flex items-center gap-1"
             >
-              <X className="h-4 w-4 mr-1" />
-              Effacer tout
-            </Button>
+              <X className="h-4 w-4" />
+              Effacer
+            </button>
           )}
         </div>
       </CardHeader>
       <CardContent className="space-y-6">
-        {(preferredSizeBottom || preferredSizeTop) && (
-          <div className="space-y-3 pb-6 border-b">
-            <h3 className="font-semibold text-sm flex items-center gap-2">
-              <Ruler className="h-4 w-4 text-[#D4AF37]" />
-              Personnalisation
-            </h3>
-            <div className="flex items-center space-x-2">
-              <Checkbox
-                id="my-size-filter"
-                checked={showMySize}
-                onCheckedChange={(checked) => setShowMySize(checked as boolean)}
-              />
-              <Label
-                htmlFor="my-size-filter"
-                className="text-sm font-normal cursor-pointer flex-1"
-              >
-                A ma taille
-              </Label>
-            </div>
-            {showMySize && (
-              <div className="ml-6 text-xs text-muted-foreground space-y-1">
-                {preferredSizeBottom && <p>• Bas : {preferredSizeBottom}</p>}
-                {preferredSizeTop && <p>• Hauts : {preferredSizeTop}</p>}
+        {profile?.user_size && enabledFilters.includes('size') && (
+          <>
+            <div className="space-y-3">
+              <h3 className="font-semibold text-sm text-gray-900">Ma taille ({profile.user_size})</h3>
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="my-size"
+                  checked={filters.sizes.includes(profile.user_size)}
+                  onCheckedChange={() => handleSizeToggle(profile.user_size!)}
+                />
+                <Label htmlFor="my-size" className="text-sm cursor-pointer">
+                  Uniquement ma taille
+                </Label>
               </div>
-            )}
-          </div>
+            </div>
+            <Separator />
+          </>
         )}
 
-        {prices.length > 0 && (
-          <div className="space-y-4">
-            <h3 className="font-semibold text-sm">Prix maximum</h3>
-            <div className="space-y-4">
-              <Slider
-                min={minPrice}
-                max={maxPrice}
-                step={1}
-                value={[maxPriceFilter]}
-                onValueChange={handleMaxPriceChange}
-                onValueCommit={applyPriceFilter}
-                className="w-full"
-              />
-              <div className="flex items-center gap-2">
-                <div className="flex-1">
-                  <Input
-                    type="number"
-                    value={minPrice}
-                    disabled
-                    className="h-8 text-sm bg-muted"
-                  />
-                </div>
-                <span className="text-muted-foreground">-</span>
-                <div className="flex-1">
-                  <Input
-                    type="number"
-                    value={maxPriceFilter}
-                    onChange={(e) => {
-                      const value = parseInt(e.target.value) || maxPrice;
-                      setMaxPriceFilter(Math.max(minPrice, Math.min(value, maxPrice)));
-                    }}
-                    onBlur={applyPriceFilter}
-                    min={minPrice}
-                    max={maxPrice}
-                    className="h-8 text-sm"
-                  />
-                </div>
-              </div>
-              <div className="flex items-center justify-between text-xs text-muted-foreground">
-                <span>{minPrice}€</span>
-                <span>{maxPrice}€</span>
+        {enabledFilters.includes('size') && (
+          <>
+            <div className="space-y-3">
+              <h3 className="font-semibold text-sm text-gray-900">Tailles</h3>
+              <div className="grid grid-cols-3 gap-2">
+                {Array.from({ length: 11 }, (_, i) => 34 + (i * 2)).map(size => (
+                  <button
+                    key={size}
+                    onClick={() => handleSizeToggle(size)}
+                    className={`px-3 py-2 text-sm rounded-md border transition-colors ${
+                      filters.sizes.includes(size)
+                        ? 'bg-[#D4AF37] text-white border-[#D4AF37]'
+                        : 'bg-white text-gray-700 border-gray-300 hover:border-[#D4AF37]'
+                    }`}
+                  >
+                    {size}
+                  </button>
+                ))}
               </div>
             </div>
-          </div>
+            <Separator />
+          </>
         )}
 
-        {attributes.length > 0 && attributes.map((attribute) => {
-          if (!attribute.terms || attribute.terms.length === 0) {
-            return null;
-          }
-
-          const sizeOrder = ['36', '38', '40', '42', '44', '46', '48', '50', '52', '54', 'XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL'];
-          const isSizeAttribute = attribute.slug.toLowerCase().includes('taille') ||
-                                 attribute.slug.toLowerCase().includes('size') ||
-                                 attribute.name.toLowerCase().includes('taille') ||
-                                 attribute.name.toLowerCase().includes('size') ||
-                                 attribute.name.toLowerCase().includes('tailles');
-
-          const isColor = isColorAttribute(attribute.name) || isColorAttribute(attribute.slug);
-
-          const sortedTerms = isSizeAttribute
-            ? [...attribute.terms].sort((a, b) => {
-                const aValue = a.name.trim();
-                const bValue = b.name.trim();
-                const aIndex = sizeOrder.indexOf(aValue);
-                const bIndex = sizeOrder.indexOf(bValue);
-
-                if (aIndex !== -1 && bIndex !== -1) {
-                  return aIndex - bIndex;
-                }
-                if (aIndex !== -1) return -1;
-                if (bIndex !== -1) return 1;
-
-                const aNum = parseInt(aValue);
-                const bNum = parseInt(bValue);
-                if (!isNaN(aNum) && !isNaN(bNum)) {
-                  return aNum - bNum;
-                }
-
-                return a.name.localeCompare(b.name);
-              })
-            : attribute.terms;
-
-          return (
-            <div key={attribute.id} className="space-y-3">
-              <h3 className="font-semibold text-sm capitalize">{attribute.name}</h3>
-              {isColor ? (
-                <div className="flex flex-wrap gap-3">
-                  {sortedTerms.map((term) => (
-                    <div key={`${attribute.slug}-${term.slug}`} className="flex flex-col items-center gap-1">
-                      <ColorSwatch
-                        color={term.name}
-                        isSelected={selectedFilters[attribute.slug]?.includes(term.name) || false}
-                        onClick={() =>
-                          handleFilterChange(
-                            attribute.slug,
-                            term.name,
-                            !(selectedFilters[attribute.slug]?.includes(term.name) || false)
-                          )
-                        }
-                        size="md"
-                      />
-                      <span className="text-xs text-muted-foreground capitalize">{term.name}</span>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  {sortedTerms.map((term) => (
-                    <div key={`${attribute.slug}-${term.slug}`} className="flex items-center space-x-2">
-                      <Checkbox
-                        id={`${attribute.slug}-${term.slug}`}
-                        checked={selectedFilters[attribute.slug]?.includes(term.name) || false}
-                        onCheckedChange={(checked) =>
-                          handleFilterChange(attribute.slug, term.name, checked as boolean)
-                        }
-                      />
-                      <Label
-                        htmlFor={`${attribute.slug}-${term.slug}`}
-                        className="text-sm font-normal cursor-pointer flex-1 capitalize"
-                      >
-                        {term.name}
-                        {term.count > 0 && (
-                          <span className="text-muted-foreground ml-1">({term.count})</span>
-                        )}
-                      </Label>
-                    </div>
-                  ))}
-                </div>
-              )}
+        {enabledFilters.includes('color') && availableColorFamilies.length > 0 && (
+          <>
+            <div className="space-y-3">
+              <h3 className="font-semibold text-sm text-gray-900">Couleurs</h3>
+              <div className="space-y-2">
+                {availableColorFamilies.map(family => (
+                  <div key={family} className="flex items-center space-x-2">
+                    <Checkbox
+                      id={`color-${family}`}
+                      checked={filters.colorFamilies.includes(family)}
+                      onCheckedChange={() => handleColorFamilyToggle(family)}
+                    />
+                    <Label htmlFor={`color-${family}`} className="text-sm cursor-pointer">
+                      {family}
+                    </Label>
+                  </div>
+                ))}
+              </div>
             </div>
-          );
-        })}
+            <Separator />
+          </>
+        )}
 
-        {attributes.length === 0 && prices.length === 0 && (
-          <p className="text-sm text-muted-foreground">
-            Aucun filtre disponible pour cette catégorie.
-          </p>
+        {enabledFilters.includes('comfort') && confortOptions.length > 0 && (
+          <>
+            <div className="space-y-3">
+              <h3 className="font-semibold text-sm text-gray-900">Confort</h3>
+              <div className="space-y-2">
+                {confortOptions.map(option => (
+                  <div key={option.id} className="flex items-center space-x-2">
+                    <Checkbox
+                      id={`comfort-${option.slug}`}
+                      checked={filters.comfort.includes(option.slug)}
+                      onCheckedChange={() => handleComfortToggle(option.slug)}
+                    />
+                    <Label htmlFor={`comfort-${option.slug}`} className="text-sm cursor-pointer">
+                      {option.name}
+                    </Label>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <Separator />
+          </>
+        )}
+
+        {enabledFilters.includes('fit') && coupeOptions.length > 0 && (
+          <>
+            <div className="space-y-3">
+              <h3 className="font-semibold text-sm text-gray-900">Coupe</h3>
+              <div className="space-y-2">
+                {coupeOptions.map(option => (
+                  <div key={option.id} className="flex items-center space-x-2">
+                    <Checkbox
+                      id={`coupe-${option.slug}`}
+                      checked={filters.coupe.includes(option.slug)}
+                      onCheckedChange={() => handleCoupeToggle(option.slug)}
+                    />
+                    <Label htmlFor={`coupe-${option.slug}`} className="text-sm cursor-pointer">
+                      {option.name}
+                    </Label>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <Separator />
+          </>
+        )}
+
+        {enabledFilters.includes('live') && (
+          <>
+            <Separator />
+            <div className="space-y-3">
+              <h3 className="font-semibold text-sm text-gray-900">Autres</h3>
+              <div className="space-y-2">
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="filter-live"
+                    checked={filters.live}
+                    onCheckedChange={(checked) => setFilters(prev => ({ ...prev, live: !!checked }))}
+                  />
+                  <Label htmlFor="filter-live" className="text-sm cursor-pointer">
+                    Vu dans le dernier Live
+                  </Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="filter-nouveautes"
+                    checked={filters.nouveautes}
+                    onCheckedChange={(checked) => setFilters(prev => ({ ...prev, nouveautes: !!checked }))}
+                  />
+                  <Label htmlFor="filter-nouveautes" className="text-sm cursor-pointer">
+                    Nouveautés
+                  </Label>
+                </div>
+              </div>
+            </div>
+          </>
+        )}
+
+        {hasActiveFilters && (
+          <>
+            <Separator />
+            <div className="space-y-2">
+              <h3 className="font-semibold text-sm text-gray-900">Filtres actifs</h3>
+              <div className="flex flex-wrap gap-2">
+                {filters.sizes.map(size => (
+                  <Badge key={`size-${size}`} variant="secondary" className="gap-1">
+                    Taille {size}
+                    <X className="h-3 w-3 cursor-pointer" onClick={() => handleSizeToggle(size)} />
+                  </Badge>
+                ))}
+                {filters.colorFamilies.map(family => (
+                  <Badge key={`color-${family}`} variant="secondary" className="gap-1">
+                    {family}
+                    <X className="h-3 w-3 cursor-pointer" onClick={() => handleColorFamilyToggle(family)} />
+                  </Badge>
+                ))}
+                {filters.live && (
+                  <Badge variant="secondary" className="gap-1">
+                    Live
+                    <X className="h-3 w-3 cursor-pointer" onClick={() => setFilters(prev => ({ ...prev, live: false }))} />
+                  </Badge>
+                )}
+                {filters.nouveautes && (
+                  <Badge variant="secondary" className="gap-1">
+                    Nouveautés
+                    <X className="h-3 w-3 cursor-pointer" onClick={() => setFilters(prev => ({ ...prev, nouveautes: false }))} />
+                  </Badge>
+                )}
+              </div>
+            </div>
+          </>
         )}
       </CardContent>
     </Card>
